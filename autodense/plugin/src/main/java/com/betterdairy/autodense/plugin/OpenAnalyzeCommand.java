@@ -32,106 +32,154 @@ public class OpenAnalyzeCommand implements Command {
     @Parameter
     private Context context;
 
-    @Parameter(label = "Expected lane count", min = "0", description = "0 = auto; set if you know the total number of lanes")
+    // All other parameters will be set in the unified optimization dialog
     private int expectedLaneCount = 0;
-
-    @Parameter(label = "Assume constant lane spacing", description = "Evenly space lanes between gel edges when count is provided")
     private boolean constantLaneSpacing = false;
-
-    // Lane layout fine-tuning
-    @Parameter(label = "Lane width fraction (of spacing)", min = "0.2", max = "0.9")
     private double laneWidthFraction = 0.55;
-
-    @Parameter(label = "Grid offset fraction (-0.15..0.15)", min = "-0.25", max = "0.25")
     private double gridOffsetFraction = 0.0;
-
-    @Parameter(label = "Preprocess for detection", description = "Use light contrast & blur to find gel bounds")
     private boolean preprocessForDetection = true;
-
-    // Post-detection optimization before band detection
-    @Parameter(label = "Post-contrast low %", min = "0", max = "20")
     private double postLowPct = 1.0;
-
-    @Parameter(label = "Post-contrast high %", min = "80", max = "100")
     private double postHighPct = 99.0;
-
-    @Parameter(label = "Post-smoothing", choices = {"none", "light", "medium"})
     private String postSmoothing = "light";
 
     @Override
     public void run() {
         GelUI ui = new GelUI(context);
         ui.show();
+        
+        // Get image from file selection or current ImageJ window
+        ImagePlus imp = null;
         if (inputFile != null && inputFile.exists()) {
-            ImagePlus imp = IJ.openImage(inputFile.getAbsolutePath());
+            IJ.log("AutoDense: Loading selected image file: " + inputFile.getName());
+            imp = IJ.openImage(inputFile.getAbsolutePath());
+        } else {
+            // Try to get current active image window
+            imp = IJ.getImage();
             if (imp != null) {
-                imp.show();
-                // Detect lanes with user-tuned layout
-                List<Lane> lanes = LaneDetector.findLanes(
-                        imp,
-                        Math.max(0, expectedLaneCount),
-                        constantLaneSpacing,
-                        laneWidthFraction,
-                        gridOffsetFraction,
-                        preprocessForDetection
-                );
-                if (!lanes.isEmpty()) {
-                    // Interactive optimization loop with live preview
-                    runInteractiveOptimization(imp, lanes);
-                    IJ.log("AutoDense: lanes detected = " + lanes.size());
-                } else {
-                    IJ.log("AutoDense: no lanes detected");
-                }
-            } else {
-                IJ.log("AutoDense: Failed to open image: " + inputFile);
+                IJ.log("AutoDense: Using current ImageJ image: " + imp.getTitle());
             }
+        }
+        
+        if (imp != null) {
+            imp.show(); // Ensure image is visible
+            
+            // Start with initial lane detection using default parameters
+            List<Lane> initialLanes = LaneDetector.findLanes(imp, expectedLaneCount, constantLaneSpacing, 
+                                                           laneWidthFraction, gridOffsetFraction, preprocessForDetection);
+            
+            // Open unified optimization dialog - user can adjust everything here
+            runInteractiveOptimization(imp, initialLanes);
+        } else {
+            IJ.log("AutoDense: No image available. Please open an image first or select an image file.");
         }
 
     }
 
     private void runInteractiveOptimization(ImagePlus imp, List<Lane> lanes) {
-        // Build dialog
-        NonBlockingGenericDialog gd = new NonBlockingGenericDialog("Band Detection Optimization");
-        gd.addNumericField("Post-contrast low %", postLowPct, 2);
-        gd.addNumericField("Post-contrast high %", postHighPct, 2);
-        gd.addChoice("Post-smoothing", new String[]{"none","light","medium"}, postSmoothing);
-        gd.addMessage("Tip: adjust and watch red band marks update live. Close dialog when satisfied.");
+        // Build unified dialog with ALL controls - wider dialog for better visibility
+        NonBlockingGenericDialog gd = new NonBlockingGenericDialog("AutoDense - Complete Gel Analysis");
+        gd.setSize(500, 600); // Make dialog larger for better slider visibility
+        
+        // Lane detection controls
+        gd.addMessage("=== Lane Detection Settings ===");
+        gd.addSlider("Expected lane count (0=auto):", 0, 20, expectedLaneCount);
+        gd.addCheckbox("Assume constant lane spacing", constantLaneSpacing);
+        gd.addCheckbox("Preprocess for detection", preprocessForDetection);
+        
+        // Lane positioning controls  
+        gd.addMessage("=== Lane Positioning (constant spacing mode) ===");
+        gd.addSlider("Lane width fraction:", 0.2, 0.9, laneWidthFraction);
+        gd.addSlider("Grid offset fraction:", -0.25, 0.25, gridOffsetFraction);
+        
+        // Band detection controls
+        gd.addMessage("=== Band Detection Optimization ===");
+        gd.addSlider("Post-contrast low %:", 0, 20, postLowPct);
+        gd.addSlider("Post-contrast high %:", 80, 100, postHighPct);
+        gd.addChoice("Post-smoothing:", new String[]{"none","light","medium"}, postSmoothing);
+        
+        // AI assistance section
+        gd.addMessage("=== AI Assistance ===");
+        gd.addMessage("🤖 Future: AI-guided parameter optimization");
+        
+        gd.addMessage("💡 Tip: Drag sliders and watch overlays update live. Green=lanes, Red=bands");
 
+        // Track current lanes outside the listener to prevent unwanted recalculation
+        @SuppressWarnings("unchecked")
+        final List<Lane>[] currentLanes = new List[1];
+        currentLanes[0] = lanes;
+        
         DialogListener listener = new DialogListener() {
             @Override
             public boolean dialogItemChanged(GenericDialog dlg, AWTEvent e) {
-                double low = Math.max(0, Math.min(20, dlg.getNextNumber()));
-                double high = Math.max(80, Math.min(100, dlg.getNextNumber()));
+                // Get all parameters from dialog in correct order
+                int newExpectedCount = Math.max(0, (int)dlg.getNextNumber());
+                boolean newConstantSpacing = dlg.getNextBoolean();
+                boolean newPreprocess = dlg.getNextBoolean();
+                
+                double newLaneWidth = dlg.getNextNumber();
+                double newGridOffset = dlg.getNextNumber();
+                
+                double low = dlg.getNextNumber();
+                double high = dlg.getNextNumber();
                 String smooth = dlg.getNextChoice();
 
-                // Recompute bands on an optimized duplicate, draw overlay on original
+                // ONLY recalculate lanes if LANE DETECTION parameters changed
+                boolean laneDetectionChanged = (newExpectedCount != expectedLaneCount) ||
+                                             (newConstantSpacing != constantLaneSpacing) ||
+                                             (newPreprocess != preprocessForDetection) ||
+                                             (Math.abs(newLaneWidth - laneWidthFraction) > 0.001) ||
+                                             (Math.abs(newGridOffset - gridOffsetFraction) > 0.001);
+
+                if (laneDetectionChanged) {
+                    IJ.log(String.format("AutoDense: Recalculating lanes - count: %d, constant: %s", 
+                           newExpectedCount, newConstantSpacing));
+                    currentLanes[0] = LaneDetector.findLanes(imp, newExpectedCount, newConstantSpacing, 
+                                                           newLaneWidth, newGridOffset, newPreprocess);
+                }
+
+                // Always apply band detection optimization (this should not affect lanes)
                 ImagePlus opt = imp.duplicate();
                 applyContrastStretch(opt, low/100.0, high/100.0);
                 if ("light".equalsIgnoreCase(smooth)) applyBoxBlur(opt, 1);
                 else if ("medium".equalsIgnoreCase(smooth)) applyBoxBlur(opt, 2);
 
+                // Draw overlay with better visibility
                 Overlay ov = new Overlay();
                 int h = imp.getHeight();
-                for (Lane lane : lanes) {
+                for (Lane lane : currentLanes[0]) {
                     int x = lane.xStart();
                     int w = Math.max(1, lane.xEnd() - lane.xStart() + 1);
-                    Roi r = new Roi(x, 0, w, h);
-                    r.setStrokeColor(new Color(0, 255, 0, 160));
-                    ov.add(r);
+                    
+                    // Highly visible green lane ROI - thicker stroke
+                    Roi laneRoi = new Roi(x, 0, w, h);
+                    laneRoi.setStrokeColor(new Color(0, 255, 0, 220));
+                    laneRoi.setStrokeWidth(3.0);
+                    ov.add(laneRoi);
+                    
+                    // Highly visible red band markers - much thicker
                     List<Band> bands = com.betterdairy.autodense.analysis.BandDetector.findBands(opt, lane);
                     for (Band b : bands) {
-                        int yb = Math.max(0, Math.min(h - 2, b.y()));
-                        Roi br = new Roi(x, yb, w, 2);
-                        br.setStrokeColor(new Color(255, 0, 0, 200));
-                        ov.add(br);
+                        int yb = Math.max(0, Math.min(h - 6, b.y()));
+                        Roi bandRoi = new Roi(x, yb, w, 6);
+                        bandRoi.setStrokeColor(new Color(255, 0, 0, 255));
+                        bandRoi.setStrokeWidth(4.0);
+                        ov.add(bandRoi);
                     }
                 }
+                
                 imp.setOverlay(ov);
                 imp.updateAndDraw();
-                // Save last values so OK applies them
+                
+                // Save current values
+                expectedLaneCount = newExpectedCount;
+                constantLaneSpacing = newConstantSpacing;
+                preprocessForDetection = newPreprocess;
+                laneWidthFraction = newLaneWidth;
+                gridOffsetFraction = newGridOffset;
                 postLowPct = low;
                 postHighPct = high;
                 postSmoothing = smooth;
+                
                 return true;
             }
         };

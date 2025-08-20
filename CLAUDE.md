@@ -68,3 +68,42 @@ The system uses a local LLM (via llama.cpp) to parse natural language commands i
 - NL client: `/nl/src/main/java/com/betterdairy/autodense/nl/NLClient.java`
 - Action executor: `/plugin/src/main/java/com/betterdairy/autodense/plugin/ActionExecutor.java`
 - UI implementation: `/plugin/src/main/java/com/betterdairy/autodense/plugin/GelUI.java`
+
+## Testing Protocol
+
+**IMPORTANT**: When user provides feedback on a running build:
+1. Kill any running background bash processes using KillBash
+2. Kill any running ImageJ2 processes using `pkill -f ImageJ`  
+3. Then build and run fresh instance to prevent conflicts
+
+User will manually test UI functionality and provide feedback after each build/run cycle.
+
+## AI-Guided Band Detection Optimization
+
+The project architecture supports AI-assisted parameter optimization using the bundled local LLM:
+
+### **Vision Model Integration**
+- Use bundled vision LLM to analyze gel images
+- Assess band clarity, background noise, contrast issues
+- Suggest optimal parameter ranges based on gel characteristics
+
+### **Automated Parameter Tuning**
+- Implement iterative optimization algorithms
+- Use metrics: band count stability, signal-to-noise ratio, band sharpness  
+- AI tries parameter combinations and ranks results
+
+### **Smart Presets & Guidance**
+- AI learns from successful parameter combinations
+- Provides real-time feedback: "*Try increasing contrast - bands are too faint*"
+- Suggests starting points: "*This looks like a protein ladder gel, try these settings...*"
+
+### **Implementation Strategy**
+1. Add "Auto-Optimize" button to dialog
+2. Vision model analyzes current gel image
+3. Algorithm tests parameter combinations
+4. Returns optimal settings with confidence scores
+5. User can accept suggestions or continue manual tuning
+
+## Known Issues
+
+**ImageJ Dialog Spinner Arrows**: ImageJ's NonBlockingGenericDialog does not support spinner arrows on numeric fields in the same way as regular system dialogs. This is a limitation of the ImageJ framework. Alternative approaches tried: stepSize parameter, sliders, different field types - none provide traditional spinner controls. **Solution**: Use sliders for intuitive parameter adjustment.
