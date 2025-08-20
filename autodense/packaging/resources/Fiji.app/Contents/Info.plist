@@ -1,0 +1,44 @@
+<?xml version="1.0" ?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+ <dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>English</string>
+  <key>CFBundleAllowMixedLocalizations</key>
+  <true/>
+  <key>CFBundleExecutable</key>
+  <string>fiji-macos</string>
+  <key>CFBundleIconFile</key>
+  <string>Fiji.icns</string>
+  <key>CFBundleIdentifier</key>
+  <string>sc.fiji.fiji</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>Fiji</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>fiji-url-scheme</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>fiji</string>
+      </array>
+    </dict>
+  </array>
+  <!-- See https://developer.apple.com/app-store/categories/ for list of AppStore categories -->
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.utilities</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0.0</string>
+  <key>CFBundleVersion</key>
+  <string>1.0.0-8d4382a</string>
+  <key>NSHumanReadableCopyright</key>
+  <string>Copyright (C) 2025</string>
+  <key>NSHighResolutionCapable</key>
+  <string>true</string>
+ </dict>
+</plist>

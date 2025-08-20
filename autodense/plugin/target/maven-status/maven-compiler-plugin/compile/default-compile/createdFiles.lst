@@ -1,0 +1,16 @@
+com/betterdairy/autodense/plugin/GelContext.class
+com/betterdairy/autodense/model/Models$Lane.class
+com/betterdairy/autodense/analysis/BandDetector.class
+com/betterdairy/autodense/plugin/GelUI.class
+com/betterdairy/autodense/model/Models$CalibrationModel.class
+com/betterdairy/autodense/analysis/Normalizer$Mode.class
+com/betterdairy/autodense/analysis/Normalizer.class
+com/betterdairy/autodense/analysis/Calibrator.class
+com/betterdairy/autodense/model/Models$Band.class
+com/betterdairy/autodense/analysis/Deltas.class
+com/betterdairy/autodense/model/Models.class
+com/betterdairy/autodense/plugin/OpenAnalyzeCommand$1.class
+com/betterdairy/autodense/plugin/OpenAnalyzeCommand.class
+com/betterdairy/autodense/analysis/LaneDetector.class
+com/betterdairy/autodense/analysis/Deltas$Stat.class
+com/betterdairy/autodense/plugin/ActionExecutor.class

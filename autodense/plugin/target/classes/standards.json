@@ -1,0 +1,14 @@
+{
+  "standards": [
+    {
+      "id": "thermo_pageruler_prestained",
+      "name": "Thermo PageRuler Prestained",
+      "bands_kda": [170,130,100,70,55,40,35,25,15,10]
+    },
+    {
+      "id": "invitrogen_seeblue_plus2",
+      "name": "Invitrogen SeeBlue Plus2",
+      "bands_kda": [250,150,120,100,80,60,50,40,30,25,20,15,10]
+    }
+  ]
+}
