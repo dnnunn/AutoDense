@@ -890,6 +890,168 @@ public class GelAnalysisTools {
     }
     
     /**
+     * Tool: enable_band_assist
+     * Enable user-assisted band identification mode
+     */
+    public JSONObject enableBandAssist(JSONObject args) {
+        try {
+            // Validate image handle with recovery
+            String imageHandle = args.optString("image_handle", "");
+            JSONObject validation = recovery.validateHandle(imageHandle, "image");
+            
+            if (!validation.getBoolean("valid")) {
+                JSONObject errorResponse = new JSONObject();
+                errorResponse.put("error", true);
+                errorResponse.put("validation", validation);
+                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
+                return errorResponse;
+            }
+            
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            
+            // Get lanes from previous analysis
+            List<String> analyses = store.getAnalysesForImage(imageHandle);
+            List<Lane> lanes = null;
+            
+            for (String analysisHandle : analyses) {
+                SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
+                if ("lanes".equals(analysis.type)) {
+                    @SuppressWarnings("unchecked")
+                    List<Lane> tempLanes = (List<Lane>) analysis.data;
+                    lanes = tempLanes;
+                    break;
+                }
+            }
+            
+            if (lanes == null || lanes.isEmpty()) {
+                return new JSONObject()
+                    .put("error", true)
+                    .put("message", "No lanes detected. Please detect lanes first before using BandAssist.");
+            }
+            
+            // Store BandAssist tool instance in session metadata
+            com.betterdairy.autodense.analysis.AssistBandTool assistTool = 
+                new com.betterdairy.autodense.analysis.AssistBandTool(lanes);
+            assistTool.enable(img.image);
+            
+            // Store tool instance for later use
+            img.metadata.put("band_assist_tool", assistTool);
+            
+            return new JSONObject()
+                .put("band_assist_enabled", true)
+                .put("lanes_available", lanes.size())
+                .put("image_handle", img.handle)
+                .put("instructions", "Click on any band in any lane to identify it across all lanes")
+                .put("usage_tip", "The system will find the corresponding band in other lanes automatically");
+                
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("enable_band_assist", e);
+        }
+    }
+    
+    /**
+     * Tool: disable_band_assist
+     * Disable user-assisted band identification mode
+     */
+    public JSONObject disableBandAssist(JSONObject args) {
+        try {
+            // Validate image handle with recovery
+            String imageHandle = args.optString("image_handle", "");
+            JSONObject validation = recovery.validateHandle(imageHandle, "image");
+            
+            if (!validation.getBoolean("valid")) {
+                JSONObject errorResponse = new JSONObject();
+                errorResponse.put("error", true);
+                errorResponse.put("validation", validation);
+                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
+                return errorResponse;
+            }
+            
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            
+            // Get and disable assist tool
+            Object toolObj = img.metadata.get("band_assist_tool");
+            if (toolObj instanceof com.betterdairy.autodense.analysis.AssistBandTool) {
+                com.betterdairy.autodense.analysis.AssistBandTool assistTool = 
+                    (com.betterdairy.autodense.analysis.AssistBandTool) toolObj;
+                assistTool.disable();
+                img.metadata.remove("band_assist_tool");
+            }
+            
+            return new JSONObject()
+                .put("band_assist_disabled", true)
+                .put("image_handle", img.handle);
+                
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("disable_band_assist", e);
+        }
+    }
+    
+    /**
+     * Tool: configure_band_assist
+     * Configure BandAssist parameters for better accuracy
+     */
+    public JSONObject configureBandAssist(JSONObject args) {
+        try {
+            // Validate image handle with recovery
+            String imageHandle = args.optString("image_handle", "");
+            JSONObject validation = recovery.validateHandle(imageHandle, "image");
+            
+            if (!validation.getBoolean("valid")) {
+                JSONObject errorResponse = new JSONObject();
+                errorResponse.put("error", true);
+                errorResponse.put("validation", validation);
+                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
+                return errorResponse;
+            }
+            
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            
+            // Get assist tool
+            Object toolObj = img.metadata.get("band_assist_tool");
+            if (!(toolObj instanceof com.betterdairy.autodense.analysis.AssistBandTool)) {
+                return new JSONObject()
+                    .put("error", true)
+                    .put("message", "BandAssist is not currently enabled. Please enable it first.");
+            }
+            
+            com.betterdairy.autodense.analysis.AssistBandTool assistTool = 
+                (com.betterdairy.autodense.analysis.AssistBandTool) toolObj;
+            
+            // Configure parameters
+            if (args.has("search_window_px")) {
+                assistTool.setSearchWindow(args.getInt("search_window_px"));
+            }
+            if (args.has("min_prominence")) {
+                assistTool.setMinProminence((float) args.getDouble("min_prominence"));
+            }
+            if (args.has("min_snr")) {
+                assistTool.setMinSnr(args.getDouble("min_snr"));
+            }
+            if (args.has("width_ratio_min") && args.has("width_ratio_max")) {
+                assistTool.setWidthRatioRange(args.getDouble("width_ratio_min"), 
+                                            args.getDouble("width_ratio_max"));
+            }
+            if (args.has("rf_tolerance")) {
+                assistTool.setRfTolerance(args.getDouble("rf_tolerance"));
+            }
+            
+            return new JSONObject()
+                .put("configuration_updated", true)
+                .put("image_handle", img.handle)
+                .put("current_settings", new JSONObject()
+                    .put("search_window_px", args.optInt("search_window_px", 20))
+                    .put("min_prominence", args.optDouble("min_prominence", 0.05))
+                    .put("min_snr", args.optDouble("min_snr", 3.0))
+                    .put("width_ratio_range", args.optDouble("width_ratio_min", 0.5) + " - " + args.optDouble("width_ratio_max", 2.0))
+                    .put("rf_tolerance", args.optDouble("rf_tolerance", 0.02)));
+                
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("configure_band_assist", e);
+        }
+    }
+    
+    /**
      * Tool: normalize_intensities
      * Normalize band intensities across lanes
      */
@@ -1438,6 +1600,252 @@ public class GelAnalysisTools {
         }
         
         Files.writeString(outputPath, csv.toString());
+    }
+    
+    /**
+     * Create labeled overlay for colony identification and communication
+     */
+    private Overlay createColonyLabeledOverlay(Overlay detectionOverlay, int colonyCount) {
+        Overlay labeledOverlay = new Overlay();
+        
+        if (detectionOverlay == null || colonyCount == 0) {
+            return labeledOverlay;
+        }
+        
+        // Copy detection ROIs and add labels
+        for (int i = 0; i < detectionOverlay.size(); i++) {
+            Roi colony = detectionOverlay.get(i);
+            
+            // Colony boundary (blue circle)
+            Roi colonyRoi = (Roi) colony.clone();
+            colonyRoi.setStrokeColor(new Color(0, 100, 255, 180)); // Blue
+            colonyRoi.setStrokeWidth(2.0);
+            colonyRoi.setName("Colony " + (i + 1));
+            labeledOverlay.add(colonyRoi);
+            
+            // Colony label (limit to first 50 colonies to avoid clutter)
+            if (i < 50) {
+                Rectangle bounds = colony.getBounds();
+                int centerX = bounds.x + bounds.width / 2;
+                int centerY = bounds.y + bounds.height / 2;
+                
+                TextRoi colonyLabel = new TextRoi(centerX - 8, centerY - 8, "C" + (i + 1));
+                colonyLabel.setStrokeColor(new Color(0, 0, 200));
+                colonyLabel.setFillColor(new Color(255, 255, 255, 220));
+                colonyLabel.setFont(new Font("Arial", Font.BOLD, 10));
+                labeledOverlay.add(colonyLabel);
+            }
+        }
+        
+        // Add total count label at top
+        TextRoi countLabel = new TextRoi(10, 10, "Total Colonies: " + colonyCount);
+        countLabel.setStrokeColor(new Color(0, 0, 200));
+        countLabel.setFillColor(new Color(255, 255, 255, 240));
+        countLabel.setFont(new Font("Arial", Font.BOLD, 14));
+        labeledOverlay.add(countLabel);
+        
+        return labeledOverlay;
+    }
+    
+    /**
+     * Create labeled overlay for colony size analysis
+     */
+    private Overlay createColonySizeOverlay(Overlay measurementOverlay, ResultsTable rt, int colonyCount) {
+        Overlay labeledOverlay = new Overlay();
+        
+        if (measurementOverlay == null || colonyCount == 0) {
+            return labeledOverlay;
+        }
+        
+        // Copy measurement ROIs and add size labels
+        for (int i = 0; i < Math.min(measurementOverlay.size(), colonyCount); i++) {
+            Roi colony = measurementOverlay.get(i);
+            
+            // Colony boundary (green circle)
+            Roi colonyRoi = (Roi) colony.clone();
+            colonyRoi.setStrokeColor(new Color(0, 150, 0, 180)); // Green
+            colonyRoi.setStrokeWidth(2.0);
+            colonyRoi.setName("Colony " + (i + 1));
+            labeledOverlay.add(colonyRoi);
+            
+            // Colony label with size (limit to first 30 for readability)
+            if (i < 30 && rt != null && i < rt.getCounter()) {
+                Rectangle bounds = colony.getBounds();
+                int centerX = bounds.x + bounds.width / 2;
+                int centerY = bounds.y + bounds.height / 2;
+                
+                double area = rt.getValue("Area", i);
+                String labelText = String.format("C%d(%.0f)", i + 1, area);
+                
+                TextRoi sizeLabel = new TextRoi(centerX - 15, centerY - 8, labelText);
+                sizeLabel.setStrokeColor(new Color(0, 100, 0));
+                sizeLabel.setFillColor(new Color(255, 255, 255, 220));
+                sizeLabel.setFont(new Font("Arial", Font.PLAIN, 9));
+                labeledOverlay.add(sizeLabel);
+            }
+        }
+        
+        // Add summary statistics
+        if (rt != null && colonyCount > 0) {
+            double[] areas = rt.getColumn("Area");
+            double avgSize = java.util.Arrays.stream(areas).average().orElse(0);
+            
+            String statsText = String.format("Count: %d | Avg Size: %.0f", colonyCount, avgSize);
+            TextRoi statsLabel = new TextRoi(10, 10, statsText);
+            statsLabel.setStrokeColor(new Color(0, 100, 0));
+            statsLabel.setFillColor(new Color(255, 255, 255, 240));
+            statsLabel.setFont(new Font("Arial", Font.BOLD, 12));
+            labeledOverlay.add(statsLabel);
+        }
+        
+        return labeledOverlay;
+    }
+    
+    /**
+     * Tool: export_colony_analysis
+     * Export colony analysis results with labeled overlays for presentations and documentation
+     */
+    public JSONObject exportColonyAnalysis(JSONObject args) {
+        try {
+            // Apply comprehensive handle protection
+            HandleGuard.HandleValidationResult protection = handleGuard.protectToolCall(args, "export_colony_analysis");
+            
+            if (!protection.isValid()) {
+                JSONObject errorResponse = protection.createErrorResponse();
+                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
+                return errorResponse;
+            }
+            
+            SessionStore.ImageRecord img = store.getImage(protection.imageHandle);
+            String filename = args.optString("filename", "colony_analysis_" + System.currentTimeMillis());
+            String outputDir = args.optString("output_directory", System.getProperty("user.home") + "/Downloads");
+            String title = args.optString("title", "Colony Count Analysis");
+            boolean includeSizes = args.optBoolean("include_sizes", false);
+            int maxWidth = args.optInt("max_width", 1000);
+            
+            Path outputPath = Path.of(outputDir, filename + ".png");
+            
+            // Create comprehensive colony overlay
+            Overlay exportOverlay = createColonyExportOverlay(protection.imageHandle, title, includeSizes);
+            
+            // Scale for export
+            ImagePlus exportImage = img.image.duplicate();
+            if (exportImage.getWidth() > maxWidth) {
+                double scale = maxWidth / (double)exportImage.getWidth();
+                int newHeight = (int)(exportImage.getHeight() * scale);
+                ImageProcessor proc = exportImage.getProcessor();
+                proc = proc.resize(maxWidth, newHeight);
+                exportImage.setProcessor(proc);
+            }
+            
+            // Apply overlay and save
+            exportImage.setOverlay(exportOverlay);
+            exportImage = exportImage.flatten();
+            
+            Files.createDirectories(outputPath.getParent());
+            FileSaver fs = new FileSaver(exportImage);
+            fs.saveAsPng(outputPath.toString());
+            
+            // Get colony statistics for summary
+            int colonyCount = 0;
+            List<String> analyses = store.getAnalysesForImage(protection.imageHandle);
+            for (String analysisHandle : analyses) {
+                SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
+                if ("colonies".equals(analysis.type)) {
+                    colonyCount = (Integer) analysis.data;
+                    break;
+                }
+            }
+            
+            return new JSONObject()
+                .put("exported_file", outputPath.toString())
+                .put("title", title)
+                .put("colony_count", colonyCount)
+                .put("dimensions", new JSONObject()
+                    .put("width", exportImage.getWidth())
+                    .put("height", exportImage.getHeight()))
+                .put("image_handle", img.handle)
+                .put("visual_elements", "Colonies labeled C1, C2, C3... with count summary")
+                .put("measurement_warning", "CRITICAL: Use original image data for all measurements, not this labeled PNG")
+                .put("usage", "Perfect for lab notebooks, presentations, and colony counting documentation");
+            
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("export_colony_analysis", e);
+        }
+    }
+    
+    /**
+     * Create comprehensive overlay for colony export
+     */
+    private Overlay createColonyExportOverlay(String imageHandle, String title, boolean includeSizes) throws Exception {
+        SessionStore.ImageRecord img = store.getImage(imageHandle);
+        Overlay exportOverlay = new Overlay();
+        
+        // Get colony analysis data
+        List<String> analyses = store.getAnalysesForImage(imageHandle);
+        int colonyCount = 0;
+        
+        for (String analysisHandle : analyses) {
+            SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
+            if ("colonies".equals(analysis.type)) {
+                colonyCount = (Integer) analysis.data;
+                break;
+            }
+        }
+        
+        // Get current overlay (should have colony detections)
+        Overlay currentOverlay = img.currentOverlay;
+        if (currentOverlay != null) {
+            // Copy and enhance existing colony overlays
+            for (int i = 0; i < Math.min(currentOverlay.size() - 1, colonyCount); i++) { // -1 to skip count label
+                Roi colony = currentOverlay.get(i + 1); // Skip the count label at index 0
+                if (colony instanceof TextRoi && colony.getName() != null && colony.getName().startsWith("Total")) {
+                    continue; // Skip summary labels
+                }
+                
+                // Colony boundary
+                Roi colonyRoi = (Roi) colony.clone();
+                colonyRoi.setStrokeColor(new Color(255, 100, 0, 180)); // Orange for export
+                colonyRoi.setStrokeWidth(2.5);
+                exportOverlay.add(colonyRoi);
+                
+                // Colony number label (show first 40)
+                if (i < 40) {
+                    Rectangle bounds = colony.getBounds();
+                    int centerX = bounds.x + bounds.width / 2;
+                    int centerY = bounds.y + bounds.height / 2;
+                    
+                    String labelText = "C" + (i + 1);
+                    if (includeSizes) {
+                        // Would include size if available from analysis
+                        labelText += "(S)"; // Placeholder for size
+                    }
+                    
+                    TextRoi colonyLabel = new TextRoi(centerX - 10, centerY - 6, labelText);
+                    colonyLabel.setStrokeColor(new Color(200, 50, 0));
+                    colonyLabel.setFillColor(new Color(255, 255, 255, 230));
+                    colonyLabel.setFont(new Font("Arial", Font.BOLD, 11));
+                    exportOverlay.add(colonyLabel);
+                }
+            }
+        }
+        
+        // Add title and summary at bottom
+        int titleY = img.image.getHeight() - 25;
+        TextRoi titleLabel = new TextRoi(10, titleY, title);
+        titleLabel.setStrokeColor(new Color(0, 0, 0));
+        titleLabel.setFillColor(new Color(255, 255, 255, 240));
+        titleLabel.setFont(new Font("Arial", Font.BOLD, 16));
+        exportOverlay.add(titleLabel);
+        
+        String summary = String.format("Total Colonies: %d", colonyCount);
+        TextRoi summaryLabel = new TextRoi(10, titleY - 20, summary);
+        summaryLabel.setStrokeColor(new Color(64, 64, 64));
+        summaryLabel.setFillColor(new Color(255, 255, 255, 200));
+        summaryLabel.setFont(new Font("Arial", Font.PLAIN, 14));
+        exportOverlay.add(summaryLabel);
+        
+        return exportOverlay;
     }
 
     private JSONObject errorResponse(Exception e) {

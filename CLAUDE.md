@@ -31,6 +31,9 @@ AutoDense is a gel densitometry application built as a standalone Mac-native Fij
      - `adjust_lanes`: Fine-tune lane positions
      - `render_overlay_png`: Export view for user
      - `quantify_bands`: Measure band intensities
+     - `enable_band_assist`: **NEW** Enable user-assisted band identification
+     - `disable_band_assist`: **NEW** Disable user-assisted mode
+     - `configure_band_assist`: **NEW** Configure BandAssist parameters
      - `export_results`: Save CSV/JSON/PNG
 
 3. **GeminiOrchestrator** (`/plugin/src/main/java/com/betterdairy/autodense/orchestrator/GeminiOrchestrator.java`)
@@ -38,6 +41,15 @@ AutoDense is a gel densitometry application built as a standalone Mac-native Fij
    - Sends tool schemas to Gemini
    - Executes tool calls from Gemini
    - Returns results with handles
+   - **NEW**: Integrated with comprehensive session logging
+
+4. **SessionLogger** (`/plugin/src/main/java/com/betterdairy/autodense/session/SessionLogger.java`)
+   - **NEW**: Comprehensive JSON logging system for troubleshooting and training
+   - Logs all conversations between user and Gemini
+   - Records all tool calls with parameters, results, and execution times
+   - Tracks session events, errors, and API interactions
+   - Automatic log rotation and cleanup
+   - Privacy-aware sanitization (removes API keys, truncates large data)
 
 ### Workflow Example
 ```
@@ -192,9 +204,157 @@ Enable debug output:
 - **API Latency**: Gemini responses typically 2-5 seconds
 - **Analysis Speed**: ImageJ operations are CPU-intensive, not GPU accelerated
 
+## Session Logging System (NEW)
+
+### Overview
+AutoDense now includes comprehensive session logging for troubleshooting, training, and quality assurance:
+
+### Log File Structure
+```
+~/.autodense/logs/
+├── autodense_session_20250821_210913_abc123.jsonl    # Main log (JSONL format)
+├── autodense_session_20250821_210913_abc123_summary.json    # Session summary
+└── [automatic rotation and cleanup]
+```
+
+### What Gets Logged
+1. **Conversations**: All user messages and Gemini responses
+2. **Tool Calls**: Every function call with parameters, results, execution times
+3. **Session Events**: Image loading, analysis completion, errors
+4. **API Interactions**: Gemini API calls with response times and token usage
+5. **System Info**: Java version, OS, timezone, session metadata
+
+### Log Entry Types
+```json
+// Conversation entry
+{"type": "conversation", "speaker": "user", "message": "Detect 12 lanes", "timestamp": "..."}
+
+// Tool call entry  
+{"type": "tool_call", "tool_name": "detect_lanes", "execution_time_ms": 850, "success": true, "..."}
+
+// Session event
+{"type": "session_event", "event_type": "image_loaded", "data": {"handle": "img_123"}, "..."}
+
+// API call (with sanitized data)
+{"type": "gemini_api", "endpoint": "analyzeGel", "status_code": 200, "response_time_ms": 1250, "..."}
+```
+
+### Privacy & Security
+- **API Keys**: Automatically removed from logs
+- **Large Data**: Base64 images truncated with size metadata
+- **File Paths**: Converted to relative paths (~/.../file.jpg)
+- **Sensitive Info**: Sanitized recursively from JSON structures
+
+### Usage
+```java
+// Access via GeminiOrchestrator
+GeminiOrchestrator orchestrator = new GeminiOrchestrator(apiKey);
+
+// All operations are automatically logged
+orchestrator.processCommand("Detect lanes", gelImage);
+
+// Export logs for analysis
+orchestrator.exportSessionLog("/path/to/export");
+```
+
+### Configuration
+```bash
+# Set custom log directory
+-Dautodense.log.dir=/custom/log/path
+
+# Log rotation (defaults)
+# - Max 50MB per file
+# - Keep 100 most recent files
+```
+
+### Testing
+```bash
+# Run logging demo
+mvn -f autodense/plugin/pom.xml exec:java \
+  -Dexec.mainClass=com.betterdairy.autodense.logging.SessionLoggingExample
+
+# Run BandAssist demo
+mvn -f autodense/plugin/pom.xml exec:java \
+  -Dexec.mainClass=com.betterdairy.autodense.analysis.BandAssistDemo
+```
+
+## BandAssist Feature (NEW)
+
+### Overview
+BandAssist is a user-assisted band identification system that allows users to click on a band in one lane and automatically find the corresponding band in all other lanes.
+
+### How It Works
+1. **Enable BandAssist**: User or Gemini enables the assist mode
+2. **User Click**: User clicks on any band in any lane 
+3. **Seed Refinement**: System refines the clicked position to nearest peak
+4. **Rf Calculation**: Computes relative mobility (Rf) of the seed band
+5. **Propagation**: Searches other lanes for bands at the same Rf
+6. **Quality Assessment**: Filters results by SNR, width similarity, and prominence
+7. **Display Results**: Shows identified bands with confidence indicators
+
+### Workflow Example
+```
+User: "Enable BandAssist for this gel"
+↓
+Gemini: tool_call("enable_band_assist", {image_handle: "img_abc123"})
+← Returns: {band_assist_enabled: true, lanes_available: 12}
+↓
+User clicks on a band in lane 3
+↓ 
+System: Identifies corresponding bands in lanes 1,2,4,5,6,7,8,9,10,11,12
+↓
+Display: Green=high confidence, Orange=medium, Red=low confidence
+```
+
+### Technical Components
+
+**Helper Classes:**
+- `Profiles.java`: Intensity profile generation from gel lanes
+- `Peaks.java`: Peak detection and sub-pixel refinement  
+- `Quant.java`: Band quantification with background correction
+- `OverlayRenderer.java`: Visualization of identified bands
+- `AssistModels.java`: Extended band models with confidence metrics
+
+**Core Classes:**
+- `AssistBandTool.java`: Main user interaction and band propagation logic
+- Integration with `GelAnalysisTools.java` for tool calls
+
+### Usage Examples
+
+**Via Tool Calls:**
+```json
+// Enable BandAssist
+{"tool": "enable_band_assist", "image_handle": "img_123"}
+
+// Configure sensitivity
+{"tool": "configure_band_assist", "min_snr": 2.0, "search_window_px": 25}
+
+// Disable when done  
+{"tool": "disable_band_assist", "image_handle": "img_123"}
+```
+
+**Via Natural Language:**
+- "Enable BandAssist so I can click on bands"
+- "Make BandAssist more sensitive for faint bands"
+- "Turn off the clicking mode"
+
+### Configuration Parameters
+- `search_window_px`: Window around click for peak refinement (default: 20)
+- `min_prominence`: Minimum peak prominence (default: 0.05)
+- `min_snr`: Minimum signal-to-noise ratio (default: 3.0)
+- `width_ratio_range`: Acceptable band width variation (default: 0.5-2.0)
+- `rf_tolerance`: Rf matching tolerance (default: 0.02)
+
+### Quality Indicators
+- **Green bands**: High confidence (>70%) - strong peaks, good SNR
+- **Orange bands**: Medium confidence (40-70%) - acceptable quality
+- **Red bands**: Low confidence (<40%) - weak signals, may need verification
+- **Magenta outline**: Seed band (user-clicked, 100% confidence)
+
 ## Security Notes
 
 - **API Keys**: Never commit keys to repository, use environment variables
+- **Session Logs**: Automatically sanitized but review before sharing
 - **Temp Files**: GelAnalysisTools creates temporary PNG files for exports
 - **Network**: Gemini API calls send base64-encoded image data to Google
 - **Local Data**: All analysis results stored locally in SessionStore
