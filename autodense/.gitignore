@@ -27,3 +27,19 @@ models/**
 # Large images (keep tiny samples only)
 gels/*
 samples/private/**
+# Build
+*/target/
+.autodense/
+# IDE cruft
+.idea/
+.vscode/
+*.iml
+.DS_Store
+# Big binaries / models
+models/**
+*.gguf
+*.dmg
+*.pkg
+# Large images (keep tiny samples only)
+gels/*
+samples/private/**
