@@ -1,0 +1,13 @@
+.env
+*.pem
+*.p12
+*.keystore
+*.key
+*.crt
+*.gguf
+*.dmg
+*.pkg
+*.tif
+*.tiff
+samples/private/**
+
