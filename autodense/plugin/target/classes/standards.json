@@ -1,14 +1,274 @@
 {
-  "standards": [
+  "protein_standards": [
+    {
+      "id": "thermo_pageruler_plus_prestained",
+      "name": "Thermo PageRuler Plus Prestained",
+      "type": "protein",
+      "manufacturer": "Thermo Fisher",
+      "catalog": "26619",
+      "bands_kda": [250, 130, 100, 70, 55, 35, 25, 15, 10],
+      "reference_bands": [70],
+      "color": "3-color (blue, orange, green)",
+      "prestained": true,
+      "default": true,
+      "description": "Popular 9-band prestained protein ladder with 3-color staining"
+    },
+    {
+      "id": "biorad_precision_plus_all_blue",
+      "name": "Bio-Rad Precision Plus All Blue",
+      "type": "protein",
+      "manufacturer": "Bio-Rad",
+      "catalog": "1610373",
+      "bands_kda": [250, 150, 100, 75, 50, 37, 25, 20, 15, 10],
+      "reference_bands": [25, 50, 75],
+      "color": "blue",
+      "prestained": true,
+      "description": "10 blue-stained recombinant proteins with high-intensity reference bands"
+    },
+    {
+      "id": "biorad_precision_plus_dual_color",
+      "name": "Bio-Rad Precision Plus Dual Color",
+      "type": "protein",
+      "manufacturer": "Bio-Rad", 
+      "catalog": "1610374",
+      "bands_kda": [250, 150, 100, 75, 50, 37, 25, 20, 15, 10],
+      "reference_bands": [25, 75],
+      "color": "blue_pink",
+      "prestained": true,
+      "description": "8 blue bands with 2 pink reference bands at 25 and 75 kDa"
+    },
+    {
+      "id": "biorad_precision_plus_kaleidoscope",
+      "name": "Bio-Rad Precision Plus Kaleidoscope",
+      "type": "protein",
+      "manufacturer": "Bio-Rad",
+      "catalog": "1610375", 
+      "bands_kda": [250, 150, 100, 75, 50, 37, 25, 20, 15, 10],
+      "reference_bands": [25, 50, 75],
+      "color": "multicolor",
+      "prestained": true,
+      "description": "Multicolor prestained protein standard for clear band identification"
+    },
+    {
+      "id": "thermo_spectra_multicolor_broad",
+      "name": "Thermo Spectra Multicolor Broad Range",
+      "type": "protein",
+      "manufacturer": "Thermo Fisher",
+      "catalog": "26634",
+      "bands_kda": [260, 140, 100, 70, 50, 40, 35, 25, 15, 10],
+      "reference_bands": [50, 100],
+      "color": "4-color (blue, orange, green, pink)",
+      "prestained": true,
+      "description": "10-band ladder with 4-color staining for easy identification"
+    },
+    {
+      "id": "thermo_himark_prestained",
+      "name": "Thermo HiMark Pre-stained",
+      "type": "protein",
+      "manufacturer": "Thermo Fisher",
+      "catalog": "LC5699",
+      "bands_kda": [460, 268, 238, 171, 117, 71, 55, 41, 31],
+      "reference_bands": [117, 268],
+      "color": "2-color (blue, pink)",
+      "prestained": true,
+      "description": "High molecular weight standard (31-460 kDa) for large proteins"
+    },
+    {
+      "id": "thermo_benchmark_prestained",
+      "name": "Thermo BenchMark Prestained",
+      "type": "protein",
+      "manufacturer": "Thermo Fisher",
+      "catalog": "10748010",
+      "bands_kda": [220, 160, 120, 100, 90, 80, 70, 60, 50, 40, 30, 25, 20, 15, 10],
+      "reference_bands": [50, 100],
+      "color": "blue",
+      "prestained": true,
+      "description": "15-band prestained protein ladder with broad range coverage"
+    },
     {
       "id": "thermo_pageruler_prestained",
-      "name": "Thermo PageRuler Prestained",
-      "bands_kda": [170,130,100,70,55,40,35,25,15,10]
+      "name": "Thermo PageRuler Prestained (Classic)",
+      "type": "protein",
+      "manufacturer": "Thermo Fisher",
+      "catalog": "26616",
+      "bands_kda": [180, 130, 100, 70, 55, 40, 35, 25, 15, 10],
+      "reference_bands": [70],
+      "color": "blue",
+      "prestained": true,
+      "description": "Classic 10-band prestained protein ladder"
+    },
+    {
+      "id": "thermo_novex_broad_range",
+      "name": "Thermo Novex Broad Range",
+      "type": "protein",
+      "manufacturer": "Thermo Fisher",
+      "catalog": "LC5800",
+      "bands_kda": [260, 160, 110, 80, 60, 50, 40, 30, 20, 15, 10, 3.5],
+      "reference_bands": [50, 110],
+      "color": "blue",
+      "prestained": true,
+      "description": "12-band broad range prestained ladder including low MW proteins"
     },
     {
       "id": "invitrogen_seeblue_plus2",
       "name": "Invitrogen SeeBlue Plus2",
-      "bands_kda": [250,150,120,100,80,60,50,40,30,25,20,15,10]
+      "type": "protein",
+      "manufacturer": "Thermo Fisher",
+      "catalog": "LC5925",
+      "bands_kda": [198, 98, 62, 49, 38, 28, 17, 14, 6, 3],
+      "reference_bands": [62, 98],
+      "color": "blue",
+      "prestained": true,
+      "description": "Classic 10-band prestained protein standard"
+    },
+    {
+      "id": "thermo_spectra_multicolor",
+      "name": "Thermo Spectra Multicolor",
+      "type": "protein",
+      "manufacturer": "Thermo Fisher",
+      "catalog": "26625",
+      "bands_kda": [260, 160, 110, 80, 60, 50, 40, 30, 25, 15, 10],
+      "reference_bands": [50, 110],
+      "color": "multicolor",
+      "prestained": true,
+      "description": "4-color protein standard for easy identification"
+    },
+    {
+      "id": "neb_color_prestained",
+      "name": "NEB Color Prestained Protein",
+      "type": "protein",
+      "manufacturer": "New England Biolabs",
+      "catalog": "P7712",
+      "bands_kda": [245, 180, 135, 100, 75, 63, 51, 39, 28, 20, 14, 6],
+      "reference_bands": [63, 135],
+      "color": "multicolor",
+      "prestained": true,
+      "description": "12-band multicolor prestained protein ladder"
+    },
+    {
+      "id": "proteintech_prestained",
+      "name": "Proteintech Prestained Protein Marker",
+      "type": "protein",
+      "manufacturer": "Proteintech",
+      "catalog": "PL00001",
+      "bands_kda": [180, 135, 100, 75, 63, 48, 35, 25, 20, 17, 11],
+      "reference_bands": [63, 135],
+      "color": "blue",
+      "prestained": true,
+      "description": "11-band prestained protein marker (10-180 kDa)"
+    }
+  ],
+  "dna_standards": [
+    {
+      "id": "neb_1kb_ladder",
+      "name": "NEB 1 kb DNA Ladder",
+      "type": "dna",
+      "manufacturer": "New England Biolabs",
+      "catalog": "N3232",
+      "bands_bp": [10000, 8000, 6000, 5000, 4000, 3000, 2500, 2000, 1500, 1000, 750, 500],
+      "reference_bands": [3000],
+      "fragment_range": "0.5-10 kb",
+      "default": true,
+      "description": "Popular 1 kb DNA ladder with 3 kb reference band"
+    },
+    {
+      "id": "neb_100bp_ladder", 
+      "name": "NEB 100 bp DNA Ladder",
+      "type": "dna",
+      "manufacturer": "New England Biolabs",
+      "catalog": "N3231",
+      "bands_bp": [1517, 1200, 1000, 900, 800, 700, 600, 500, 400, 300, 200, 100],
+      "reference_bands": [500, 1000],
+      "fragment_range": "100-1517 bp",
+      "description": "12-band ladder with reference bands at 500 and 1000 bp"
+    },
+    {
+      "id": "neb_1kb_plus_ladder",
+      "name": "NEB 1 kb Plus DNA Ladder",
+      "type": "dna",
+      "manufacturer": "New England Biolabs", 
+      "catalog": "N3200",
+      "bands_bp": [10000, 7000, 5000, 4000, 3000, 2000, 1500, 1000, 700, 500, 400, 300, 200, 100],
+      "reference_bands": [500, 1000, 3000],
+      "fragment_range": "100 bp - 10 kb",
+      "description": "19-band ladder with multiple reference bands"
+    },
+    {
+      "id": "thermo_generuler_1kb",
+      "name": "Thermo GeneRuler 1 kb DNA Ladder",
+      "type": "dna",
+      "manufacturer": "Thermo Fisher",
+      "catalog": "SM0311",
+      "bands_bp": [10000, 8000, 6000, 5000, 4000, 3000, 2500, 2000, 1500, 1000, 750, 500, 250],
+      "reference_bands": [3000],
+      "fragment_range": "250 bp - 10 kb", 
+      "description": "13-band DNA ladder with increased intensity 3 kb band"
+    },
+    {
+      "id": "thermo_generuler_100bp",
+      "name": "Thermo GeneRuler 100 bp DNA Ladder",
+      "type": "dna",
+      "manufacturer": "Thermo Fisher",
+      "catalog": "SM0241",
+      "bands_bp": [1031, 900, 800, 700, 600, 500, 400, 300, 200, 100],
+      "reference_bands": [500],
+      "fragment_range": "100-1031 bp",
+      "description": "10-band ladder ideal for small fragments"
+    },
+    {
+      "id": "thermo_generuler_mix",
+      "name": "Thermo GeneRuler DNA Ladder Mix",
+      "type": "dna",
+      "manufacturer": "Thermo Fisher",
+      "catalog": "SM0331",
+      "bands_bp": [10000, 8000, 6000, 5000, 4000, 3000, 2500, 2000, 1500, 1200, 1000, 900, 800, 700, 600, 500, 400, 300, 200, 100, 80],
+      "reference_bands": [500, 3000],
+      "fragment_range": "80 bp - 10 kb",
+      "description": "21-band mix covering broad size range"
+    },
+    {
+      "id": "biorad_quick_load_1kb",
+      "name": "Bio-Rad Quick-Load 1 kb DNA Ladder",
+      "type": "dna", 
+      "manufacturer": "Bio-Rad",
+      "catalog": "1708355",
+      "bands_bp": [10000, 8000, 6000, 5000, 4000, 3000, 2500, 2000, 1500, 1000, 750, 500],
+      "reference_bands": [3000],
+      "fragment_range": "0.5-10 kb",
+      "description": "Ready-to-load 1 kb ladder with loading dye"
+    },
+    {
+      "id": "biorad_quick_load_100bp",
+      "name": "Bio-Rad Quick-Load 100 bp DNA Ladder",
+      "type": "dna",
+      "manufacturer": "Bio-Rad", 
+      "catalog": "1708354",
+      "bands_bp": [1517, 1200, 1000, 900, 800, 700, 600, 500, 400, 300, 200, 100],
+      "reference_bands": [500, 1000],
+      "fragment_range": "100-1517 bp",
+      "description": "Ready-to-load 100 bp ladder with enhanced visibility"
+    },
+    {
+      "id": "invitrogen_trackit_1kb",
+      "name": "Invitrogen TrackIt 1 Kb Plus DNA Ladder", 
+      "type": "dna",
+      "manufacturer": "Thermo Fisher",
+      "catalog": "10488058",
+      "bands_bp": [12000, 5000, 4000, 3000, 2000, 1650, 1000, 850, 650, 500, 400, 300, 200, 100],
+      "reference_bands": [1000, 3000],
+      "fragment_range": "100 bp - 12 kb",
+      "description": "14-band ladder with extended high molecular weight range"
+    },
+    {
+      "id": "neb_lambda_dna_hindiii",
+      "name": "NEB Lambda DNA/HindIII Markers",
+      "type": "dna",
+      "manufacturer": "New England Biolabs",
+      "catalog": "N3012",
+      "bands_bp": [23130, 9416, 6557, 4361, 2322, 2027, 564, 125],
+      "reference_bands": [23130],
+      "fragment_range": "125 bp - 23.1 kb",
+      "description": "Classic lambda DNA HindIII digest for large fragments"
     }
   ]
 }

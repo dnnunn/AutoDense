@@ -4,106 +4,207 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AutoDense is a gel densitometry application built as a standalone Mac-native Fiji/ImageJ2 app with offline natural language control. The project consists of two main Java modules that package into a self-contained macOS application bundle.
+AutoDense is a gel densitometry application built as a standalone Mac-native Fiji/ImageJ2 app with AI-powered control via Google Gemini. The system uses a **handle-based architecture** where Gemini acts as the planner and ImageJ/Fiji executes the actual image analysis operations.
+
+## Architecture (NEW - Handle-Based System)
+
+### Core Design Principle
+- **Gemini = Planner**: Emits structured tool calls, never processes pixels
+- **ImageJ = Executor**: Performs all image operations, maintains state
+- **Handles = References**: Images and overlays referenced by handles, not pixels
+
+### Key Components
+
+1. **SessionStore** (`/plugin/src/main/java/com/betterdairy/autodense/session/SessionStore.java`)
+   - Maintains all state (images, overlays, analysis results)
+   - Issues handles (e.g., `img_abc123`, `ov_def456`)
+   - Never passes pixels to LLM
+
+2. **GelAnalysisTools** (`/plugin/src/main/java/com/betterdairy/autodense/tools/GelAnalysisTools.java`)
+   - Tool implementations for Gemini function calling
+   - Each tool operates on handles, not pixels
+   - Available tools:
+     - `open_image`: Load gel image → returns image_handle
+     - `preprocess`: Apply enhancements (rotate, flip, contrast, background)
+     - `detect_lanes`: Find lanes → returns overlay_handle
+     - `detect_bands`: Find bands within lanes
+     - `adjust_lanes`: Fine-tune lane positions
+     - `render_overlay_png`: Export view for user
+     - `quantify_bands`: Measure band intensities
+     - `export_results`: Save CSV/JSON/PNG
+
+3. **GeminiOrchestrator** (`/plugin/src/main/java/com/betterdairy/autodense/orchestrator/GeminiOrchestrator.java`)
+   - Coordinates Gemini planning with ImageJ execution
+   - Sends tool schemas to Gemini
+   - Executes tool calls from Gemini
+   - Returns results with handles
+
+### Workflow Example
+```
+User: "Open gel.tif, detect 12 lanes, find bands, export CSV"
+↓
+Gemini: tool_call("open_image", {path: "gel.tif"})
+← Returns: {image_handle: "img_abc123"}
+↓
+Gemini: tool_call("detect_lanes", {image_handle: "img_abc123", expected_lanes: 12})
+← Returns: {overlay_handle: "ov_def456", lanes_found: 12}
+↓
+Gemini: tool_call("detect_bands", {image_handle: "img_abc123"})
+← Returns: {bands_total: 67}
+↓
+Gemini: tool_call("export_results", {image_handle: "img_abc123", formats: ["csv"]})
+← Returns: {exported_files: ["results.csv"]}
+```
 
 ## Build System
 
-This is a Maven multi-module project using Java 17:
+Maven single-module project using Java 17:
 
-- **Root build**: `mvn clean package` from `/autodense/`
-- **Plugin module**: `mvn clean package` from `/autodense/plugin/`  
-- **NL module**: `mvn clean package` from `/autodense/nl/`
-- **Build llama.cpp**: `./packaging/scripts/build_llama_universal.sh`
-- **Package app**: `./packaging/scripts/package_app.sh`
+### Development Build & Run Commands
 
-## Architecture
+**Build:**
+```bash
+mvn -q -DskipTests=true -f autodense/pom.xml clean install
+```
 
-### Core Modules
+**Run with Gemini API:**
+```bash
+mvn -q -f autodense/plugin/pom.xml exec:java \
+  -Dexec.mainClass=com.betterdairy.autodense.plugin.EnhancedImageJLauncher \
+  -Dexec.classpathScope=runtime \
+  -DGEMINI_API_KEY=your_api_key_here
+```
 
-1. **plugin** (`autodense-plugin`): ImageJ2 plugin containing core analysis and UI
-   - Entry point: `OpenAnalyzeCommand.java` - main ImageJ plugin command
-   - Analysis package: Lane detection, band detection, calibration, normalization
-   - UI: Swing-based gel analysis interface with drag-and-drop
-   - Model: Data structures for lanes, bands, calibration results
-
-2. **nl** (`autodense-nl`): Natural language processing client 
-   - Spawns local llama.cpp server processes for offline LLM inference
-   - JSON schema validation for natural language commands
-   - Context management for gel analysis state
-
-### Key Analysis Components
+## Core Analysis Components
 
 - **LaneDetector**: Finds gel lanes via vertical projection analysis
 - **BandDetector**: Identifies protein bands within lanes using 1D profile analysis  
+- **FijiBandDetector**: Enhanced band detection with Fiji algorithms
+- **BandQuantification**: Quantifies band intensities with background subtraction
 - **Calibrator**: Fits molecular weight calibration curves from ladder lanes
-- **Normalizer**: Applies various normalization strategies (lane total, reference band)
-- **Deltas**: Computes statistical comparisons between lanes
+- **Normalizer**: Applies various normalization strategies
+- **ImagePreprocessor**: Handles saturation, contrast, filtering
+- **WorkflowManager**: Manages analysis pipelines
 
-### Natural Language Control
+## Migration from Old Architecture
 
-The system uses a local LLM (via llama.cpp) to parse natural language commands into structured JSON actions:
-- Schema: `/nl/src/main/resources/intent.schema.json`
-- Supported actions: set_ladder, detect_bands, calibrate_mw, quantify_bands, normalize, lane_deltas, export
-- Standards library: `/plugin/src/main/resources/standards.json`
+### Old System (Removed)
+- **GelUI.java**: Monolithic UI with embedded NLP (deprecated)
+- **NaturalLanguageProcessor**: Pattern matching system (removed)
+- **nl module**: Local LLM via llama.cpp (removed)
+- **GGUF models**: Local model files (removed)
+- Direct pixel manipulation
+- Context loss between commands
 
-### Packaging Structure
+### Current System
+- **GeminiOrchestrator**: Clean separation of concerns
+- **Gemini Cloud API**: Advanced reasoning and vision
+- **Handle-based state**: SessionStore maintains context
+- **Embedded chat**: Direct conversation in UI
+- **Tool-based execution**: Structured function calls
 
-- **packaging/resources/**: Contains Fiji.app bundle template and app resources
-- **packaging/scripts/**: Build scripts for llama.cpp binaries and app packaging
-- **Models**: GGUF model files placed in `Contents/Resources/models/`
-- **LLM binaries**: Universal llama-server binary in `Contents/Resources/bin/`
+### Key Changes
+| Removed | Current |
+|---------|---------|
+| Local LLM server | Gemini Cloud API only |
+| NL module | Plugin module only |
+| Pattern matching | Vision analysis + reasoning |
+| Dialog-based chat | Embedded chat interface |
+| llama.cpp binaries | No local inference |
 
-## Development Workflow
+## API Configuration
 
-1. Develop Java code in plugin/ and nl/ modules
-2. Test with `mvn clean package` from root or individual modules
-3. Build llama.cpp universal binaries if needed
-4. Package into standalone .app bundle for distribution
-5. Sign and notarize for macOS distribution (see packaging scripts)
-
-## Key Files
-
-- Main entry: `/plugin/src/main/java/com/betterdairy/autodense/plugin/OpenAnalyzeCommand.java:26`
-- Core models: `/plugin/src/main/java/com/betterdairy/autodense/model/Models.java`
-- NL client: `/nl/src/main/java/com/betterdairy/autodense/nl/NLClient.java`
-- Action executor: `/plugin/src/main/java/com/betterdairy/autodense/plugin/ActionExecutor.java`
-- UI implementation: `/plugin/src/main/java/com/betterdairy/autodense/plugin/GelUI.java`
+Set Gemini API key via:
+- Environment variable: `export GEMINI_API_KEY=your_key`
+- System property: `-DGEMINI_API_KEY=your_key`
 
 ## Testing Protocol
 
-**IMPORTANT**: When user provides feedback on a running build:
-1. Kill any running background bash processes using KillBash
-2. Kill any running ImageJ2 processes using `pkill -f ImageJ`  
-3. Then build and run fresh instance to prevent conflicts
+When user provides feedback:
+1. Kill running processes: `pkill -f ImageJ`
+2. Rebuild with changes
+3. Run with API key
+4. Test handle persistence across commands
 
-User will manually test UI functionality and provide feedback after each build/run cycle.
+## Key Files (Updated)
 
-## AI-Guided Band Detection Optimization
+- **Orchestrator**: `/plugin/src/main/java/com/betterdairy/autodense/orchestrator/GeminiOrchestrator.java`
+- **Session Store**: `/plugin/src/main/java/com/betterdairy/autodense/session/SessionStore.java`
+- **Tools**: `/plugin/src/main/java/com/betterdairy/autodense/tools/GelAnalysisTools.java`
+- **Models**: `/plugin/src/main/java/com/betterdairy/autodense/model/Models.java`
+- **Analysis**: `/plugin/src/main/java/com/betterdairy/autodense/analysis/` (all detectors)
+- **Main UI**: `/plugin/src/main/java/com/betterdairy/autodense/plugin/GelUI.java` (embedded chat)
 
-The project architecture supports AI-assisted parameter optimization using the bundled local LLM:
+## Design Principles
 
-### **Vision Model Integration**
-- Use bundled vision LLM to analyze gel images
-- Assess band clarity, background noise, contrast issues
-- Suggest optimal parameter ranges based on gel characteristics
+1. **Never pass pixels to LLM** - Use handles for all references
+2. **Gemini plans, ImageJ executes** - Clear separation of concerns
+3. **Tools are deterministic** - Same inputs → same outputs
+4. **State persists in SessionStore** - Not in LLM memory
+5. **One tool call at a time** - Sequential execution for clarity
 
-### **Automated Parameter Tuning**
-- Implement iterative optimization algorithms
-- Use metrics: band count stability, signal-to-noise ratio, band sharpness  
-- AI tries parameter combinations and ranks results
+## Troubleshooting
 
-### **Smart Presets & Guidance**
-- AI learns from successful parameter combinations
-- Provides real-time feedback: "*Try increasing contrast - bands are too faint*"
-- Suggests starting points: "*This looks like a protein ladder gel, try these settings...*"
+### Common Issues
 
-### **Implementation Strategy**
-1. Add "Auto-Optimize" button to dialog
-2. Vision model analyzes current gel image
-3. Algorithm tests parameter combinations
-4. Returns optimal settings with confidence scores
-5. User can accept suggestions or continue manual tuning
+**Gemini API Errors:**
+- 500 errors: Check API key validity and billing status
+- 429 errors: API quota exceeded, wait or upgrade plan
+- Invalid requests: Verify tool call JSON format
 
-## Known Issues
+**State Management:**
+- "Image not found": Handle expired or incorrect, check SessionStore
+- Overlay persistence: Use putOverlay/getOverlay with image handle
+- Analysis data: Store results with putAnalysis, retrieve with getAnalysis
 
-**ImageJ Dialog Spinner Arrows**: ImageJ's NonBlockingGenericDialog does not support spinner arrows on numeric fields in the same way as regular system dialogs. This is a limitation of the ImageJ framework. Alternative approaches tried: stepSize parameter, sliders, different field types - none provide traditional spinner controls. **Solution**: Use sliders for intuitive parameter adjustment.
+**ImageJ Integration:**
+- Plugin not found: Ensure EnhancedImageJLauncher launches complete ImageJ
+- UI focus issues: Use ImageJ dialogs instead of Swing when possible
+- Memory leaks: Clear SessionStore periodically for long sessions
+
+### Debug Logging
+
+Enable debug output:
+```bash
+-Dorg.slf4j.simpleLogger.defaultLogLevel=debug
+```
+
+## Dependencies
+
+- **Java 17+** (required)
+- **ImageJ2/SciJava** framework
+- **Gemini Pro Vision API** (cloud service)
+- **JSON processing** (org.json)
+- **Maven 3.8+** for builds
+
+## Known Limitations
+
+1. **ImageJ Dialog Spinners**: Numeric fields don't support traditional spinner arrows
+2. **Single Session**: Current design handles one gel analysis at a time
+3. **Cloud Dependency**: Requires internet for Gemini API calls
+4. **Memory Usage**: Large images consume significant RAM in SessionStore
+5. **Tool Call Ordering**: Sequential execution may be slower than parallel
+
+## Performance Considerations
+
+- **Image Caching**: SessionStore keeps full ImagePlus objects in memory
+- **Overlay Rendering**: PNG exports scale down large images automatically
+- **API Latency**: Gemini responses typically 2-5 seconds
+- **Analysis Speed**: ImageJ operations are CPU-intensive, not GPU accelerated
+
+## Security Notes
+
+- **API Keys**: Never commit keys to repository, use environment variables
+- **Temp Files**: GelAnalysisTools creates temporary PNG files for exports
+- **Network**: Gemini API calls send base64-encoded image data to Google
+- **Local Data**: All analysis results stored locally in SessionStore
+
+## Future Enhancements
+
+- Capability registry from SciJava introspection
+- Auto-tune loops for parameter optimization  
+- Workflow recording and replay
+- Multi-image session support
+- Batch processing pipelines
+- Local caching of Gemini responses
+- GPU-accelerated analysis kernels

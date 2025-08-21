@@ -1,0 +1,150 @@
+{
+  "gel_electrophoresis": {
+    "gel_types": [
+      "SDS-PAGE", "PAGE", "agarose gel", "polyacrylamide gel", "urea gel", "tricine gel", "bis-tris gel",
+      "gradient gel", "native gel", "denaturing gel", "reducing gel", "non-reducing gel"
+    ],
+    "molecular_weight_standards": {
+      "protein_ladders": [
+        "protein ladder", "MW marker", "molecular weight marker", "size standard", 
+        "broad range ladder", "prestained ladder", "unstained ladder",
+        "low MW ladder", "high MW ladder", "precision ladder"
+      ],
+      "dna_ladders": [
+        "DNA ladder", "1kb ladder", "100bp ladder", "50bp ladder",
+        "lambda DNA", "HindIII ladder", "EcoRI ladder", "size marker"
+      ]
+    },
+    "analysis_terms": [
+      "band intensity", "densitometry", "quantification", "normalization",
+      "background subtraction", "saturation", "linear range", "loading control",
+      "housekeeping protein", "reference band", "internal standard"
+    ],
+    "gel_conditions": [
+      "running buffer", "stacking gel", "resolving gel", "sample buffer",
+      "reducing agent", "DTT", "beta-mercaptoethanol", "TCEP",
+      "voltage", "current", "temperature", "migration distance"
+    ],
+    "staining_methods": [
+      "Coomassie blue", "silver stain", "methylene blue", "ethidium bromide",
+      "SYBR safe", "GelRed", "crystal violet", "amido black"
+    ]
+  },
+  "microbiology": {
+    "agar_media": [
+      "LB agar", "nutrient agar", "blood agar", "chocolate agar", "MacConkey agar",
+      "sabouraud agar", "PDA", "potato dextrose agar", "TSA", "tryptic soy agar",
+      "selective media", "differential media", "enriched media"
+    ],
+    "colony_characteristics": {
+      "morphology": [
+        "circular", "irregular", "punctiform", "filamentous", "rhizoid",
+        "smooth", "rough", "mucoid", "dry", "raised", "flat", "convex",
+        "entire margin", "serrated", "lobate", "undulate", "filiform"
+      ],
+      "colors": [
+        "white", "cream", "yellow", "orange", "pink", "red", "purple", "blue",
+        "green", "brown", "black", "translucent", "opaque", "iridescent",
+        "metallic sheen", "pigmented", "non-pigmented"
+      ],
+      "sizes": [
+        "pinpoint", "small", "medium", "large", "tiny colonies",
+        "microcolonies", "spreading", "swarming"
+      ]
+    },
+    "microorganisms": {
+      "yeast": [
+        "Saccharomyces cerevisiae", "Candida albicans", "Schizosaccharomyces pombe",
+        "Pichia pastoris", "Kluyveromyces lactis", "brewing yeast", "baker's yeast"
+      ],
+      "bacteria": [
+        "E. coli", "Bacillus subtilis", "Staphylococcus aureus", "Streptococcus",
+        "Pseudomonas", "Salmonella", "Listeria", "gram-positive", "gram-negative"
+      ],
+      "fungi": [
+        "Aspergillus", "Penicillium", "Rhizopus", "Mucor", "dermatophytes",
+        "mold", "filamentous fungi", "dimorphic fungi"
+      ]
+    },
+    "growth_conditions": [
+      "aerobic", "anaerobic", "facultative", "microaerophilic",
+      "mesophile", "thermophile", "psychrophile", "halophile",
+      "incubation temperature", "CO2 requirements", "pH requirements"
+    ],
+    "contamination": [
+      "mixed culture", "cross-contamination", "environmental contaminant",
+      "sterility check", "pure culture", "isolation", "streaking"
+    ]
+  },
+  "quantification": {
+    "statistical_terms": [
+      "mean", "median", "standard deviation", "coefficient of variation",
+      "confidence interval", "p-value", "significance", "correlation",
+      "regression", "ANOVA", "t-test", "fold change"
+    ],
+    "normalization_methods": [
+      "total lane normalization", "housekeeping gene normalization",
+      "loading control", "reference band", "internal standard",
+      "β-actin", "GAPDH", "tubulin", "total protein"
+    ],
+    "units": [
+      "kDa", "kilodalton", "bp", "base pair", "kb", "kilobase",
+      "CFU", "colony forming units", "OD", "optical density",
+      "AU", "arbitrary units", "RFU", "relative fluorescence units"
+    ]
+  },
+  "laboratory_techniques": {
+    "sample_preparation": [
+      "cell lysis", "protein extraction", "DNA isolation", "RNA extraction",
+      "sonication", "homogenization", "centrifugation", "filtration",
+      "dialysis", "concentration", "precipitation", "purification"
+    ],
+    "detection_methods": [
+      "western blot", "northern blot", "southern blot", "dot blot",
+      "ELISA", "immunoassay", "PCR", "qPCR", "RT-PCR",
+      "fluorescence", "chemiluminescence", "colorimetric"
+    ],
+    "imaging": [
+      "UV transillumination", "blue light", "visible light",
+      "fluorescence imaging", "phosphorimager", "densitometer",
+      "gel documentation system", "CCD camera"
+    ]
+  },
+  "common_abbreviations": {
+    "molecular_biology": {
+      "SDS": "sodium dodecyl sulfate",
+      "PAGE": "polyacrylamide gel electrophoresis",
+      "EDTA": "ethylenediaminetetraacetic acid",
+      "Tris": "tris(hydroxymethyl)aminomethane",
+      "HEPES": "4-(2-hydroxyethyl)-1-piperazineethanesulfonic acid",
+      "BSA": "bovine serum albumin",
+      "DTT": "dithiothreitol",
+      "PMSF": "phenylmethylsulfonyl fluoride"
+    },
+    "microbiology": {
+      "LB": "Luria-Bertani",
+      "TSB": "tryptic soy broth",
+      "PDA": "potato dextrose agar",
+      "CFU": "colony forming units",
+      "MIC": "minimum inhibitory concentration",
+      "MAC": "minimum antibiotic concentration"
+    }
+  },
+  "analysis_workflows": {
+    "gel_analysis": [
+      "load image", "detect lanes", "identify bands", "quantify intensity",
+      "normalize results", "calculate molecular weights", "export data"
+    ],
+    "colony_counting": [
+      "load plate image", "detect colonies", "count by color",
+      "measure sizes", "check contamination", "calculate CFU",
+      "generate report"
+    ]
+  },
+  "troubleshooting_terms": [
+    "overloaded lanes", "band distortion", "smiling", "frowning",
+    "streaking", "compression", "band inversion", "poor resolution",
+    "high background", "uneven staining", "edge effects",
+    "overgrowth", "undergrowth", "spreading colonies", "satellite colonies"
+  ]
+}

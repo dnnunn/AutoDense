@@ -79,3 +79,61 @@ All notable changes to the AutoDense gel densitometry project are documented in 
 - Added interactive band detection optimization with live preview overlay
 - Real-time parameter adjustment with visual feedback
 - Enhanced user interface for fine-tuning detection parameters
+
+#### 2025-08-21 - Restored Arrow (Spinner) Controls for Lane Layout
+- **File**: `autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/OpenAnalyzeCommand.java`
+- Re-enabled SciJava command parameters with `style="spinner"` for:
+  - `laneWidthFraction` (0.2–0.9)
+  - `gridOffsetFraction` (-0.25–0.25)
+- Keeps expected lane count/constant spacing as parameters and clarifies descriptions.
+- Reason: Up/down arrows were nonfunctional with previous slider approach; spinners restore precise nudge control.
+
+### AI Integration & Natural Language Processing - 2025-08-20 Evening
+
+#### Complete LLM Integration Setup
+- **Model**: Downloaded Gemma 3 4B instruction-tuned GGUF model (2.3GB) from Hugging Face
+- **Vision**: Downloaded mmproj vision component (812MB) for multimodal gel image analysis
+- **Server**: Integrated llama.cpp server with ARM64 Metal GPU acceleration for M3 Max
+- **Dependencies**: Added org.json, jackson-databind, json-schema-validator to nl module
+
+#### Natural Language Architecture
+- **File**: `autodense/nl/src/main/java/com/betterdairy/autodense/nl/LlamaServer.java`
+  - Complete server lifecycle management (startup, health checks, shutdown)
+  - Auto-detection of app bundle vs development mode paths
+  - Vision support with --mmproj parameter integration
+  - Process management with proper error handling and timeouts
+- **File**: `autodense/nl/src/main/java/com/betterdairy/autodense/nl/NLClient.java`
+  - Multimodal chat completion API integration
+  - Base64 image encoding for vision analysis
+  - JSON schema validation for reliable command parsing
+  - OpenAI-compatible chat format with system prompts
+- **File**: `autodense/nl/src/main/java/com/betterdairy/autodense/nl/PortFinder.java`
+  - Enhanced port discovery with fallback mechanisms
+
+#### Build System Updates
+- **File**: `autodense/packaging/scripts/build_llama_universal.sh`
+  - Updated from deprecated Makefile to modern CMake build system
+  - ARM64-optimized build configuration for Apple Silicon
+  - Fixed cross-compilation issues for macOS universal binaries
+- **Dependencies**: Added CMake installation and dependency management
+- **Models**: Integrated model files into packaging/resources/models/ structure
+
+#### Testing & Validation
+- **Performance**: Achieved 619 tokens/sec prompt processing, 75 tokens/sec generation
+- **Response Time**: ~650ms total for natural language to structured JSON conversion
+- **Accuracy**: Successfully converts "detect protein bands in lanes 1-4" to valid JSON:
+  ```json
+  {
+    "intent": "multi_action",
+    "actions": [{"action": "detect_bands", "lanes": ["1", "2", "3", "4"]}]
+  }
+  ```
+- **Schema Compliance**: Full validation against intent.schema.json specification
+- **Offline Operation**: Complete local inference with no internet dependency
+
+#### System Integration
+- **Chat Template**: Gemma 3 format with proper system/user/assistant roles
+- **Vision Pipeline**: Ready for gel image analysis with <start_of_image> tokens
+- **Context Management**: Gel analysis state integration with NLContext
+- **Error Handling**: Comprehensive error handling with detailed logging
+- **Resource Management**: Proper server startup/shutdown lifecycle
