@@ -85,9 +85,10 @@ public class GeminiApiClient {
             .uri(URI.create(API_BASE_URL + "?key=" + apiKey))
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
-            .timeout(Duration.ofSeconds(30))
+            .timeout(Duration.ofSeconds(40))
             .build();
         
+        // Set per-call timeout of 40 seconds for Gemini API calls
         HttpResponse<String> response = httpClient.send(request, 
             HttpResponse.BodyHandlers.ofString());
         

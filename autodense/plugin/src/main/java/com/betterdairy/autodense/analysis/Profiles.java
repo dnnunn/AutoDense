@@ -19,13 +19,24 @@ public final class Profiles {
         int w = ip.getWidth(), h = ip.getHeight();
         int xs = Math.max(0, Math.min(xStart, xEnd));
         int xe = Math.min(w - 1, Math.max(xStart, xEnd));
-        float[] out = new float[h];
+        
+        // Fast pixel array access
+        float[] pixels = (float[]) ip.convertToFloat().getPixels();
+        float[] out = BufferPool.getFloatBuffer(h);
+        
         for (int y = 0; y < h; y++) {
             double s = 0;
-            for (int x = xs; x <= xe; x++) s += ip.getf(x, y);
+            int rowStart = y * w;
+            for (int x = xs; x <= xe; x++) {
+                s += pixels[rowStart + x];
+            }
             out[y] = (float) s;
         }
-        return out;
+        
+        // Return a copy since we're giving this to the caller
+        float[] result = java.util.Arrays.copyOf(out, h);
+        BufferPool.returnFloatBuffer(out);
+        return result;
     }
 
     /** 
@@ -35,13 +46,18 @@ public final class Profiles {
     public static float[] smooth(float[] a, int window) {
         if (window < 3 || window % 2 == 0) return a.clone();
         int r = window / 2, n = a.length;
-        float[] out = new float[n];
+        float[] out = BufferPool.getFloatBuffer(n);
+        
         for (int i = 0; i < n; i++) {
             int i0 = Math.max(0, i - r), i1 = Math.min(n - 1, i + r);
             double sum = 0;
             for (int j = i0; j <= i1; j++) sum += a[j];
             out[i] = (float)(sum / (i1 - i0 + 1));
         }
-        return out;
+        
+        // Return a copy since we're giving this to the caller
+        float[] result = java.util.Arrays.copyOf(out, n);
+        BufferPool.returnFloatBuffer(out);
+        return result;
     }
 }

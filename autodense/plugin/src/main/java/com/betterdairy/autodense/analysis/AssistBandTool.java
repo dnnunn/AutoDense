@@ -14,6 +14,9 @@ import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalInt;
+import java.util.Stack;
+import java.util.Map;
+import java.util.HashMap;
 
 /**
  * User-assisted band identification tool for AutoDense.
@@ -32,16 +35,119 @@ public final class AssistBandTool {
     private MouseAdapter clicker;
     private boolean isActive = false;
     
-    // Configuration parameters
-    private int searchWindowPx = 20;      // Window around click for peak refinement
-    private float minProminence = 0.05f;  // Minimum peak prominence
-    private double minSnr = 3.0;          // Minimum SNR for acceptance
-    private double maxWidthRatio = 2.0;   // Max width ratio vs seed band
-    private double minWidthRatio = 0.5;   // Min width ratio vs seed band
-    private double rfTolerance = 0.02;    // Rf matching tolerance
+    // Enhanced configuration with all parameters
+    private AssistConfig config = new AssistConfig();
+    
+    // UX state management
+    private Stack<AssistResult> undoStack = new Stack<>();
+    private Map<Integer, String> laneMessages = new HashMap<>(); // Lane index -> message
+    private boolean hasMolecularWeightCalibration = false;
+    
+    /**
+     * Configuration container for all AssistBandTool parameters
+     */
+    public static class AssistConfig {
+        // Search and tolerance parameters
+        public int searchWindowPx = 30;        // ± around click for refinement
+        public double rfTolerance = 0.02;      // ± 0.02 default for Rf matching
+        public double minSnr = 2.0;            // Minimum SNR for acceptance  
+        public float minProminence = 0.03f;    // Minimum peak prominence
+        public double[] widthRatioRange = {0.5, 2.0}; // Width similarity range
+        
+        // Propagation strategy parameters
+        public boolean preferMolecularWeight = true;  // Use MW if available, fallback to Rf
+        public double perLaneWindowPercent = 0.03;    // 3% of lane height per-lane search
+        public int minPerLaneWindowPx = 8;             // Minimum 8px search window
+        
+        // UX parameters
+        public Color seedBandColor = Color.MAGENTA;           // Seed band color
+        public Color acceptedBandColor = Color.CYAN;          // Accepted bands
+        public Color confirmedBandColor = Color.GREEN;        // User-confirmed bands  
+        public Color ambiguousBandColor = Color.ORANGE;       // Needs confirmation
+        public double confidenceThresholdAmbiguous = 0.6;    // Below this = ambiguous
+        
+        public AssistConfig() {}
+        
+        public AssistConfig(AssistConfig other) {
+            this.searchWindowPx = other.searchWindowPx;
+            this.rfTolerance = other.rfTolerance;
+            this.minSnr = other.minSnr;
+            this.minProminence = other.minProminence;
+            this.widthRatioRange = other.widthRatioRange.clone();
+            this.preferMolecularWeight = other.preferMolecularWeight;
+            this.perLaneWindowPercent = other.perLaneWindowPercent;
+            this.minPerLaneWindowPx = other.minPerLaneWindowPx;
+            this.seedBandColor = other.seedBandColor;
+            this.acceptedBandColor = other.acceptedBandColor;
+            this.confirmedBandColor = other.confirmedBandColor;
+            this.ambiguousBandColor = other.ambiguousBandColor;
+            this.confidenceThresholdAmbiguous = other.confidenceThresholdAmbiguous;
+        }
+    }
     
     public AssistBandTool(List<Lane> lanes) {
         this.lanes = new ArrayList<>(lanes);
+    }
+    
+    /**
+     * Create AssistBandTool with custom configuration
+     */
+    public AssistBandTool(List<Lane> lanes, AssistConfig config) {
+        this.lanes = new ArrayList<>(lanes);
+        this.config = new AssistConfig(config);
+    }
+    
+    /**
+     * Update configuration parameters
+     */
+    public void setConfig(AssistConfig config) {
+        this.config = new AssistConfig(config);
+    }
+    
+    /**
+     * Get current configuration (copy)
+     */
+    public AssistConfig getConfig() {
+        return new AssistConfig(config);
+    }
+    
+    /**
+     * Set molecular weight calibration availability
+     */
+    public void setMolecularWeightCalibration(boolean available) {
+        this.hasMolecularWeightCalibration = available;
+    }
+    
+    /**
+     * Undo the last assist operation
+     */
+    public boolean undo(ImagePlus imp) {
+        if (undoStack.isEmpty()) {
+            IJ.showMessage("BandAssist", "No operations to undo.");
+            return false;
+        }
+        
+        AssistResult lastResult = undoStack.pop();
+        // Clear the display from the last result
+        imp.setOverlay(null);
+        
+        // If there's a previous result, redisplay it
+        if (!undoStack.isEmpty()) {
+            displayResult(imp, undoStack.peek());
+        }
+        
+        IJ.showStatus("BandAssist: Undid last operation (" + undoStack.size() + " operations remaining)");
+        return true;
+    }
+    
+    /**
+     * Clear all assist operations
+     */
+    public void clearAll(ImagePlus imp) {
+        undoStack.clear();
+        laneMessages.clear();
+        imp.setOverlay(null);
+        IJ.showStatus("BandAssist: Cleared all operations");
     }
     
     /**
@@ -102,7 +208,7 @@ public final class AssistBandTool {
             }
             
             // Refine the clicked position to find the nearest band
-            AssistBand seedBand = refineBandAtY(imp, clickedLane, y, searchWindowPx);
+            AssistBand seedBand = refineBandAtY(imp, clickedLane, y, config.searchWindowPx);
             if (seedBand == null) {
                 IJ.showMessage("BandAssist", "No clear band found near click position. Try clicking closer to a band.");
                 return;
@@ -112,16 +218,18 @@ public final class AssistBandTool {
             seedBand.flags.add("seed");
             seedBand.confidence = 1.0; // Seed band has 100% confidence
             
-            // Compute Rf (relative mobility) for propagation
+            // Use Rf-based propagation
             double rfSeed = computeRf(clickedLane, seedBand, imp.getHeight());
-            
-            // Propagate to other lanes
             List<AssistBand> propagatedBands = propagateToOtherLanes(imp, clickedLane, seedBand, rfSeed);
+            IJ.showStatus("BandAssist: Propagating by Rf (" + String.format("%.3f", rfSeed) + ")");
             
-            // Create result
+            // Create result 
             AssistResult result = new AssistResult(seedBand, propagatedBands, lanes.size());
             
-            // Update display
+            // Add to undo stack
+            undoStack.push(result);
+            
+            // Update display 
             displayResult(imp, result);
             
             // Show summary
@@ -129,11 +237,10 @@ public final class AssistBandTool {
                 "BandAssist Result:\n" +
                 "✓ Seed band at Rf=%.3f\n" +
                 "✓ Found in %d/%d lanes\n" +
-                "✓ Average confidence: %.0f%%\n\n" +
-                "Green = High confidence (>70%%)\n" +
-                "Orange = Medium confidence (40-70%%)\n" +
-                "Red = Low confidence (<40%%)",
-                rfSeed, result.successfulLanes, result.totalLanes, result.averageConfidence * 100
+                "\nGreen = High confidence\n" +
+                "Orange = Medium confidence\n" +
+                "Red = Low confidence",
+                rfSeed, result.successfulLanes, result.totalLanes
             );
             
             IJ.showMessage("BandAssist Complete", message);
@@ -167,7 +274,7 @@ public final class AssistBandTool {
         
         // Find nearest prominent peak
         int peak = Peaks.argmax(profile, y0, y1);
-        if (!Peaks.isProminent(profile, peak, minProminence)) {
+        if (!Peaks.isProminent(profile, peak, config.minProminence)) {
             return null;
         }
         
@@ -179,7 +286,7 @@ public final class AssistBandTool {
         AssistBand band = Quant.integrateBand(imp, lane, leftValley, rightValley);
         
         // Check quality thresholds
-        if (band.snr < minSnr) {
+        if (band.snr < config.minSnr) {
             return null; // Too noisy
         }
         
@@ -215,7 +322,7 @@ public final class AssistBandTool {
             int y1 = Math.min(profile.length - 1, yPredicted + searchWindow);
             
             // Find best prominent peak in search window
-            OptionalInt bestPeak = Peaks.bestProminent(profile, y0, y1, minProminence);
+            OptionalInt bestPeak = Peaks.bestProminent(profile, y0, y1, config.minProminence);
             if (bestPeak.isEmpty()) continue;
             
             int peak = bestPeak.getAsInt();
@@ -229,7 +336,7 @@ public final class AssistBandTool {
             double snr = band.snr;
             double widthRatio = band.heightPx() / (double) seedBand.heightPx();
             
-            if (snr < minSnr || widthRatio < minWidthRatio || widthRatio > maxWidthRatio) {
+            if (snr < config.minSnr || widthRatio < config.widthRatioRange[0] || widthRatio > config.widthRatioRange[1]) {
                 continue; // Failed quality checks
             }
             
@@ -274,12 +381,12 @@ public final class AssistBandTool {
     }
     
     // Configuration setters for fine-tuning
-    public void setSearchWindow(int windowPx) { this.searchWindowPx = windowPx; }
-    public void setMinProminence(float prominence) { this.minProminence = prominence; }
-    public void setMinSnr(double snr) { this.minSnr = snr; }
+    public void setSearchWindow(int windowPx) { this.config.searchWindowPx = windowPx; }
+    public void setMinProminence(float prominence) { this.config.minProminence = prominence; }
+    public void setMinSnr(double snr) { this.config.minSnr = snr; }
     public void setWidthRatioRange(double min, double max) { 
-        this.minWidthRatio = min; 
-        this.maxWidthRatio = max; 
+        this.config.widthRatioRange[0] = min; 
+        this.config.widthRatioRange[1] = max; 
     }
-    public void setRfTolerance(double tolerance) { this.rfTolerance = tolerance; }
+    public void setRfTolerance(double tolerance) { this.config.rfTolerance = tolerance; }
 }

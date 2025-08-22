@@ -26,11 +26,16 @@ public final class Quant {
         AssistBand band = new AssistBand(x0, x1, y0, y1, (y0 + y1) / 2.0);
         ImageProcessor ip = imp.getProcessor();
 
-        // Band area sum
+        // Fast pixel array access - avoid getf() in nested loops
+        float[] pixels = (float[]) ip.convertToFloat().getPixels();
+        int width = ip.getWidth();
+        
+        // Band area sum using array indexing
         double sum = 0;
         for (int y = y0; y <= y1; y++) {
+            int rowStart = y * width;
             for (int x = x0; x <= x1; x++) {
-                sum += ip.getf(x, y);
+                sum += pixels[rowStart + x];
             }
         }
         
@@ -42,22 +47,24 @@ public final class Quant {
         double bgSum = 0; 
         int bgN = 0;
 
-        // Above flank
+        // Above flank using array indexing
         int a0 = clamp(y0 - flankH - 4, 0, imp.getHeight() - 1);
         int a1 = clamp(y0 - 4, 0, imp.getHeight() - 1);
         for (int y = a0; y <= a1; y++) {
+            int rowStart = y * width;
             for (int x = x0; x <= x1; x++) { 
-                bgSum += ip.getf(x, y); 
+                bgSum += pixels[rowStart + x]; 
                 bgN++; 
             }
         }
 
-        // Below flank  
+        // Below flank using array indexing
         int b0 = clamp(y1 + 4, 0, imp.getHeight() - 1);
         int b1 = clamp(y1 + 4 + flankH, 0, imp.getHeight() - 1);
         for (int y = b0; y <= b1; y++) {
+            int rowStart = y * width;
             for (int x = x0; x <= x1; x++) { 
-                bgSum += ip.getf(x, y); 
+                bgSum += pixels[rowStart + x]; 
                 bgN++; 
             }
         }

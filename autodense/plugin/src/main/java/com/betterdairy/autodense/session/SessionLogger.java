@@ -17,12 +17,14 @@ import java.util.ArrayList;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * Comprehensive session logging for AutoDense gel analysis sessions.
- * Captures all Gemini conversations, tool calls, and session events for:
- * - Troubleshooting and debugging
- * - Training data for AI improvements
- * - Session replay and analysis
- * - User behavior insights
+ * Enhanced session logging for AutoDense gel analysis sessions.
+ * Captures all Gemini conversations, tool calls, and session events with:
+ * - Comprehensive tool logging (name, args after clamping, runtime, handles)
+ * - Path sanitization for privacy
+ * - Band/lane count telemetry for Gemini planning
+ * - JSONL log rotation with size caps
+ * - Opt-out functionality
+ * - Thread-safe operation
  */
 public class SessionLogger {
     
@@ -30,8 +32,12 @@ public class SessionLogger {
     private static final String DEFAULT_LOG_DIR = System.getProperty("user.home") + "/.autodense/logs";
     private static final DateTimeFormatter FILENAME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
     private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
-    private static final int MAX_LOG_SIZE_MB = 50; // Max 50MB per log file
-    private static final int MAX_LOG_FILES = 100;   // Keep max 100 log files
+    // Enhanced configuration
+    private static final int MAX_LOG_SIZE_MB = 50;   // Max 50MB per log file
+    private static final int MAX_LOG_FILES = 100;    // Keep max 100 log files
+    private static final boolean DEFAULT_ENABLED = true; // Opt-out by default
+    private static final String OPT_OUT_PROPERTY = "autodense.logging.disabled";
+    private static final String LOG_LEVEL_PROPERTY = "autodense.logging.level";
     
     private final String sessionId;
     private final Path logFile;
@@ -40,16 +46,24 @@ public class SessionLogger {
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
     private final JSONObject sessionMetadata;
     private volatile boolean isActive = true;
+    private volatile boolean loggingEnabled;
     
-    // Session statistics
+    // Enhanced session statistics
     private int conversationCount = 0;
     private int toolCallCount = 0;
     private int errorCount = 0;
     private final Instant sessionStartTime;
     
+    // Telemetry tracking for Gemini planning
+    private volatile int currentLaneCount = 0;
+    private volatile int currentBandCount = 0;
+    private volatile int currentImageCount = 0;
+    private volatile long currentLogSizeBytes = 0;
+    
     public SessionLogger(String sessionId) {
         this.sessionId = sessionId;
         this.sessionStartTime = Instant.now();
+        this.loggingEnabled = !Boolean.getBoolean(OPT_OUT_PROPERTY);
         this.pendingEntries = new ConcurrentLinkedQueue<>();
         this.logWriter = Executors.newScheduledThreadPool(1, r -> {
             Thread t = new Thread(r, "SessionLogger-" + sessionId);
@@ -57,18 +71,24 @@ public class SessionLogger {
             return t;
         });
         
-        // Initialize log directory and file
-        this.logFile = initializeLogFile();
-        this.sessionMetadata = initializeMetadata();
-        
-        // Start periodic log writing (every 5 seconds)
-        logWriter.scheduleWithFixedDelay(this::flushPendingEntries, 5, 5, TimeUnit.SECONDS);
-        
-        // Log session start
-        logSessionEvent("session_start", "Session initialized", null);
-        
-        // Cleanup old logs on startup
-        cleanupOldLogs();
+        if (loggingEnabled) {
+            // Initialize log directory and file
+            this.logFile = initializeLogFile();
+            this.sessionMetadata = initializeMetadata();
+            
+            // Start periodic log writing (every 5 seconds)
+            logWriter.scheduleWithFixedDelay(this::flushPendingEntries, 5, 5, TimeUnit.SECONDS);
+            
+            // Log session start
+            logSessionEvent("session_start", "Session initialized", null);
+            
+            // Cleanup old logs on startup
+            cleanupOldLogs();
+        } else {
+            this.logFile = null;
+            this.sessionMetadata = new JSONObject();
+            System.out.println("SessionLogger: Logging disabled via " + OPT_OUT_PROPERTY);
+        }
     }
     
     /**
@@ -91,11 +111,14 @@ public class SessionLogger {
     }
     
     /**
-     * Log a tool call execution (request and response)
+     * Enhanced tool call logging with comprehensive details and telemetry
      */
     public void logToolCall(String toolName, JSONObject request, JSONObject response, 
                            long executionTimeMs, boolean success) {
-        if (!isActive) return;
+        if (!isActive || !loggingEnabled) return;
+        
+        // Extract telemetry data for Gemini planning
+        JSONObject telemetry = extractTelemetry(toolName, request, response);
         
         JSONObject entry = new JSONObject()
             .put("type", "tool_call")
@@ -105,10 +128,12 @@ public class SessionLogger {
             .put("tool_name", toolName)
             .put("execution_time_ms", executionTimeMs)
             .put("success", success)
-            .put("request", sanitizeToolData(request))
-            .put("response", sanitizeToolData(response))
+            .put("request", sanitizeToolData(request))      // Args after clamping
+            .put("response", sanitizeToolData(response))    // Including handles
             .put("request_size", request.toString().length())
-            .put("response_size", response.toString().length());
+            .put("response_size", response.toString().length())
+            .put("telemetry", telemetry)                   // Key metrics for Gemini
+            .put("handles", extractHandles(request, response)); // All handles involved
         
         if (!success) {
             errorCount++;
@@ -116,6 +141,98 @@ public class SessionLogger {
         }
         
         pendingEntries.offer(new LogEntry(entry, success ? LogLevel.INFO : LogLevel.ERROR));
+    }
+    
+    /**
+     * Extract key telemetry data that Gemini needs for planning next steps
+     */
+    private JSONObject extractTelemetry(String toolName, JSONObject request, JSONObject response) {
+        JSONObject telemetry = new JSONObject();
+        
+        // Track counts based on tool type
+        switch (toolName) {
+            case "open_image":
+                currentImageCount++;
+                telemetry.put("total_images", currentImageCount);
+                break;
+                
+            case "detect_lanes":
+                if (response.has("lanes_found")) {
+                    currentLaneCount = response.optInt("lanes_found", 0);
+                    telemetry.put("lanes_found", currentLaneCount);
+                }
+                break;
+                
+            case "detect_bands":
+                if (response.has("bands_total")) {
+                    currentBandCount = response.optInt("bands_total", 0);
+                    telemetry.put("bands_found", currentBandCount);
+                }
+                if (response.has("lanes_analyzed")) {
+                    telemetry.put("lanes_analyzed", response.optInt("lanes_analyzed", 0));
+                }
+                break;
+                
+            case "quantify_bands":
+                if (response.has("lanes_quantified")) {
+                    telemetry.put("lanes_quantified", response.optInt("lanes_quantified", 0));
+                }
+                if (response.has("total_bands")) {
+                    telemetry.put("total_bands_quantified", response.optInt("total_bands", 0));
+                }
+                break;
+                
+            case "export_results":
+                if (response.has("exported_files")) {
+                    JSONArray files = response.optJSONArray("exported_files");
+                    telemetry.put("files_exported", files != null ? files.length() : 0);
+                }
+                break;
+        }
+        
+        // Always include current session state for Gemini context
+        telemetry.put("session_state", new JSONObject()
+            .put("current_images", currentImageCount)
+            .put("current_lanes", currentLaneCount)
+            .put("current_bands", currentBandCount)
+            .put("total_tool_calls", toolCallCount)
+            .put("session_duration_min", (System.currentTimeMillis() - sessionStartTime.toEpochMilli()) / 60000));
+        
+        return telemetry;
+    }
+    
+    /**
+     * Extract all handles from request and response for handle tracking
+     */
+    private JSONObject extractHandles(JSONObject request, JSONObject response) {
+        JSONObject handles = new JSONObject();
+        
+        // Extract from request
+        if (request.has("image_handle")) {
+            handles.put("input_image_handle", request.getString("image_handle"));
+        }
+        if (request.has("overlay_handle")) {
+            handles.put("input_overlay_handle", request.getString("overlay_handle"));
+        }
+        if (request.has("analysis_handle")) {
+            handles.put("input_analysis_handle", request.getString("analysis_handle"));
+        }
+        
+        // Extract from response
+        if (response.has("image_handle")) {
+            handles.put("output_image_handle", response.getString("image_handle"));
+        }
+        if (response.has("overlay_handle")) {
+            handles.put("output_overlay_handle", response.getString("overlay_handle"));
+        }
+        if (response.has("analysis_handle")) {
+            handles.put("output_analysis_handle", response.getString("analysis_handle"));
+        }
+        if (response.has("quantification_handle")) {
+            handles.put("quantification_handle", response.getString("quantification_handle"));
+        }
+        
+        return handles;
     }
     
     /**
@@ -135,6 +252,22 @@ public class SessionLogger {
         
         LogLevel level = eventType.contains("error") ? LogLevel.ERROR : LogLevel.INFO;
         pendingEntries.offer(new LogEntry(entry, level));
+    }
+    
+    /**
+     * Log a warning message for handle discipline and other issues
+     */
+    public void warn(String category, String message) {
+        if (!isActive) return;
+        
+        JSONObject entry = new JSONObject()
+            .put("type", "warning")
+            .put("timestamp", getCurrentTimestamp())
+            .put("session_id", sessionId)
+            .put("category", category)
+            .put("message", message);
+        
+        pendingEntries.offer(new LogEntry(entry, LogLevel.DEBUG));
     }
     
     /**
@@ -412,13 +545,40 @@ public class SessionLogger {
             sanitized.put("base64_image_length", base64.length());
         }
         
-        // Sanitize file paths to relative paths for privacy
-        if (sanitized.has("path")) {
-            String path = sanitized.getString("path");
-            sanitized.put("path", sanitizeFilePath(path));
-        }
+        // Recursively sanitize all path-like fields for privacy
+        sanitizePathsRecursive(sanitized);
         
         return sanitized;
+    }
+    
+    private void sanitizePathsRecursive(JSONObject obj) {
+        // List of common path field names to sanitize
+        String[] pathFieldNames = {"path", "file_path", "image_path", "output_path", "export_path", "csv_path"};
+        
+        for (String pathField : pathFieldNames) {
+            if (obj.has(pathField)) {
+                Object value = obj.get(pathField);
+                if (value instanceof String) {
+                    obj.put(pathField, sanitizeFilePath((String) value));
+                }
+            }
+        }
+        
+        // Recursively process nested objects and arrays
+        for (String key : obj.keySet()) {
+            Object value = obj.get(key);
+            if (value instanceof JSONObject) {
+                sanitizePathsRecursive((JSONObject) value);
+            } else if (value instanceof JSONArray) {
+                JSONArray arr = (JSONArray) value;
+                for (int i = 0; i < arr.length(); i++) {
+                    Object item = arr.get(i);
+                    if (item instanceof JSONObject) {
+                        sanitizePathsRecursive((JSONObject) item);
+                    }
+                }
+            }
+        }
     }
     
     private JSONObject sanitizeApiData(JSONObject data) {
@@ -465,11 +625,25 @@ public class SessionLogger {
     }
     
     private String sanitizeFilePath(String path) {
-        // Convert absolute paths to relative for privacy
+        if (path == null || path.trim().isEmpty()) {
+            return path;
+        }
+        
+        // Convert absolute paths to privacy-preserving format: ~/…/filename.ext
         String home = System.getProperty("user.home");
         if (path.startsWith(home)) {
-            return "~" + path.substring(home.length());
+            // Extract just the filename
+            String filename = path.substring(path.lastIndexOf('/') + 1);
+            return "~/…/" + filename;
         }
+        
+        // For non-home paths, still show only filename for privacy
+        if (path.contains("/")) {
+            String filename = path.substring(path.lastIndexOf('/') + 1);
+            return "…/" + filename;
+        }
+        
+        // Return as-is if it's just a filename
         return path;
     }
     

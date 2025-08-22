@@ -5,19 +5,35 @@ import ij.gui.Overlay;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.Objects;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Collections;
+import java.util.Iterator;
 
 /**
- * Handle-based state management for gel analysis sessions.
- * Maintains references to images, overlays, and analysis results
- * without passing pixels to the LLM.
+ * Thread-safe, LRU-enabled handle-based state management for gel analysis sessions.
+ * Maintains references to images, overlays, and analysis results without passing pixels to the LLM.
+ * 
+ * Thread Safety:
+ * - All maps are ConcurrentHashMap for thread-safe access
+ * - Write operations should be called from orchestration thread
+ * - UI reads should be called from EDT only
+ * - LRU eviction is protected by ReadWriteLock
+ * 
+ * Memory Management:
+ * - LRU eviction after configurable image count or memory threshold
+ * - Manual image closure with closeImage(handle)
+ * - Automatic ghost overlay cleanup on image lifecycle events
  */
 public final class SessionStore {
     
     /**
-     * Image record with handle and ImageJ ImagePlus
+     * Enhanced image record with LRU tracking and lifecycle management
      */
     public static final class ImageRecord {
         public final String handle;
@@ -25,9 +41,48 @@ public final class SessionStore {
         public Overlay currentOverlay;
         public Map<String, Object> metadata = new ConcurrentHashMap<>();
         
+        // LRU and lifecycle tracking
+        public final long creationTime = System.currentTimeMillis();
+        public volatile long lastAccessTime = System.currentTimeMillis();
+        public final long estimatedMemoryBytes;
+        public volatile boolean detached = false; // For lifecycle management
+        
         public ImageRecord(String handle, ImagePlus image) {
             this.handle = handle;
             this.image = Objects.requireNonNull(image);
+            this.estimatedMemoryBytes = estimateImageMemory(image);
+        }
+        
+        /**
+         * Update access time for LRU tracking (thread-safe)
+         */
+        public void touch() {
+            this.lastAccessTime = System.currentTimeMillis();
+        }
+        
+        /**
+         * Estimate memory usage of ImagePlus
+         */
+        private static long estimateImageMemory(ImagePlus imp) {
+            int width = imp.getWidth();
+            int height = imp.getHeight();
+            int slices = imp.getStackSize();
+            int bytesPerPixel = imp.getBytesPerPixel();
+            
+            // Base image data + overhead estimate
+            long baseMemory = (long) width * height * slices * bytesPerPixel;
+            return baseMemory + (baseMemory / 10); // +10% overhead estimate
+        }
+        
+        /**
+         * Detach from overlays to prevent ghost references
+         */
+        public void detachOverlays() {
+            if (image != null) {
+                image.setOverlay(null);
+            }
+            currentOverlay = null;
+            detached = true;
         }
     }
     
@@ -63,27 +118,66 @@ public final class SessionStore {
         }
     }
     
+    // Thread-safe storage with enhanced tracking
     private final Map<String, ImageRecord> images = new ConcurrentHashMap<>();
     private final Map<String, OverlayRecord> overlays = new ConcurrentHashMap<>();
     private final Map<String, AnalysisRecord> analyses = new ConcurrentHashMap<>();
-    private String currentImageHandle = null;
+    
+    // Active handle tracking (thread-safe)
+    private volatile String currentImageHandle = null;
+    private volatile String lastActiveImageHandle = null;
+    private volatile String lastActiveOverlayHandle = null;
+    
+    // LRU and memory management
+    private final ReadWriteLock evictionLock = new ReentrantReadWriteLock();
+    private final AtomicLong totalMemoryBytes = new AtomicLong(0);
+    
+    // Configuration (can be modified at runtime)
+    private volatile int maxImages = 50;              // Max images before LRU eviction
+    private volatile long maxMemoryMB = 2048;         // Max memory in MB before eviction
+    private volatile boolean autoEvictionEnabled = true;
+    
+    // Session tracking
+    private String sessionId = UUID.randomUUID().toString().substring(0, 8);
+    private final long sessionStartTime = System.currentTimeMillis();
     
     /**
-     * Store an image and return its handle
+     * Store an image and return its handle (thread-safe with LRU management)
      */
     public String putImage(ImagePlus image) {
         String handle = "img_" + UUID.randomUUID().toString().substring(0, 8);
-        images.put(handle, new ImageRecord(handle, image));
-        currentImageHandle = handle; // Make it current
+        ImageRecord record = new ImageRecord(handle, image);
+        
+        // Thread-safe insertion with memory tracking
+        images.put(handle, record);
+        totalMemoryBytes.addAndGet(record.estimatedMemoryBytes);
+        
+        // Update active handles
+        setLastActiveImageHandle(handle);
+        currentImageHandle = handle;
+        
+        // Check for LRU eviction
+        if (autoEvictionEnabled) {
+            checkAndEvictLRU();
+        }
+        
         return handle;
     }
     
     /**
-     * Get image by handle
+     * Get image by handle (thread-safe with LRU touch)
      */
     public ImageRecord getImage(String handle) {
-        return Objects.requireNonNull(images.get(handle), 
-            "Invalid image_handle: " + handle);
+        ImageRecord record = images.get(handle);
+        if (record == null) {
+            throw new IllegalArgumentException("Invalid image_handle: " + handle);
+        }
+        
+        // Touch for LRU (should be called from appropriate thread)
+        record.touch();
+        setLastActiveImageHandle(handle);
+        
+        return record;
     }
     
     /**
@@ -104,25 +198,35 @@ public final class SessionStore {
     }
     
     /**
-     * Store an overlay and return its handle
+     * Store an overlay and return its handle (thread-safe)
      */
     public String putOverlay(Overlay overlay, String imageHandle) {
         String handle = "ov_" + UUID.randomUUID().toString().substring(0, 8);
         overlays.put(handle, new OverlayRecord(handle, overlay, imageHandle));
         
-        // Also update the image's current overlay
+        // Also update the image's current overlay (thread-safe)
         ImageRecord img = getImage(imageHandle);
         img.currentOverlay = overlay;
+        
+        // Update active overlay handle
+        lastActiveOverlayHandle = handle;
         
         return handle;
     }
     
     /**
-     * Get overlay by handle
+     * Get overlay by handle (thread-safe)
      */
     public OverlayRecord getOverlay(String handle) {
-        return Objects.requireNonNull(overlays.get(handle), 
-            "Invalid overlay_handle: " + handle);
+        OverlayRecord record = overlays.get(handle);
+        if (record == null) {
+            throw new IllegalArgumentException("Invalid overlay_handle: " + handle);
+        }
+        
+        // Update active overlay handle
+        lastActiveOverlayHandle = handle;
+        
+        return record;
     }
     
     /**
@@ -158,8 +262,26 @@ public final class SessionStore {
         return images.keySet().stream().reduce((first, second) -> second).orElse(null);
     }
     
+    /**
+     * Get the last active image handle (cleaner alias for handle discipline)
+     */
+    public String lastActiveImageHandle() {
+        return currentImageHandle != null ? currentImageHandle : getMostRecentImageHandle();
+    }
+    
     public boolean hasImage(String handle) {
         return images.containsKey(handle);
+    }
+    
+    /**
+     * Set the last active image handle explicitly (e.g., when a tool returns a new image handle)
+     * No-op if the handle is unknown.
+     */
+    public void setLastActiveImageHandle(String handle) {
+        if (handle == null) return;
+        if (images.containsKey(handle)) {
+            this.currentImageHandle = handle;
+        }
     }
     
     public boolean hasOverlay(String handle) {
@@ -191,25 +313,270 @@ public final class SessionStore {
             .collect(java.util.stream.Collectors.toList());
     }
     
-    private String sessionId = java.util.UUID.randomUUID().toString().substring(0, 8);
     public String getSessionId() { return sessionId; }
     
+    // ==================== Enhanced Active Handle Management ====================
+    
     /**
-     * Clear all session data
+     * Get the last active image handle (thread-safe)
      */
-    public void clear() {
-        images.clear();
-        overlays.clear();
-        analyses.clear();
-        currentImageHandle = null;
-        sessionId = java.util.UUID.randomUUID().toString().substring(0, 8);
+    public String getLastActiveImageHandle() {
+        return lastActiveImageHandle;
     }
     
     /**
-     * Get session summary for debugging
+     * Get the last active overlay handle (thread-safe)
+     */
+    public String getLastActiveOverlayHandle() {
+        return lastActiveOverlayHandle;
+    }
+    
+    
+    /**
+     * Set the last active overlay handle explicitly (thread-safe)
+     */
+    public void setLastActiveOverlayHandle(String handle) {
+        if (handle != null && overlays.containsKey(handle)) {
+            lastActiveOverlayHandle = handle;
+        }
+    }
+    
+    // ==================== LRU Eviction and Memory Management ====================
+    
+    /**
+     * Configure eviction parameters
+     */
+    public void configureEviction(int maxImages, long maxMemoryMB, boolean enabled) {
+        this.maxImages = maxImages;
+        this.maxMemoryMB = maxMemoryMB;
+        this.autoEvictionEnabled = enabled;
+    }
+    
+    /**
+     * Get current memory usage in MB
+     */
+    public long getCurrentMemoryMB() {
+        return totalMemoryBytes.get() / (1024 * 1024);
+    }
+    
+    /**
+     * Check and perform LRU eviction if needed (thread-safe)
+     */
+    private void checkAndEvictLRU() {
+        evictionLock.writeLock().lock();
+        try {
+            // Check image count threshold
+            if (images.size() > maxImages) {
+                evictOldestImages(images.size() - maxImages);
+            }
+            
+            // Check memory threshold
+            long currentMemoryMB = getCurrentMemoryMB();
+            if (currentMemoryMB > maxMemoryMB) {
+                evictByMemoryPressure(currentMemoryMB - maxMemoryMB);
+            }
+        } finally {
+            evictionLock.writeLock().unlock();
+        }
+    }
+    
+    /**
+     * Evict oldest images by count
+     */
+    private void evictOldestImages(int countToEvict) {
+        List<ImageRecord> sortedByAge = new ArrayList<>(images.values());
+        sortedByAge.sort((a, b) -> Long.compare(a.lastAccessTime, b.lastAccessTime));
+        
+        for (int i = 0; i < Math.min(countToEvict, sortedByAge.size()); i++) {
+            ImageRecord oldest = sortedByAge.get(i);
+            closeImageInternal(oldest.handle, "LRU eviction (count)");
+        }
+    }
+    
+    /**
+     * Evict images to free memory
+     */
+    private void evictByMemoryPressure(long memoryToFreeMB) {
+        List<ImageRecord> sortedByAge = new ArrayList<>(images.values());
+        sortedByAge.sort((a, b) -> Long.compare(a.lastAccessTime, b.lastAccessTime));
+        
+        long freedMB = 0;
+        for (ImageRecord record : sortedByAge) {
+            if (freedMB >= memoryToFreeMB) break;
+            
+            long imageMB = record.estimatedMemoryBytes / (1024 * 1024);
+            closeImageInternal(record.handle, "LRU eviction (memory)");
+            freedMB += imageMB;
+        }
+    }
+    
+    /**
+     * Manually close and remove an image to free memory (thread-safe)
+     */
+    public boolean closeImage(String handle) {
+        evictionLock.writeLock().lock();
+        try {
+            return closeImageInternal(handle, "Manual closure");
+        } finally {
+            evictionLock.writeLock().unlock();
+        }
+    }
+    
+    /**
+     * Internal image closure with ghost overlay cleanup
+     */
+    private boolean closeImageInternal(String handle, String reason) {
+        ImageRecord record = images.get(handle);
+        if (record == null) return false;
+        
+        // Step 1: Detach overlays to prevent ghost references
+        record.detachOverlays();
+        
+        // Step 2: Remove associated overlays
+        List<String> associatedOverlays = getOverlaysForImage(handle);
+        for (String overlayHandle : associatedOverlays) {
+            overlays.remove(overlayHandle);
+            if (overlayHandle.equals(lastActiveOverlayHandle)) {
+                lastActiveOverlayHandle = null;
+            }
+        }
+        
+        // Step 3: Remove associated analyses
+        List<String> associatedAnalyses = getAnalysesForImage(handle);
+        for (String analysisHandle : associatedAnalyses) {
+            analyses.remove(analysisHandle);
+        }
+        
+        // Step 4: Update memory tracking
+        totalMemoryBytes.addAndGet(-record.estimatedMemoryBytes);
+        
+        // Step 5: Remove image and update active handles
+        images.remove(handle);
+        if (handle.equals(currentImageHandle)) {
+            currentImageHandle = null;
+        }
+        if (handle.equals(lastActiveImageHandle)) {
+            lastActiveImageHandle = getMostRecentImageHandle();
+        }
+        
+        System.out.println("SessionStore: Closed image " + handle + " (" + reason + ")");
+        return true;
+    }
+    
+    // ==================== Enhanced Lifecycle Management ====================
+    
+    /**
+     * Create a duplicate image with proper lifecycle management
+     * Returns new handle and detaches from old overlays
+     */
+    public String duplicateImage(String sourceHandle, String title) {
+        ImageRecord source = getImage(sourceHandle);
+        ImagePlus duplicate = source.image.duplicate();
+        if (title != null) {
+            duplicate.setTitle(title);
+        }
+        
+        // Create new image record (this will get new handle)
+        String newHandle = putImage(duplicate);
+        
+        // Important: Don't copy overlays - let tools create new ones
+        // This prevents ghost overlay references
+        
+        return newHandle;
+    }
+    
+    /**
+     * Replace image content for destructive operations
+     * Maintains handle but detaches old overlays
+     */
+    public void replaceImageContent(String handle, ImagePlus newImage) {
+        ImageRecord record = images.get(handle);
+        if (record == null) {
+            throw new IllegalArgumentException("Image handle not found: " + handle);
+        }
+        
+        // Detach old overlays to prevent ghost references
+        record.detachOverlays();
+        
+        // Replace the ImagePlus content
+        // Note: We can't actually replace the ImagePlus object due to final field
+        // So we copy the new image data into the existing ImagePlus
+        record.image.setProcessor(newImage.getProcessor());
+        record.image.setStack(newImage.getStack());
+        
+        // Touch for LRU
+        record.touch();
+        
+        System.out.println("SessionStore: Replaced content for image " + handle);
+    }
+    
+    // ==================== Enhanced Session Management ====================
+    
+    /**
+     * Clear all session data with proper cleanup
+     */
+    public void clear() {
+        evictionLock.writeLock().lock();
+        try {
+            // Detach all overlays first
+            for (ImageRecord record : images.values()) {
+                record.detachOverlays();
+            }
+            
+            images.clear();
+            overlays.clear();
+            analyses.clear();
+            
+            currentImageHandle = null;
+            lastActiveImageHandle = null;
+            lastActiveOverlayHandle = null;
+            
+            totalMemoryBytes.set(0);
+            sessionId = UUID.randomUUID().toString().substring(0, 8);
+            
+            System.out.println("SessionStore: Session cleared, new ID: " + sessionId);
+        } finally {
+            evictionLock.writeLock().unlock();
+        }
+    }
+    
+    /**
+     * Get enhanced session summary with memory and threading info
      */
     public String getSummary() {
-        return String.format("Session: %d images, %d overlays, %d analyses. Current: %s",
-            images.size(), overlays.size(), analyses.size(), currentImageHandle);
+        long uptimeHours = (System.currentTimeMillis() - sessionStartTime) / (1000 * 60 * 60);
+        return String.format(
+            "Session %s: %d images (%.1f MB), %d overlays, %d analyses. " +
+            "Current: %s, LastActive: %s. Uptime: %dh. Thread: %s",
+            sessionId, images.size(), getCurrentMemoryMB(), overlays.size(), analyses.size(),
+            currentImageHandle, lastActiveImageHandle, uptimeHours, 
+            Thread.currentThread().getName());
+    }
+    
+    /**
+     * Get detailed memory breakdown
+     */
+    public String getMemoryReport() {
+        StringBuilder report = new StringBuilder();
+        report.append(String.format("Total Memory: %.1f MB\n", getCurrentMemoryMB()));
+        report.append(String.format("Images: %d (max: %d)\n", images.size(), maxImages));
+        report.append(String.format("Memory Limit: %d MB\n", maxMemoryMB));
+        report.append(String.format("Auto-eviction: %s\n", autoEvictionEnabled));
+        
+        if (!images.isEmpty()) {
+            report.append("\nImage Details:\n");
+            images.values().stream()
+                .sorted((a, b) -> Long.compare(b.lastAccessTime, a.lastAccessTime))
+                .limit(10)
+                .forEach(record -> {
+                    long ageSec = (System.currentTimeMillis() - record.lastAccessTime) / 1000;
+                    double sizeMB = record.estimatedMemoryBytes / (1024.0 * 1024.0);
+                    report.append(String.format("  %s: %.1f MB, %ds ago%s\n", 
+                        record.handle, sizeMB, ageSec,
+                        record.detached ? " [DETACHED]" : ""));
+                });
+        }
+        
+        return report.toString();
     }
 }

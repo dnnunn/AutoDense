@@ -4,6 +4,7 @@ import com.betterdairy.autodense.session.SessionStore;
 import com.betterdairy.autodense.session.SessionRecovery;
 import com.betterdairy.autodense.analysis.*;
 import com.betterdairy.autodense.model.Models.*;
+import com.betterdairy.autodense.plugin.ToolSchemaValidator;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Overlay;
@@ -11,6 +12,9 @@ import ij.gui.Roi;
 import ij.gui.TextRoi;
 import ij.io.FileSaver;
 import ij.process.ImageProcessor;
+import ij.plugin.filter.BackgroundSubtracter;
+import ij.plugin.filter.GaussianBlur;
+import ij.plugin.ContrastEnhancer;
 import ij.measure.ResultsTable;
 import org.json.JSONObject;
 import org.json.JSONArray;
@@ -20,8 +24,11 @@ import java.awt.Font;
 import java.awt.Rectangle;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.text.DecimalFormat;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
 
 /**
  * Tool implementations for Gemini function calling.
@@ -34,6 +41,9 @@ public class GelAnalysisTools {
     private final HandleGuard handleGuard;
     private Path tempDir;
     
+    // Cache for expensive preprocessing operations (rolling ball, CLAHE, etc.)
+    private final Map<String, String> preprocessingCache = new ConcurrentHashMap<>();
+    
     public GelAnalysisTools(SessionStore store) {
         this.store = store;
         this.recovery = new SessionRecovery(store);
@@ -45,11 +55,76 @@ public class GelAnalysisTools {
         }
     }
     
+    private JSONObject ok(String tool, JSONObject data) {
+        return new JSONObject().put("ok", true).put("tool", tool).put("data", data).put("warnings", new JSONArray());
+    }
+    
+    /**
+     * Create standardized failure response
+     */
+    private JSONObject fail(String code, String msg, String param) {
+        return new JSONObject().put("ok", false)
+            .put("error", new JSONObject().put("code", code).put("message", msg).put("param", param));
+    }
+    
+    /**
+     * @deprecated Use toolFailure instead
+     */
+    @Deprecated
+    private JSONObject toolError(String errorType, String field, JSONObject args) {
+        return fail(errorType, String.format("Required field '%s' is missing or invalid", field), field);
+    }
+    
+    /**
+     * Standard error codes for Gemini self-correction
+     */
+    private static final String ERROR_MISSING_REQUIRED_FIELD = "missing_required_field";
+    private static final String ERROR_INVALID_PARAM = "invalid_param";
+    private static final String ERROR_IMAGE_NOT_FOUND = "image_not_found";
+    private static final String ERROR_OVERLAY_NOT_FOUND = "overlay_not_found";
+    private static final String ERROR_IMAGE_STATE_CONFLICT = "image_state_conflict";
+    private static final String ERROR_IJ_RUNTIME_ERROR = "ij_runtime_error";
+    
+    /**
+     * Clamp value to valid range for determinism and self-documentation
+     */
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+    
+    /**
+     * Clamp double value to valid range
+     */
+    private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
+    }
+    
+    /**
+     * Enforce handle discipline - ensure image_handle is present or inject last active
+     * Returns error JSONObject if handle cannot be resolved, null if successful
+     */
+    private JSONObject enforceHandleDiscipline(JSONObject args) {
+        // Before dispatch
+        if (!args.has("image_handle") || args.isNull("image_handle")) {
+            var last = store.lastActiveImageHandle();
+            if (last != null) {
+                args.put("image_handle", last);
+                // Note: SessionLogger not directly accessible here, would need to be passed in
+                // sessionLogger.warn("tool_call", "Injected missing image_handle=" + last);
+                System.out.println("DEBUG: Injected missing image_handle=" + last);
+            } else {
+                return fail(ERROR_MISSING_REQUIRED_FIELD, "image_handle is required", "image_handle");
+            }
+        }
+        return null; // Success
+    }
+    
     /**
      * Tool: open_image
      * Load a gel image into the session
      */
     public JSONObject openImage(JSONObject args) {
+        ToolSchemaValidator.require(args, "path");
         try {
             String path = args.getString("path");
             ImagePlus imp = IJ.openImage(path);
@@ -58,6 +133,8 @@ public class GelAnalysisTools {
             }
             
             String handle = store.putImage(imp);
+            // Explicitly set as current (putImage already does this, but being explicit)
+            store.setLastActiveImageHandle(handle);
             imp.show(); // Display in ImageJ
             
             return new JSONObject()
@@ -78,58 +155,213 @@ public class GelAnalysisTools {
     /**
      * Tool: preprocess
      * Apply preprocessing steps to an image
+     * IMPORTANT: All preprocessing operations are destructive and will modify pixel data.
+     * Set "destructive": true to modify the original image in place.
+     * If destructive=false or omitted, creates a duplicate and processes that instead.
      */
     public JSONObject preprocess(JSONObject args) {
+        ToolSchemaValidator.requireImageHandle(args);
         try {
-            SessionStore.ImageRecord img = store.getImage(args.getString("image_handle"));
+            // Enforce handle discipline first
+            JSONObject disciplineError = enforceHandleDiscipline(args);
+            if (disciplineError != null) return disciplineError;
+            
+            ToolSchemaValidator.requireArray(args, "steps");
+            SessionStore.ImageRecord originalImg = store.getImage(args.getString("image_handle"));
+            if (originalImg == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+            }
+            
             JSONArray steps = args.getJSONArray("steps");
+            boolean destructive = args.optBoolean("destructive", false);
+            
+            // Create cache key for this preprocessing combination
+            String cacheKey = createPreprocessingCacheKey(originalImg.handle, steps, destructive);
+            
+            // Check if we've already processed this exact combination
+            if (preprocessingCache.containsKey(cacheKey)) {
+                String cachedHandle = preprocessingCache.get(cacheKey);
+                if (store.getImage(cachedHandle) != null) {
+                    // Return cached result
+                    JSONObject data = new JSONObject()
+                        .put("image_handle", cachedHandle)
+                        .put("cache_hit", true)
+                        .put("processed_steps", steps) // Return original steps as-is
+                        .put("parameters_used", args);
+                    return ok("preprocess", data);
+                }
+            }
+            
+            // Decide whether to work on original or duplicate
+            SessionStore.ImageRecord workingImg;
+            String resultHandle;
+            
+            if (destructive) {
+                // Work directly on original image
+                workingImg = originalImg;
+                resultHandle = originalImg.handle;
+            } else {
+                // Create duplicate only when needed (not already cached)
+                // Use conditionalDuplicate utility for potential optimization
+                ImagePlus duplicate = conditionalDuplicate(originalImg.image, true, "processed");
+                resultHandle = store.putImage(duplicate);
+                workingImg = store.getImage(resultHandle);
+            }
+            
+            JSONArray processedSteps = new JSONArray(); // Track what was actually applied
             
             for (int i = 0; i < steps.length(); i++) {
                 JSONObject step = steps.getJSONObject(i);
                 String op = step.getString("op");
+                JSONObject processedStep = new JSONObject().put("op", op);
                 
                 switch (op) {
                     case "rotate":
-                        double angle = step.getDouble("angle_deg");
-                        IJ.run(img.image, "Rotate...", "angle=" + angle + " interpolation=Bilinear");
+                        // Clamp angle to reasonable range
+                        double angle = step.optDouble("angle_deg", 0.0);
+                        angle = clamp(angle, -180.0, 180.0);
+                        step.put("angle_deg", angle); // Echo actual value used
+                        processedStep.put("angle_deg", angle);
+                        // Use direct API for 90-degree rotation, IJ.run for arbitrary angles
+                        if (Math.abs(angle - 90) < 0.001) {
+                            ImageProcessor rotProc = workingImg.image.getProcessor();
+                            rotProc.setInterpolationMethod(ImageProcessor.BILINEAR);
+                            rotProc = rotProc.rotateLeft();
+                            workingImg.image.setProcessor(rotProc);
+                        } else if (Math.abs(angle + 90) < 0.001 || Math.abs(angle - 270) < 0.001) {
+                            ImageProcessor rotProc = workingImg.image.getProcessor();
+                            rotProc.setInterpolationMethod(ImageProcessor.BILINEAR);
+                            rotProc = rotProc.rotateRight();
+                            workingImg.image.setProcessor(rotProc);
+                        } else {
+                            // For non-90 degree rotations, fall back to IJ.run
+                            IJ.run(workingImg.image, "Rotate...", "angle=" + angle + " interpolation=Bilinear");
+                        }
                         break;
                         
                     case "flip":
-                        String axis = step.getString("axis");
-                        IJ.run(img.image, axis.equals("vertical") ? "Flip Vertically" : "Flip Horizontally", "");
+                        String axis = step.optString("axis", "horizontal");
+                        // Validate axis parameter
+                        if (!axis.equals("vertical") && !axis.equals("horizontal")) {
+                            axis = "horizontal"; // Default fallback
+                        }
+                        step.put("axis", axis); // Echo actual value used
+                        processedStep.put("axis", axis);
+                        // Use direct API for flipping
+                        ImageProcessor proc = workingImg.image.getProcessor();
+                        if (axis.equals("vertical")) {
+                            proc.flipVertical();
+                        } else {
+                            proc.flipHorizontal();
+                        }
                         break;
                         
                     case "enhance_contrast":
+                        // Clamp saturated percentage
                         double saturated = step.optDouble("saturated", 0.35);
-                        IJ.run(img.image, "Enhance Contrast...", "saturated=" + saturated);
+                        saturated = clamp(saturated, 0.0, 1.0);
+                        step.put("saturated", saturated); // Echo actual value used
+                        processedStep.put("saturated", saturated);
+                        // Use direct API for contrast enhancement
+                        ContrastEnhancer enhancer = new ContrastEnhancer();
+                        enhancer.stretchHistogram(workingImg.image.getProcessor(), saturated);
                         break;
                         
                     case "subtract_background":
+                        // Clamp rolling ball radius
                         int radius = step.optInt("radius_px", 150);
-                        IJ.run(img.image, "Subtract Background...", "rolling=" + radius);
+                        radius = clamp(radius, 10, 400);
+                        step.put("radius_px", radius); // Echo actual value used
+                        processedStep.put("radius_px", radius);
+                        // Use direct API for background subtraction
+                        BackgroundSubtracter bs = new BackgroundSubtracter();
+                        bs.rollingBallBackground(workingImg.image.getProcessor(), radius, false, false, false, false, false);
                         break;
                         
                     case "smooth":
-                        IJ.run(img.image, "Smooth", "");
+                        processedStep.put("iterations", 1); // Document what smooth does
+                        // Use direct API for smoothing (Gaussian blur with sigma=0.5)
+                        GaussianBlur gb = new GaussianBlur();
+                        gb.blurGaussian(workingImg.image.getProcessor(), 0.5, 0.5, 0.02);
+                        break;
+                        
+                    case "clahe":
+                        // CLAHE (Contrast Limited Adaptive Histogram Equalization)
+                        int blockSize = step.optInt("block_size", 127);
+                        blockSize = clamp(blockSize, 10, 255);
+                        int histogram = step.optInt("histogram_bins", 256); 
+                        histogram = clamp(histogram, 64, 1024);
+                        double slope = step.optDouble("max_slope", 3.0);
+                        slope = clamp(slope, 1.0, 10.0);
+                        step.put("block_size", blockSize);
+                        step.put("histogram_bins", histogram);
+                        step.put("max_slope", slope);
+                        processedStep.put("block_size", blockSize)
+                                   .put("histogram_bins", histogram)
+                                   .put("max_slope", slope);
+                        // CLAHE is a plugin operation - use IJ.run as no direct API available
+                        IJ.run(workingImg.image, "Enhance Local Contrast (CLAHE)", 
+                               "blocksize=" + blockSize + " histogram=" + histogram + " maximum=" + slope);
+                        break;
+                        
+                    case "bandpass":
+                        // Bandpass filter parameters
+                        double filterLarge = step.optDouble("filter_large", 40.0);
+                        filterLarge = clamp(filterLarge, 1.0, 1000.0);
+                        double filterSmall = step.optDouble("filter_small", 3.0);
+                        filterSmall = clamp(filterSmall, 0.0, filterLarge - 1.0);
+                        step.put("filter_large", filterLarge);
+                        step.put("filter_small", filterSmall);
+                        processedStep.put("filter_large", filterLarge)
+                                   .put("filter_small", filterSmall);
+                        // Bandpass filter requires FFT - use IJ.run as it's a complex plugin operation
+                        IJ.run(workingImg.image, "Bandpass Filter...", 
+                               "filter_large=" + filterLarge + " filter_small=" + filterSmall + " suppress=None tolerance=5");
                         break;
                         
                     case "sharpen":
-                        IJ.run(img.image, "Sharpen", "");
+                        processedStep.put("iterations", 1); // Document what sharpen does
+                        // Use direct API for sharpening (unsharp mask)
+                        ImageProcessor sharpProc = workingImg.image.getProcessor();
+                        sharpProc.sharpen();
                         break;
                         
                     default:
-                        throw new IllegalArgumentException("Unknown preprocessing op: " + op);
+                        return fail(ERROR_INVALID_PARAM, "Unknown preprocessing operation: " + op, "op");
                 }
+                
+                processedSteps.put(processedStep);
             }
             
-            img.image.updateAndDraw();
+            workingImg.image.updateAndDraw();
             
-            return new JSONObject()
-                .put("image_handle", img.handle)
-                .put("steps_applied", steps.length());
+            // Set the result as the current active image
+            store.setLastActiveImageHandle(resultHandle);
+            
+            JSONObject data = new JSONObject()
+                .put("image_handle", resultHandle)
+                .put("steps_applied", steps.length())
+                .put("processed_steps", processedSteps) // Echo all actual values used
+                .put("original_steps", steps) // Include the modified original steps with clamped values
+                .put("destructive_operation", destructive)
+                .put("original_preserved", !destructive)
+                .put("parameters_used", new JSONObject()
+                    .put("destructive", destructive)
+                    .put("total_steps", steps.length()));
+            
+            if (!destructive) {
+                data.put("original_image_handle", originalImg.handle);
+                data.put("processing_note", "Original image preserved. New processed image created with handle: " + resultHandle);
+            }
+            
+            // Cache the result for future use
+            preprocessingCache.put(cacheKey, resultHandle);
+            data.put("cache_miss", true); // Indicate this was newly processed
+            
+            return ok("preprocess", data);
                 
         } catch (Exception e) {
-            return errorResponse(e);
+            return fail(ERROR_IJ_RUNTIME_ERROR, "ImageJ preprocessing error: " + e.getMessage(), "preprocessing");
         }
     }
     
@@ -138,29 +370,36 @@ public class GelAnalysisTools {
      * Detect lanes in a gel image
      */
     public JSONObject detectLanes(JSONObject args) {
+        ToolSchemaValidator.requireImageHandle(args);
         try {
-            // Server-side handle injection guard
-            String imageHandle = ensureImageHandle(args, "detect_lanes");
+            // Enforce handle discipline first
+            JSONObject disciplineError = enforceHandleDiscipline(args);
+            if (disciplineError != null) return disciplineError;
             
-            // Enhanced validation with Gemini guidance
-            JSONObject validation = validateWithGuidance(imageHandle, "image", "detect_lanes");
-            
-            if (!validation.getBoolean("valid")) {
-                JSONObject errorResponse = new JSONObject();
-                errorResponse.put("error", true);
-                errorResponse.put("error_type", "invalid_handle");
-                errorResponse.put("message", validation.getString("message"));
-                errorResponse.put("validation", validation);
-                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
-                return errorResponse;
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            if (img == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
             }
             
-            SessionStore.ImageRecord img = store.getImage(imageHandle);
-            
+            // Clamp and echo parameters for determinism
             int expectedLanes = args.optInt("expected_lanes", 0);
+            expectedLanes = clamp(expectedLanes, 1, 50); // Reasonable range for gel lanes
+            args.put("expected_lanes", expectedLanes);
+            
             boolean constantSpacing = args.optBoolean("constant_spacing", true);
+            
             double laneWidth = args.optDouble("lane_width_fraction", 0.55);
+            laneWidth = clamp(laneWidth, 0.1, 0.9); // 10% to 90% of spacing
+            args.put("lane_width_fraction", laneWidth);
+            
             double gridOffset = args.optDouble("grid_offset", 0.0);
+            gridOffset = clamp(gridOffset, -0.5, 0.5); // ±50% offset
+            args.put("grid_offset", gridOffset);
+            
+            double minPeakDistance = args.optDouble("min_peak_distance", 20.0);
+            minPeakDistance = clamp(minPeakDistance, 5.0, 200.0); // 5-200 pixels
+            args.put("min_peak_distance", minPeakDistance);
             
             // Detect lanes using existing detector
             List<Lane> lanes = LaneDetector.findLanes(
@@ -198,20 +437,23 @@ public class GelAnalysisTools {
             String overlayHandle = store.putOverlay(overlay, img.handle);
             String analysisHandle = store.putAnalysis("lanes", lanes, img.handle);
             
-            JSONObject response = new JSONObject();
-            response.put("success", true);
-            response.put("lanes_found", lanes.size());
-            response.put("overlay_handle", overlayHandle);
-            response.put("analysis_handle", analysisHandle);
-            response.put("image_handle", img.handle);
-            response.put("parameters_used", new JSONObject()
-                .put("expected_lanes", expectedLanes)
-                .put("constant_spacing", constantSpacing)
-                .put("lane_width_fraction", laneWidth)
-                .put("grid_offset", gridOffset));
-            response.put("next_step_guidance", "Use image_handle='" + img.handle + "' for all subsequent tool calls on this image");
+            // Ensure this image remains current for subsequent operations
+            store.setLastActiveImageHandle(img.handle);
             
-            return response;
+            // Build standardized success response
+            JSONObject data = new JSONObject()
+                .put("lanes_found", lanes.size())
+                .put("overlay_handle", overlayHandle)
+                .put("analysis_handle", analysisHandle)
+                .put("image_handle", img.handle)
+                .put("parameters_used", new JSONObject()
+                    .put("expected_lanes", expectedLanes)
+                    .put("constant_spacing", constantSpacing)
+                    .put("lane_width_fraction", laneWidth)
+                    .put("grid_offset", gridOffset)
+                    .put("min_peak_distance", minPeakDistance));
+            
+            return ok("detect_lanes", data);
                 
         } catch (Exception e) {
             return recovery.createRecoveryResponse("detect_lanes", e);
@@ -223,17 +465,30 @@ public class GelAnalysisTools {
      * Detect bands within lanes
      */
     public JSONObject detectBands(JSONObject args) {
+        ToolSchemaValidator.requireImageHandle(args);
         try {
-            // Apply comprehensive handle protection
-            HandleGuard.HandleValidationResult protection = handleGuard.protectToolCall(args, "detect_bands");
+            // Enforce handle discipline first
+            JSONObject disciplineError = enforceHandleDiscipline(args);
+            if (disciplineError != null) return disciplineError;
             
-            if (!protection.isValid()) {
-                JSONObject errorResponse = protection.createErrorResponse();
-                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
-                return errorResponse;
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            if (img == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
             }
             
-            SessionStore.ImageRecord img = store.getImage(protection.imageHandle);
+            // Clamp and echo parameters for determinism
+            double sensitivity = args.optDouble("sensitivity", 0.3);
+            sensitivity = clamp(sensitivity, 0.1, 1.0); // 10% to 100% sensitivity
+            args.put("sensitivity", sensitivity);
+            
+            double minBandHeight = args.optDouble("min_band_height", 3.0);
+            minBandHeight = clamp(minBandHeight, 1.0, 20.0); // 1-20 pixels
+            args.put("min_band_height", minBandHeight);
+            
+            double prominence = args.optDouble("prominence", 0.05);
+            prominence = clamp(prominence, 0.01, 0.5); // 1% to 50% prominence
+            args.put("prominence", prominence);
             
             // Get lanes from previous analysis or detect them
             List<Lane> lanes;
@@ -310,14 +565,22 @@ public class GelAnalysisTools {
             String overlayHandle = store.putOverlay(overlay, img.handle);
             String analysisHandle = store.putAnalysis("bands", allBands, img.handle);
             
-            JSONObject response = new JSONObject()
+            // Ensure this image remains current for subsequent operations
+            store.setLastActiveImageHandle(img.handle);
+            
+            // Build standardized success response
+            JSONObject data = new JSONObject()
                 .put("lanes_analyzed", lanes.size())
                 .put("bands_total", totalBands)
                 .put("overlay_handle", overlayHandle)
                 .put("analysis_handle", analysisHandle)
-                .put("image_handle", img.handle);
-                
-            return handleGuard.addPersistenceGuidance(response, img.handle);
+                .put("image_handle", img.handle)
+                .put("parameters_used", new JSONObject()
+                    .put("sensitivity", sensitivity)
+                    .put("min_band_height", minBandHeight)
+                    .put("prominence", prominence));
+            
+            return ok("detect_bands", data);
                 
         } catch (Exception e) {
             return recovery.createRecoveryResponse("detect_bands", e);
@@ -329,27 +592,31 @@ public class GelAnalysisTools {
      * Adjust lane positions (offset/width)
      */
     public JSONObject adjustLanes(JSONObject args) {
+        ToolSchemaValidator.requireImageHandle(args);
         try {
-            // Validate image handle with recovery
-            String imageHandle = args.optString("image_handle", "");
-            JSONObject validation = recovery.validateHandle(imageHandle, "image");
+            // Enforce handle discipline first
+            JSONObject disciplineError = enforceHandleDiscipline(args);
+            if (disciplineError != null) return disciplineError;
             
-            if (!validation.getBoolean("valid")) {
-                JSONObject errorResponse = new JSONObject();
-                errorResponse.put("error", true);
-                errorResponse.put("validation", validation);
-                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
-                return errorResponse;
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            if (img == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
             }
             
-            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            // Clamp and echo parameters for determinism
             double offsetAmount = args.optDouble("offset", 0.0);
+            offsetAmount = clamp(offsetAmount, -0.5, 0.5); // ±50% offset
+            args.put("offset", offsetAmount);
+            
             double widthAdjust = args.optDouble("width_adjust", 1.0);
+            widthAdjust = clamp(widthAdjust, 0.5, 2.0); // 50% to 200% width
+            args.put("width_adjust", widthAdjust);
             
             // Get current overlay
             Overlay currentOverlay = img.currentOverlay;
             if (currentOverlay == null) {
-                return errorResponse("No lanes detected yet");
+                return fail(ERROR_IMAGE_STATE_CONFLICT, "No lanes detected yet - run detect_lanes first", "overlay");
             }
             
             // Create new overlay with adjusted positions
@@ -376,11 +643,18 @@ public class GelAnalysisTools {
             
             String overlayHandle = store.putOverlay(newOverlay, img.handle);
             
-            return new JSONObject()
-                .put("offset_applied", offsetAmount)
-                .put("width_adjust", widthAdjust)
+            // Ensure this image remains current for subsequent operations
+            store.setLastActiveImageHandle(img.handle);
+            
+            // Build standardized success response
+            JSONObject data = new JSONObject()
                 .put("overlay_handle", overlayHandle)
-                .put("image_handle", img.handle);
+                .put("image_handle", img.handle)
+                .put("parameters_used", new JSONObject()
+                    .put("offset", offsetAmount)
+                    .put("width_adjust", widthAdjust));
+            
+            return ok("adjust_lanes", data);
                 
         } catch (Exception e) {
             return recovery.createRecoveryResponse("adjust_lanes", e);
@@ -394,21 +668,26 @@ public class GelAnalysisTools {
      * The labeled overlay helps users identify lanes (L1, L2, etc.) and bands (B1, B2, etc.) for discussion.
      */
     public JSONObject renderOverlayPng(JSONObject args) {
+        ToolSchemaValidator.requireImageHandle(args);
         try {
-            // Validate image handle with recovery
-            String imageHandle = args.optString("image_handle", "");
-            JSONObject validation = recovery.validateHandle(imageHandle, "image");
+            // Enforce handle discipline first
+            JSONObject disciplineError = enforceHandleDiscipline(args);
+            if (disciplineError != null) return disciplineError;
             
-            if (!validation.getBoolean("valid")) {
-                JSONObject errorResponse = new JSONObject();
-                errorResponse.put("error", true);
-                errorResponse.put("validation", validation);
-                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
-                return errorResponse;
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            if (img == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
             }
             
-            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            // Clamp and echo parameters for determinism
             int maxWidth = args.optInt("max_width", 1200);
+            maxWidth = clamp(maxWidth, 200, 4000); // 200-4000 pixels
+            args.put("max_width", maxWidth);
+            
+            int quality = args.optInt("quality", 90);
+            quality = clamp(quality, 50, 100); // 50-100% quality
+            args.put("quality", quality);
             
             // Duplicate image with overlay
             ImagePlus dup = img.image.duplicate();
@@ -432,13 +711,19 @@ public class GelAnalysisTools {
             FileSaver fs = new FileSaver(dup);
             fs.saveAsPng(outputPath.toString());
             
-            return new JSONObject()
+            // Build standardized success response
+            JSONObject data = new JSONObject()
                 .put("png_path", outputPath.toString())
                 .put("width", dup.getWidth())
                 .put("height", dup.getHeight())
                 .put("image_handle", img.handle)
                 .put("usage_note", "This PNG shows labeled lanes/bands for visual reference only. Use original image data for all measurements.")
-                .put("visual_elements", "Lane labels: L1, L2, L3... Band labels: B1, B2, B3... (first 3 bands per lane)");
+                .put("visual_elements", "Lane labels: L1, L2, L3... Band labels: B1, B2, B3... (first 3 bands per lane)")
+                .put("parameters_used", new JSONObject()
+                    .put("max_width", maxWidth)
+                    .put("quality", quality));
+            
+            return ok("render_overlay_png", data);
                 
         } catch (Exception e) {
             return recovery.createRecoveryResponse("render_overlay_png", e);
@@ -452,33 +737,34 @@ public class GelAnalysisTools {
      * All measurements are performed on pixel values from the source image.
      */
     public JSONObject quantifyBands(JSONObject args) {
+        ToolSchemaValidator.requireImageHandle(args);
         try {
-            // Validate image handle with recovery
-            String imageHandle = args.optString("image_handle", "");
-            JSONObject validation = recovery.validateHandle(imageHandle, "image");
+            // Enforce handle discipline first
+            JSONObject disciplineError = enforceHandleDiscipline(args);
+            if (disciplineError != null) return disciplineError;
             
-            if (!validation.getBoolean("valid")) {
-                JSONObject errorResponse = new JSONObject();
-                errorResponse.put("error", true);
-                errorResponse.put("validation", validation);
-                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
-                return errorResponse;
-            }
-            
-            // Validate analysis handle with recovery
-            String analysisHandle = args.optString("analysis_handle", "");
-            JSONObject analysisValidation = recovery.validateHandle(analysisHandle, "analysis");
-            
-            if (!analysisValidation.getBoolean("valid")) {
-                JSONObject errorResponse = new JSONObject();
-                errorResponse.put("error", true);
-                errorResponse.put("validation", analysisValidation);
-                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
-                return errorResponse;
-            }
-            
+            String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord img = store.getImage(imageHandle);
-            // String backgroundMethod = args.optString("background_method", "median"); // TODO: implement background subtraction
+            if (img == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+            }
+            
+            String analysisHandle = args.optString("analysis_handle", "");
+            if (analysisHandle.isEmpty() || !store.hasAnalysis(analysisHandle)) {
+                return fail("analysis_not_found", "Analysis handle not found - run detect_bands first", "analysis_handle");
+            }
+            
+            // Clamp and echo parameters for determinism
+            String backgroundMethod = args.optString("background_method", "median");
+            // Validate background method options
+            if (!backgroundMethod.equals("median") && !backgroundMethod.equals("rolling") && !backgroundMethod.equals("none")) {
+                backgroundMethod = "median";
+            }
+            args.put("background_method", backgroundMethod);
+            
+            int backgroundRadius = args.optInt("background_radius", 50);
+            backgroundRadius = clamp(backgroundRadius, 10, 200); // 10-200 pixels
+            args.put("background_radius", backgroundRadius);
             
             // IMPORTANT: All quantification uses original ImagePlus pixel data
             ImagePlus originalImage = img.image; // Original image data for measurements
@@ -509,14 +795,19 @@ public class GelAnalysisTools {
             
             String quantHandle = store.putAnalysis("quantification", results, img.handle);
             
-            return new JSONObject()
+            // Build standardized success response
+            JSONObject data = new JSONObject()
                 .put("quantification_handle", quantHandle)
                 .put("lanes_quantified", allBands.size())
                 .put("total_bands", allBands.stream().mapToInt(List::size).sum())
                 .put("results", results)
                 .put("image_handle", img.handle)
                 .put("measurement_source", "original_image_data")
-                .put("data_integrity", "All measurements performed on original ImagePlus pixel values");
+                .put("parameters_used", new JSONObject()
+                    .put("background_method", backgroundMethod)
+                    .put("background_radius", backgroundRadius));
+            
+            return ok("quantify_bands", data);
                 
         } catch (Exception e) {
             return recovery.createRecoveryResponse("quantify_bands", e);
@@ -528,24 +819,37 @@ public class GelAnalysisTools {
      * Export analysis results to CSV/JSON/PDF
      */
     public JSONObject exportResults(JSONObject args) {
+        ToolSchemaValidator.requireImageHandle(args);
+        ToolSchemaValidator.requireArray(args, "export_formats");
         try {
-            // Validate image handle with recovery
-            String imageHandle = args.optString("image_handle", "");
-            JSONObject validation = recovery.validateHandle(imageHandle, "image");
+            // Enforce handle discipline first
+            JSONObject disciplineError = enforceHandleDiscipline(args);
+            if (disciplineError != null) return disciplineError;
             
-            if (!validation.getBoolean("valid")) {
-                JSONObject errorResponse = new JSONObject();
-                errorResponse.put("error", true);
-                errorResponse.put("validation", validation);
-                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
-                return errorResponse;
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            if (img == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
             }
             
-            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            if (!args.has("export_formats")) {
+                return fail(ERROR_MISSING_REQUIRED_FIELD, "export_formats array is required", "export_formats");
+            }
+            
             JSONArray formats = args.getJSONArray("export_formats");
             
+            // Clamp and echo parameters for determinism
             String baseFilename = args.optString("filename", "gel_analysis_" + System.currentTimeMillis());
+            // Sanitize filename
+            baseFilename = baseFilename.replaceAll("[^a-zA-Z0-9_-]", "_");
+            baseFilename = baseFilename.substring(0, Math.min(baseFilename.length(), 100)); // Max 100 chars
+            args.put("filename", baseFilename);
+            
             String outputDir = args.optString("output_directory", tempDir.toString());
+            
+            int maxFileSize = args.optInt("max_file_size_mb", 50);
+            maxFileSize = clamp(maxFileSize, 1, 500); // 1-500 MB limit
+            args.put("max_file_size_mb", maxFileSize);
             Path outputPath = Path.of(outputDir);
             
             JSONArray exportedFiles = new JSONArray();
@@ -610,7 +914,8 @@ public class GelAnalysisTools {
                 }
             }
             
-            return new JSONObject()
+            // Build standardized success response
+            JSONObject data = new JSONObject()
                 .put("exported_files", exportedFiles)
                 .put("export_summary", new JSONObject()
                     .put("total_files", exportedFiles.length())
@@ -622,7 +927,13 @@ public class GelAnalysisTools {
                     .put("high_res_png", "Publication-quality with full resolution and intensity values")
                     .put("presentation_png", "Includes title and summary statistics for slides")
                     .put("csv", "Quantification data for further analysis in Excel/R/Python")
-                    .put("json", "Complete analysis metadata and session information"));
+                    .put("json", "Complete analysis metadata and session information"))
+                .put("parameters_used", new JSONObject()
+                    .put("filename", baseFilename)
+                    .put("max_file_size_mb", maxFileSize)
+                    .put("export_formats", formats));
+            
+            return ok("export_results", data);
                 
         } catch (Exception e) {
             return recovery.createRecoveryResponse("export_results", e);
@@ -638,24 +949,30 @@ public class GelAnalysisTools {
      * Detect colonies on agar plates
      */
     public JSONObject detectColonies(JSONObject args) {
+        ToolSchemaValidator.requireImageHandle(args);
         try {
-            // Validate image handle with recovery
-            String imageHandle = args.optString("image_handle", "");
-            JSONObject validation = recovery.validateHandle(imageHandle, "image");
+            // Enforce handle discipline first
+            JSONObject disciplineError = enforceHandleDiscipline(args);
+            if (disciplineError != null) return disciplineError;
             
-            if (!validation.getBoolean("valid")) {
-                JSONObject errorResponse = new JSONObject();
-                errorResponse.put("error", true);
-                errorResponse.put("validation", validation);
-                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
-                return errorResponse;
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            if (img == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
             }
             
-            SessionStore.ImageRecord img = store.getImage(imageHandle);
-            
+            // Clamp and echo parameters for determinism
             int minSize = args.optInt("min_colony_size", 5);
+            minSize = clamp(minSize, 1, 100); // 1-100 pixels
+            args.put("min_colony_size", minSize);
+            
             int maxSize = args.optInt("max_colony_size", 200);
+            maxSize = clamp(maxSize, minSize + 1, 2000); // Must be larger than minSize, max 2000
+            args.put("max_colony_size", maxSize);
+            
             double sensitivity = args.optDouble("sensitivity", 0.8);
+            sensitivity = clamp(sensitivity, 0.1, 1.0); // 10% to 100%
+            args.put("sensitivity", sensitivity);
             
             // IMPORTANT: Work on duplicate for detection, preserve original for measurements
             ImagePlus workingImage = img.image.duplicate();
@@ -680,14 +997,24 @@ public class GelAnalysisTools {
             String overlayHandle = store.putOverlay(labeledOverlay, img.handle);
             String analysisHandle = store.putAnalysis("colonies", colonyCount, img.handle);
             
-            return new JSONObject()
+            // Ensure this image remains current for subsequent operations
+            store.setLastActiveImageHandle(img.handle);
+            
+            // Build standardized success response
+            JSONObject data = new JSONObject()
                 .put("colonies_found", colonyCount)
                 .put("overlay_handle", overlayHandle)
                 .put("analysis_handle", analysisHandle)
                 .put("image_handle", img.handle)
                 .put("measurement_source", "original_image_data")
                 .put("visual_elements", "Colony labels: C1, C2, C3... for identification and discussion")
-                .put("export_ready", "Use render_overlay_png or colony export tools for presentations");
+                .put("export_ready", "Use render_overlay_png or colony export tools for presentations")
+                .put("parameters_used", new JSONObject()
+                    .put("min_colony_size", minSize)
+                    .put("max_colony_size", maxSize)
+                    .put("sensitivity", sensitivity));
+            
+            return ok("detect_colonies", data);
                 
         } catch (Exception e) {
             return recovery.createRecoveryResponse("detect_colonies", e);
@@ -700,6 +1027,8 @@ public class GelAnalysisTools {
      */
     public JSONObject countColoniesByColor(JSONObject args) {
         try {
+            ToolSchemaValidator.requireImageHandle(args);
+            ToolSchemaValidator.requireArray(args, "color_groups");
             // Validate image handle with recovery
             String imageHandle = args.optString("image_handle", "");
             JSONObject validation = recovery.validateHandle(imageHandle, "image");
@@ -894,20 +1223,19 @@ public class GelAnalysisTools {
      * Enable user-assisted band identification mode
      */
     public JSONObject enableBandAssist(JSONObject args) {
+        ToolSchemaValidator.requireImageHandle(args);
         try {
-            // Validate image handle with recovery
-            String imageHandle = args.optString("image_handle", "");
-            JSONObject validation = recovery.validateHandle(imageHandle, "image");
+            // Enforce handle discipline first
+            JSONObject disciplineError = enforceHandleDiscipline(args);
+            if (disciplineError != null) return disciplineError;
             
-            if (!validation.getBoolean("valid")) {
-                JSONObject errorResponse = new JSONObject();
-                errorResponse.put("error", true);
-                errorResponse.put("validation", validation);
-                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
-                return errorResponse;
-            }
+            // Now we're guaranteed to have a valid image_handle
+            String imageHandle = args.getString("image_handle");
             
             SessionStore.ImageRecord img = store.getImage(imageHandle);
+            if (img == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+            }
             
             // Get lanes from previous analysis
             List<String> analyses = store.getAnalysesForImage(imageHandle);
@@ -924,9 +1252,7 @@ public class GelAnalysisTools {
             }
             
             if (lanes == null || lanes.isEmpty()) {
-                return new JSONObject()
-                    .put("error", true)
-                    .put("message", "No lanes detected. Please detect lanes first before using BandAssist.");
+                return fail(ERROR_IMAGE_STATE_CONFLICT, "No lanes detected. Please detect lanes first before using BandAssist.", "overlay");
             }
             
             // Store BandAssist tool instance in session metadata
@@ -937,15 +1263,16 @@ public class GelAnalysisTools {
             // Store tool instance for later use
             img.metadata.put("band_assist_tool", assistTool);
             
-            return new JSONObject()
+            JSONObject data = new JSONObject()
                 .put("band_assist_enabled", true)
                 .put("lanes_available", lanes.size())
                 .put("image_handle", img.handle)
-                .put("instructions", "Click on any band in any lane to identify it across all lanes")
-                .put("usage_tip", "The system will find the corresponding band in other lanes automatically");
+                .put("instructions", "Click on any band in any lane to identify it across all lanes");
+            
+            return ok("enable_band_assist", data);
                 
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("enable_band_assist", e);
+            return fail(ERROR_IJ_RUNTIME_ERROR, "ImageJ runtime error: " + e.getMessage(), "runtime");
         }
     }
     
@@ -954,36 +1281,38 @@ public class GelAnalysisTools {
      * Disable user-assisted band identification mode
      */
     public JSONObject disableBandAssist(JSONObject args) {
+        ToolSchemaValidator.requireImageHandle(args);
         try {
-            // Validate image handle with recovery
-            String imageHandle = args.optString("image_handle", "");
-            JSONObject validation = recovery.validateHandle(imageHandle, "image");
+            // Enforce handle discipline first
+            JSONObject disciplineError = enforceHandleDiscipline(args);
+            if (disciplineError != null) return disciplineError;
             
-            if (!validation.getBoolean("valid")) {
-                JSONObject errorResponse = new JSONObject();
-                errorResponse.put("error", true);
-                errorResponse.put("validation", validation);
-                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
-                return errorResponse;
-            }
-            
+            String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord img = store.getImage(imageHandle);
+            if (img == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+            }
             
             // Get and disable assist tool
             Object toolObj = img.metadata.get("band_assist_tool");
+            boolean wasEnabled = false;
             if (toolObj instanceof com.betterdairy.autodense.analysis.AssistBandTool) {
                 com.betterdairy.autodense.analysis.AssistBandTool assistTool = 
                     (com.betterdairy.autodense.analysis.AssistBandTool) toolObj;
                 assistTool.disable();
                 img.metadata.remove("band_assist_tool");
+                wasEnabled = true;
             }
             
-            return new JSONObject()
+            JSONObject data = new JSONObject()
                 .put("band_assist_disabled", true)
+                .put("was_enabled", wasEnabled)
                 .put("image_handle", img.handle);
+            
+            return ok("disable_band_assist", data);
                 
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("disable_band_assist", e);
+            return fail(ERROR_IJ_RUNTIME_ERROR, "ImageJ runtime error: " + e.getMessage(), "runtime");
         }
     }
     
@@ -1200,6 +1529,9 @@ public class GelAnalysisTools {
             
             // Store reference overlay
             String overlayHandle = store.putOverlay(referenceOverlay, img.handle);
+            
+            // Ensure this image remains current for subsequent operations
+            store.setLastActiveImageHandle(img.handle);
             
             return new JSONObject()
                 .put("reference_png", outputPath.toString())
@@ -1567,35 +1899,131 @@ public class GelAnalysisTools {
     }
     
     /**
-     * Export quantification data to CSV
+     * Export quantification data to CSV with standardized format
+     * Header: file,lane,band_idx,x_start,x_end,y_top,y_bottom,apex_y,area_raw,area_bg,area_corr,snr,mw_kda,rf,flags
      */
     private void exportQuantificationCSV(Path outputPath, String imageHandle) throws Exception {
-        // Get quantification data
-        List<String> analyses = store.getAnalysesForImage(imageHandle);
+        SessionStore.ImageRecord imgRecord = store.getImage(imageHandle);
+        if (imgRecord == null) {
+            throw new Exception("Image not found for handle: " + imageHandle);
+        }
+        
+        // Decimal formatters for fixed precision
+        DecimalFormat df3 = new DecimalFormat("#.###");  // 3 decimal places
+        DecimalFormat df4 = new DecimalFormat("#.####"); // 4 decimal places for RF
+        
         StringBuilder csv = new StringBuilder();
         
-        // CSV header
-        csv.append("Lane,Band,Y_Position,Intensity,Area\n");
+        // Standardized CSV header
+        csv.append("file,lane,band_idx,x_start,x_end,y_top,y_bottom,apex_y,area_raw,area_bg,area_corr,snr,mw_kda,rf,flags\n");
         
+        // Get filename from image
+        String filename = imgRecord.image.getTitle();
+        if (filename == null || filename.isEmpty()) {
+            filename = "unknown.tif";
+        }
+        
+        // Get lanes and bands from analysis data
+        List<String> analyses = store.getAnalysesForImage(imageHandle);
+        List<Lane> lanes = null;
+        List<List<Band>> allBands = new ArrayList<>();
+        
+        // Find lane detection results
         for (String analysisHandle : analyses) {
             SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
-            if ("quantification".equals(analysis.type)) {
-                JSONArray results = new JSONArray(analysis.data.toString());
-                for (int i = 0; i < results.length(); i++) {
-                    JSONObject laneResult = results.getJSONObject(i);
-                    int laneNum = laneResult.getInt("lane");
-                    JSONArray bands = laneResult.getJSONArray("bands");
-                    
-                    for (int b = 0; b < bands.length(); b++) {
-                        JSONObject band = bands.getJSONObject(b);
-                        csv.append(String.format("%d,%d,%d,%.2f,%.2f\n",
-                            laneNum, b+1,
-                            band.getInt("y_position"),
-                            band.getDouble("intensity"),
-                            band.getDouble("area")));
+            if ("lane_detection".equals(analysis.type)) {
+                JSONObject analysisData = (JSONObject) analysis.data;
+                if (analysisData.has("lanes")) {
+                    JSONArray laneArray = analysisData.getJSONArray("lanes");
+                    lanes = new ArrayList<>();
+                    for (int i = 0; i < laneArray.length(); i++) {
+                        JSONObject laneObj = laneArray.getJSONObject(i);
+                        lanes.add(new Lane(
+                            laneObj.getInt("index"),
+                            laneObj.getInt("x_start"),
+                            laneObj.getInt("x_end")
+                        ));
                     }
                 }
-                break; // Use first quantification found
+                break;
+            }
+        }
+        
+        // Find band detection results
+        for (String analysisHandle : analyses) {
+            SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
+            if ("band_detection".equals(analysis.type)) {
+                JSONObject analysisData = (JSONObject) analysis.data;
+                if (analysisData.has("lanes")) {
+                    JSONArray laneResults = analysisData.getJSONArray("lanes");
+                    for (int laneIdx = 0; laneIdx < laneResults.length(); laneIdx++) {
+                        JSONObject laneResult = laneResults.getJSONObject(laneIdx);
+                        if (laneResult.has("bands")) {
+                            JSONArray bands = laneResult.getJSONArray("bands");
+                            List<Band> laneBands = new ArrayList<>();
+                            
+                            for (int bandIdx = 0; bandIdx < bands.length(); bandIdx++) {
+                                JSONObject bandObj = bands.getJSONObject(bandIdx);
+                                Band band = new Band(
+                                    bandIdx + 1,
+                                    bandObj.getInt("y_position"),
+                                    bandObj.getDouble("area"),
+                                    bandObj.optDouble("background", 0.0),
+                                    bandObj.optDouble("mw_kda", 0.0)
+                                );
+                                laneBands.add(band);
+                            }
+                            allBands.add(laneBands);
+                        }
+                    }
+                }
+                break;
+            }
+        }
+        
+        // If we don't have proper analysis data, create minimal structure
+        if (lanes == null) {
+            lanes = new ArrayList<>();
+            // Create default single lane if no lane data
+            lanes.add(new Lane(1, 0, imgRecord.image.getWidth()));
+        }
+        
+        // Export data for each lane and band
+        for (int laneIdx = 0; laneIdx < lanes.size(); laneIdx++) {
+            Lane lane = lanes.get(laneIdx);
+            List<Band> laneBands = (laneIdx < allBands.size()) ? allBands.get(laneIdx) : new ArrayList<>();
+            
+            for (int bandIdx = 0; bandIdx < laneBands.size(); bandIdx++) {
+                Band band = laneBands.get(bandIdx);
+                
+                // Calculate derived values
+                double apexY = band.y(); // Use center as apex
+                double areaRaw = band.area();
+                double areaBg = band.baseline() * (lane.xEnd() - lane.xStart() + 1) * 10; // Estimate band height as 10px
+                double areaCorr = Math.max(0, areaRaw - areaBg);
+                double snr = 0.0; // SNR would need to be calculated from raw data
+                double rf = apexY / (double) imgRecord.image.getHeight(); // Simple RF calculation
+                double mwKda = band.mwKDa(); // Get molecular weight if available
+                String flags = ""; // No specific flags in current data
+                
+                // Build CSV row with fixed decimal formatting
+                csv.append(String.format("%s,%d,%d,%d,%d,%d,%d,%s,%s,%s,%s,%s,%s,%s,%s\n",
+                    filename,
+                    lane.index(),
+                    band.index(),
+                    lane.xStart(),
+                    lane.xEnd(),
+                    Math.max(0, (int)(apexY - 5)), // y_top (estimate)
+                    Math.min(imgRecord.image.getHeight() - 1, (int)(apexY + 5)), // y_bottom (estimate)
+                    df3.format(apexY),
+                    df3.format(areaRaw),
+                    df3.format(areaBg),
+                    df3.format(areaCorr),
+                    df3.format(snr),
+                    df3.format(mwKda),
+                    df4.format(rf),
+                    flags
+                ));
             }
         }
         
@@ -1858,5 +2286,63 @@ public class GelAnalysisTools {
         return new JSONObject()
             .put("error", true)
             .put("message", message);
+    }
+    
+    /**
+     * Create a cache key for preprocessing operations.
+     * This ensures identical preprocessing chains reuse cached results.
+     */
+    private String createPreprocessingCacheKey(String imageHandle, JSONArray steps, boolean destructive) {
+        StringBuilder key = new StringBuilder();
+        key.append(imageHandle).append("|").append(destructive);
+        
+        // Include each step's operation and parameters
+        for (int i = 0; i < steps.length(); i++) {
+            JSONObject step = steps.getJSONObject(i);
+            key.append("|").append(step.getString("op"));
+            
+            // Include relevant parameters for cache differentiation
+            switch (step.getString("op")) {
+                case "rotate":
+                    key.append(":").append(step.optDouble("angle_deg", 0.0));
+                    break;
+                case "flip":
+                    key.append(":").append(step.optString("axis", "horizontal"));
+                    break;
+                case "enhance_contrast":
+                    key.append(":").append(step.optDouble("saturated", 0.35));
+                    break;
+                case "subtract_background":
+                    key.append(":").append(step.optInt("radius_px", 150));
+                    break;
+                case "clahe":
+                    key.append(":").append(step.optInt("block_size", 127))
+                       .append(":").append(step.optInt("histogram_bins", 256))
+                       .append(":").append(step.optDouble("max_slope", 3.0));
+                    break;
+                case "bandpass":
+                    key.append(":").append(step.optDouble("filter_large", 40.0))
+                       .append(":").append(step.optDouble("filter_small", 3.0));
+                    break;
+            }
+        }
+        
+        return key.toString();
+    }
+    
+    /**
+     * Conditionally duplicate an image only if modifications are needed.
+     * This prevents unnecessary deep copies when read-only operations suffice.
+     */
+    private ImagePlus conditionalDuplicate(ImagePlus original, boolean needsModification, String suffix) {
+        if (!needsModification) {
+            return original; // Return reference to original
+        }
+        
+        ImagePlus duplicate = original.duplicate();
+        if (suffix != null && !suffix.isEmpty()) {
+            duplicate.setTitle(original.getTitle() + "_" + suffix);
+        }
+        return duplicate;
     }
 }

@@ -137,3 +137,45 @@ All notable changes to the AutoDense gel densitometry project are documented in 
 - **Context Management**: Gel analysis state integration with NLContext
 - **Error Handling**: Comprehensive error handling with detailed logging
 - **Resource Management**: Proper server startup/shutdown lifecycle
+
+### 2025-08-22 - Synthetic Gel Pipeline Test and JUnit Setup (06:22 BST)
+
+- **File**: `autodense/plugin/src/test/java/com/betterdairy/autodense/analysis/SyntheticGelTest.java`
+  - Added a synthetic SDS mini-gel generator and smoke test for pipeline
+  - Verifies lane detection (~8 lanes), band detection (~3 per lane), and positive band area
+  - Uses `LaneDetector.findLanes(imp)` and `BandDetector.findBands(imp, lane)` APIs, and `Models.Band`
+- **Build**: `autodense/plugin/pom.xml`
+  - Added JUnit 5 dependencies (`junit-jupiter-api`, `junit-jupiter-engine`) and configured `maven-surefire-plugin` 3.1.2
+  - Ensures tests under `src/test/java` compile and run with JUnit Jupiter
+  - Reason: Establish a reproducible test for core analysis functions using a deterministic synthetic gel
+
+### 2025-08-22 - Tool Schema Validator Utility (06:26 BST)
+
+- **File**: `autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/ToolSchemaValidator.java`
+  - Added JSON helper for tool argument validation and normalization
+  - Methods: `requireImageHandle(JSONObject)`, `requireArray(JSONObject,String)`, `clamp(JSONObject,String,double,double)`
+  - Reason: Centralize schema checks and numeric clamping for NL tool inputs
+
+### 2025-08-22 - Integrated ToolSchemaValidator in Tools (06:27 BST)
+
+- **File**: `autodense/plugin/src/main/java/com/betterdairy/autodense/tools/GelAnalysisTools.java`
+  - Added validations at top of handlers: `preprocess`, `detectLanes`, `detectBands`, `adjustLanes`, `renderOverlayPng`, `quantifyBands`, `exportResults`, `detectColonies`, `countColoniesByColor`
+  - `preprocess`: Clamps `radius_px` to [10, 400] before running "Subtract Background..."
+  - Also require arrays for `steps`, `export_formats`, and `color_groups` where applicable
+  - Reason: Strengthen input validation and prevent out-of-range parameters reaching ImageJ
+
+### 2025-08-22 - Orchestrator image_handle auto-injection (06:30 BST)
+
+- **File**: `autodense/plugin/src/main/java/com/betterdairy/autodense/orchestrator/GeminiOrchestrator.java`
+  - Before dispatch, injects `image_handle` into tool parameters if missing by using `currentImageHandle` or `SessionStore.getMostRecentImageHandle()`
+  - Logs a session event `tool_call_warning` when injection occurs
+  - Throws `IllegalArgumentException` if no active image is available
+  - Reason: Ensure robust tool execution even when Gemini omits `image_handle` in parameters
+
+### 2025-08-22 - Track last active image handle on tool results (06:31 BST)
+
+- **File**: `autodense/plugin/src/main/java/com/betterdairy/autodense/session/SessionStore.java`
+  - Added `setLastActiveImageHandle(String)` to update the current image when a tool returns a handle
+- **File**: `autodense/plugin/src/main/java/com/betterdairy/autodense/orchestrator/GeminiOrchestrator.java`
+  - After tool execution in `executeTool(...)`, if `result.image_handle` is present, updates `SessionStore` and `currentImageHandle`
+  - Reason: Keep orchestrator session state in sync with latest tool-produced image handle

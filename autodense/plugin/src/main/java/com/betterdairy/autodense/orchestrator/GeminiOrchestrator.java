@@ -165,9 +165,19 @@ public class GeminiOrchestrator {
         JSONObject result = null;
         
         try {
-            // Ensure image handle is available
-            if (currentImageHandle != null && !parameters.has("image_handle")) {
-                parameters.put("image_handle", currentImageHandle);
+            // Before dispatch: ensure image_handle is present or inject last active
+            if (!parameters.has("image_handle") || parameters.isNull("image_handle")) {
+                String last = (currentImageHandle != null) ? currentImageHandle : sessionStore.getMostRecentImageHandle();
+                if (last != null && sessionStore.hasImage(last)) {
+                    parameters.put("image_handle", last);
+                    sessionLogger.logSessionEvent(
+                        "tool_call_warning",
+                        "Injected missing image_handle: " + last,
+                        new JSONObject().put("injected_image_handle", last).put("tool", toolName)
+                    );
+                } else {
+                    throw new IllegalArgumentException("image_handle required and no active image in session");
+                }
             }
             
             // Execute the tool
@@ -196,6 +206,14 @@ public class GeminiOrchestrator {
                 case "clear_session" -> analysisTools.clearSession(parameters);
                 default -> new JSONObject().put("error", true).put("message", "Unknown tool: " + toolName);
             };
+            // Record last active image handle if returned by tool
+            if (result != null && result.has("image_handle")) {
+                String handle = result.optString("image_handle", null);
+                if (handle != null) {
+                    sessionStore.setLastActiveImageHandle(handle);
+                    this.currentImageHandle = handle;
+                }
+            }
             
             success = !result.optBoolean("error", false);
             return result;
@@ -329,9 +347,19 @@ public class GeminiOrchestrator {
         // Convert Gemini parameters to tool parameters
         JSONObject toolParameters = new JSONObject(geminiResponse.parameters);
         
-        // Ensure image handle is included
-        if (currentImageHandle != null) {
-            toolParameters.put("image_handle", currentImageHandle);
+        // Before dispatch: ensure image_handle is present or inject last active
+        if (!toolParameters.has("image_handle") || toolParameters.isNull("image_handle")) {
+            String last = (currentImageHandle != null) ? currentImageHandle : sessionStore.getMostRecentImageHandle();
+            if (last != null && sessionStore.hasImage(last)) {
+                toolParameters.put("image_handle", last);
+                sessionLogger.logSessionEvent(
+                    "tool_call_warning",
+                    "Injected missing image_handle: " + last,
+                    new JSONObject().put("injected_image_handle", last).put("tool", geminiResponse.action)
+                );
+            } else {
+                throw new IllegalArgumentException("image_handle required and no active image in session");
+            }
         }
         
         return executeTool(geminiResponse.action, toolParameters);
