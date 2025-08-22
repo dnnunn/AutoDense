@@ -130,10 +130,32 @@ public class GelUI {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 10, 15));
         
-        // Title
+        // Left side: Title and Analysis Type Selector
+        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        
         JLabel titleLabel = new JLabel("🔬 AutoDense AI Assistant");
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 18f));
-        panel.add(titleLabel, BorderLayout.WEST);
+        leftPanel.add(titleLabel);
+        
+        // Analysis Type Selector
+        leftPanel.add(Box.createHorizontalStrut(20));
+        JLabel analysisLabel = new JLabel("Analysis Type:");
+        analysisLabel.setFont(analysisLabel.getFont().deriveFont(Font.PLAIN, 12f));
+        leftPanel.add(analysisLabel);
+        
+        leftPanel.add(Box.createHorizontalStrut(5));
+        JComboBox<String> analysisTypeCombo = new JComboBox<>(new String[]{
+            "🧬 Gel Densitometry", "🦠 Colony Counting"
+        });
+        analysisTypeCombo.setToolTipText("Choose analysis workflow: gel bands or bacterial colonies");
+        analysisTypeCombo.addActionListener(e -> {
+            String selected = (String) analysisTypeCombo.getSelectedItem();
+            boolean isColonyMode = selected.contains("Colony");
+            updateUIForAnalysisType(isColonyMode);
+        });
+        leftPanel.add(analysisTypeCombo);
+        
+        panel.add(leftPanel, BorderLayout.WEST);
         
         // Quick actions
         JPanel actionsPanel = new JPanel(new FlowLayout());
@@ -989,10 +1011,8 @@ public class GelUI {
                 return executeBandDetection(response.originalCommand, imp);
                 
             case "executeQuantification":
-                return executeQuantification(response.originalCommand, imp);
-                
             case "executeCalibration":
-                return executeCalibration(response.originalCommand, imp, response.parameters);
+                return "🔄 Action not yet implemented: " + response.action;
                 
             default:
                 return "✅ Gemini Analysis: " + response.analysis + "\\n" +
@@ -1236,25 +1256,10 @@ public class GelUI {
         }
     }
     
-    private String executeQuantification(String command, ImagePlus imp) {
-        return "🔄 Quantification execution not yet implemented";
-    }
     
-    private String executeImageEnhancement(String command, ImagePlus imp, Map<String, Object> params) {
-        return "🔄 Image enhancement execution not yet implemented";
-    }
     
-    private String executeCalibration(String command, ImagePlus imp, Map<String, Object> params) {
-        return "🔄 Calibration execution not yet implemented";
-    }
     
-    private String executeExport(String command, ImagePlus imp, Map<String, Object> params) {
-        return "🔄 Export execution not yet implemented";
-    }
     
-    private String executeWorkflow(String command, ImagePlus imp, Map<String, Object> params) {
-        return "🔄 Workflow execution not yet implemented";
-    }
     
     private String showContextualHelp() {
         return "🤖 AutoDense Help:\\n" +
@@ -1296,5 +1301,42 @@ public class GelUI {
             chatArea.append(text);
             chatArea.setCaretPosition(chatArea.getDocument().getLength());
         });
+    }
+    
+    /**
+     * Update UI elements based on selected analysis type
+     */
+    private void updateUIForAnalysisType(boolean isColonyMode) {
+        if (isColonyMode) {
+            statusLabel.setText("🦠 Colony Analysis Mode - Ready to analyze bacterial plates");
+            // Update chat area with colony-specific help
+            String colonyHelp = """
+                🦠 Colony Analysis Mode Selected
+                
+                Commands you can try:
+                • "Detect the plate boundary"
+                • "Count colonies on this plate"  
+                • "Classify colonies by color"
+                • "Export colony analysis to CSV"
+                
+                Colony tools: detect_plate, count_colonies, classify_colonies, bin_colonies, export_colonies
+                """;
+            appendToChatArea(colonyHelp);
+        } else {
+            statusLabel.setText("🧬 Gel Analysis Mode - Ready to analyze protein/DNA gels");
+            // Update chat area with gel-specific help
+            String gelHelp = """
+                🧬 Gel Densitometry Mode Selected
+                
+                Commands you can try:
+                • "Detect 12 lanes in this gel"
+                • "Find bands in all lanes"
+                • "Quantify band intensities"
+                • "Export results to CSV"
+                
+                Gel tools: detect_lanes, detect_bands, quantify_bands, export_results
+                """;
+            appendToChatArea(gelHelp);
+        }
     }
 }

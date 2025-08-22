@@ -15,7 +15,11 @@ import ij.process.ImageProcessor;
 import ij.plugin.filter.BackgroundSubtracter;
 import ij.plugin.filter.GaussianBlur;
 import ij.plugin.ContrastEnhancer;
-import ij.measure.ResultsTable;
+import ij.process.AutoThresholder;
+import ij.plugin.ImageCalculator;
+import java.awt.geom.AffineTransform;
+import ij.plugin.filter.EDM;
+import ij.process.ColorProcessor;
 import org.json.JSONObject;
 import org.json.JSONArray;
 
@@ -67,13 +71,6 @@ public class GelAnalysisTools {
             .put("error", new JSONObject().put("code", code).put("message", msg).put("param", param));
     }
     
-    /**
-     * @deprecated Use toolFailure instead
-     */
-    @Deprecated
-    private JSONObject toolError(String errorType, String field, JSONObject args) {
-        return fail(errorType, String.format("Required field '%s' is missing or invalid", field), field);
-    }
     
     /**
      * Standard error codes for Gemini self-correction
@@ -81,9 +78,9 @@ public class GelAnalysisTools {
     private static final String ERROR_MISSING_REQUIRED_FIELD = "missing_required_field";
     private static final String ERROR_INVALID_PARAM = "invalid_param";
     private static final String ERROR_IMAGE_NOT_FOUND = "image_not_found";
-    private static final String ERROR_OVERLAY_NOT_FOUND = "overlay_not_found";
     private static final String ERROR_IMAGE_STATE_CONFLICT = "image_state_conflict";
     private static final String ERROR_IJ_RUNTIME_ERROR = "ij_runtime_error";
+    protected static final String ERROR_ANALYSIS_FAILED = "analysis_failed";
     
     /**
      * Clamp value to valid range for determinism and self-documentation
@@ -148,7 +145,7 @@ public class GelAnalysisTools {
                      "This image handle must be included in every tool call: detect_lanes, detect_bands, quantify_bands, etc.");
                 
         } catch (Exception e) {
-            return errorResponse(e);
+            return recovery.createRecoveryResponse("open_image", e);
         }
     }
     
@@ -944,198 +941,8 @@ public class GelAnalysisTools {
      * Tool: clear_session
      * Clear all session data
      */
-    /**
-     * Tool: detect_colonies
-     * Detect colonies on agar plates
-     */
-    public JSONObject detectColonies(JSONObject args) {
-        ToolSchemaValidator.requireImageHandle(args);
-        try {
-            // Enforce handle discipline first
-            JSONObject disciplineError = enforceHandleDiscipline(args);
-            if (disciplineError != null) return disciplineError;
-            
-            String imageHandle = args.getString("image_handle");
-            SessionStore.ImageRecord img = store.getImage(imageHandle);
-            if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
-            }
-            
-            // Clamp and echo parameters for determinism
-            int minSize = args.optInt("min_colony_size", 5);
-            minSize = clamp(minSize, 1, 100); // 1-100 pixels
-            args.put("min_colony_size", minSize);
-            
-            int maxSize = args.optInt("max_colony_size", 200);
-            maxSize = clamp(maxSize, minSize + 1, 2000); // Must be larger than minSize, max 2000
-            args.put("max_colony_size", maxSize);
-            
-            double sensitivity = args.optDouble("sensitivity", 0.8);
-            sensitivity = clamp(sensitivity, 0.1, 1.0); // 10% to 100%
-            args.put("sensitivity", sensitivity);
-            
-            // IMPORTANT: Work on duplicate for detection, preserve original for measurements
-            ImagePlus workingImage = img.image.duplicate();
-            
-            // Use ImageJ's particle analyzer for colony detection on working copy
-            IJ.run(workingImage, "Convert to Mask", "");
-            IJ.run(workingImage, "Fill Holes", "");
-            IJ.run(workingImage, "Watershed", "");
-            IJ.run(workingImage, "Analyze Particles...", 
-                String.format("size=%d-%d pixel show=Overlay", minSize, maxSize));
-            
-            Overlay detectionOverlay = workingImage.getOverlay();
-            int colonyCount = detectionOverlay != null ? detectionOverlay.size() : 0;
-            
-            // Create labeled overlay for visual communication
-            Overlay labeledOverlay = createColonyLabeledOverlay(detectionOverlay, colonyCount);
-            
-            // Apply labeled overlay to original image for display
-            img.image.setOverlay(labeledOverlay);
-            img.image.updateAndDraw();
-            
-            String overlayHandle = store.putOverlay(labeledOverlay, img.handle);
-            String analysisHandle = store.putAnalysis("colonies", colonyCount, img.handle);
-            
-            // Ensure this image remains current for subsequent operations
-            store.setLastActiveImageHandle(img.handle);
-            
-            // Build standardized success response
-            JSONObject data = new JSONObject()
-                .put("colonies_found", colonyCount)
-                .put("overlay_handle", overlayHandle)
-                .put("analysis_handle", analysisHandle)
-                .put("image_handle", img.handle)
-                .put("measurement_source", "original_image_data")
-                .put("visual_elements", "Colony labels: C1, C2, C3... for identification and discussion")
-                .put("export_ready", "Use render_overlay_png or colony export tools for presentations")
-                .put("parameters_used", new JSONObject()
-                    .put("min_colony_size", minSize)
-                    .put("max_colony_size", maxSize)
-                    .put("sensitivity", sensitivity));
-            
-            return ok("detect_colonies", data);
-                
-        } catch (Exception e) {
-            return recovery.createRecoveryResponse("detect_colonies", e);
-        }
-    }
     
-    /**
-     * Tool: count_colonies_by_color
-     * Count colonies grouped by color
-     */
-    public JSONObject countColoniesByColor(JSONObject args) {
-        try {
-            ToolSchemaValidator.requireImageHandle(args);
-            ToolSchemaValidator.requireArray(args, "color_groups");
-            // Validate image handle with recovery
-            String imageHandle = args.optString("image_handle", "");
-            JSONObject validation = recovery.validateHandle(imageHandle, "image");
-            
-            if (!validation.getBoolean("valid")) {
-                JSONObject errorResponse = new JSONObject();
-                errorResponse.put("error", true);
-                errorResponse.put("validation", validation);
-                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
-                return errorResponse;
-            }
-            
-            SessionStore.ImageRecord img = store.getImage(imageHandle);
-            JSONArray colorGroups = args.getJSONArray("color_groups");
-            
-            // This would require color analysis - simplified implementation
-            int totalColonies = 0;
-            JSONObject colorCounts = new JSONObject();
-            
-            for (int i = 0; i < colorGroups.length(); i++) {
-                String color = colorGroups.getString(i);
-                // Simplified: random count for demonstration
-                int count = (int)(Math.random() * 20);
-                colorCounts.put(color, count);
-                totalColonies += count;
-            }
-            
-            String analysisHandle = store.putAnalysis("color_counts", colorCounts.toString(), img.handle);
-            
-            return new JSONObject()
-                .put("total_colonies", totalColonies)
-                .put("color_counts", colorCounts)
-                .put("analysis_handle", analysisHandle)
-                .put("image_handle", img.handle);
-                
-        } catch (Exception e) {
-            return recovery.createRecoveryResponse("count_colonies_by_color", e);
-        }
-    }
     
-    /**
-     * Tool: measure_colony_sizes
-     * Measure colony size distribution
-     */
-    public JSONObject measureColonySizes(JSONObject args) {
-        try {
-            // Validate image handle with recovery
-            String imageHandle = args.optString("image_handle", "");
-            JSONObject validation = recovery.validateHandle(imageHandle, "image");
-            
-            if (!validation.getBoolean("valid")) {
-                JSONObject errorResponse = new JSONObject();
-                errorResponse.put("error", true);
-                errorResponse.put("validation", validation);
-                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
-                return errorResponse;
-            }
-            
-            SessionStore.ImageRecord img = store.getImage(imageHandle);
-            
-            // IMPORTANT: Use duplicate for measurements to preserve original
-            ImagePlus measurementImage = img.image.duplicate();
-            
-            // Use ImageJ's measurement tools on working copy
-            IJ.run(measurementImage, "Set Measurements...", "area mean min centroid");
-            IJ.run(measurementImage, "Analyze Particles...", "size=5-Infinity show=Overlay display");
-            
-            // Get results from ImageJ Results table (measurements from original data)
-            ResultsTable rt = ResultsTable.getResultsTable();
-            int colonyCount = rt != null ? rt.getCounter() : 0;
-            
-            // Create labeled overlay with size information
-            Overlay measurementOverlay = measurementImage.getOverlay();
-            Overlay labeledOverlay = createColonySizeOverlay(measurementOverlay, rt, colonyCount);
-            
-            // Apply to original for display
-            img.image.setOverlay(labeledOverlay);
-            img.image.updateAndDraw();
-            
-            JSONObject sizeStats = new JSONObject();
-            if (rt != null && colonyCount > 0) {
-                double[] areas = rt.getColumn("Area");
-                double avgSize = java.util.Arrays.stream(areas).average().orElse(0);
-                double minSize = java.util.Arrays.stream(areas).min().orElse(0);
-                double maxSize = java.util.Arrays.stream(areas).max().orElse(0);
-                
-                sizeStats.put("average_area", avgSize);
-                sizeStats.put("min_area", minSize);
-                sizeStats.put("max_area", maxSize);
-                sizeStats.put("colony_count", colonyCount);
-            }
-            
-            String analysisHandle = store.putAnalysis("colony_sizes", sizeStats.toString(), img.handle);
-            
-            return new JSONObject()
-                .put("colony_count", colonyCount)
-                .put("size_statistics", sizeStats)
-                .put("analysis_handle", analysisHandle)
-                .put("image_handle", img.handle)
-                .put("measurement_source", "original_image_data")
-                .put("visual_elements", "Colonies labeled C1, C2... with optional size values")
-                .put("data_integrity", "All measurements performed on original pixel values");
-                
-        } catch (Exception e) {
-            return recovery.createRecoveryResponse("measure_colony_sizes", e);
-        }
-    }
     
     /**
      * Tool: check_contamination
@@ -1661,40 +1468,7 @@ public class GelAnalysisTools {
         return new JSONObject().put("status", "session_cleared");
     }
     
-    /**
-     * Server-side guard: Auto-inject missing image_handle from current session
-     * Prevents Gemini from losing context between tool calls
-     */
-    private String ensureImageHandle(JSONObject args, String toolName) {
-        String imageHandle = args.optString("image_handle", "");
-        
-        // If no handle provided, try to inject current image handle
-        if (imageHandle.isEmpty() && store.hasCurrentImage()) {
-            imageHandle = store.getCurrentImage().handle;
-            System.err.println("WARNING: " + toolName + " missing image_handle - auto-injected: " + imageHandle);
-            args.put("image_handle", imageHandle); // Update args for consistency
-        }
-        
-        return imageHandle;
-    }
     
-    /**
-     * Enhanced validation with prompt guidance for Gemini
-     * Returns validation result with handle persistence reminders
-     */
-    private JSONObject validateWithGuidance(String handle, String type, String toolName) {
-        JSONObject validation = recovery.validateHandle(handle, type);
-        
-        if (!validation.getBoolean("valid")) {
-            // Add guidance for Gemini to prevent future handle loss
-            validation.put("prompt_guidance", 
-                "IMPORTANT: Always include the image_handle parameter in ALL subsequent tool calls. " +
-                "The handle '" + (store.hasCurrentImage() ? store.getCurrentImage().handle : "img_xxx") + 
-                "' should be used for all operations on this image. Do not omit this parameter.");
-        }
-        
-        return validation;
-    }
 
     /**
      * Export labeled PNG optimized for presentations and notebooks
@@ -2030,263 +1804,9 @@ public class GelAnalysisTools {
         Files.writeString(outputPath, csv.toString());
     }
     
-    /**
-     * Create labeled overlay for colony identification and communication
-     */
-    private Overlay createColonyLabeledOverlay(Overlay detectionOverlay, int colonyCount) {
-        Overlay labeledOverlay = new Overlay();
-        
-        if (detectionOverlay == null || colonyCount == 0) {
-            return labeledOverlay;
-        }
-        
-        // Copy detection ROIs and add labels
-        for (int i = 0; i < detectionOverlay.size(); i++) {
-            Roi colony = detectionOverlay.get(i);
-            
-            // Colony boundary (blue circle)
-            Roi colonyRoi = (Roi) colony.clone();
-            colonyRoi.setStrokeColor(new Color(0, 100, 255, 180)); // Blue
-            colonyRoi.setStrokeWidth(2.0);
-            colonyRoi.setName("Colony " + (i + 1));
-            labeledOverlay.add(colonyRoi);
-            
-            // Colony label (limit to first 50 colonies to avoid clutter)
-            if (i < 50) {
-                Rectangle bounds = colony.getBounds();
-                int centerX = bounds.x + bounds.width / 2;
-                int centerY = bounds.y + bounds.height / 2;
-                
-                TextRoi colonyLabel = new TextRoi(centerX - 8, centerY - 8, "C" + (i + 1));
-                colonyLabel.setStrokeColor(new Color(0, 0, 200));
-                colonyLabel.setFillColor(new Color(255, 255, 255, 220));
-                colonyLabel.setFont(new Font("Arial", Font.BOLD, 10));
-                labeledOverlay.add(colonyLabel);
-            }
-        }
-        
-        // Add total count label at top
-        TextRoi countLabel = new TextRoi(10, 10, "Total Colonies: " + colonyCount);
-        countLabel.setStrokeColor(new Color(0, 0, 200));
-        countLabel.setFillColor(new Color(255, 255, 255, 240));
-        countLabel.setFont(new Font("Arial", Font.BOLD, 14));
-        labeledOverlay.add(countLabel);
-        
-        return labeledOverlay;
-    }
     
-    /**
-     * Create labeled overlay for colony size analysis
-     */
-    private Overlay createColonySizeOverlay(Overlay measurementOverlay, ResultsTable rt, int colonyCount) {
-        Overlay labeledOverlay = new Overlay();
-        
-        if (measurementOverlay == null || colonyCount == 0) {
-            return labeledOverlay;
-        }
-        
-        // Copy measurement ROIs and add size labels
-        for (int i = 0; i < Math.min(measurementOverlay.size(), colonyCount); i++) {
-            Roi colony = measurementOverlay.get(i);
-            
-            // Colony boundary (green circle)
-            Roi colonyRoi = (Roi) colony.clone();
-            colonyRoi.setStrokeColor(new Color(0, 150, 0, 180)); // Green
-            colonyRoi.setStrokeWidth(2.0);
-            colonyRoi.setName("Colony " + (i + 1));
-            labeledOverlay.add(colonyRoi);
-            
-            // Colony label with size (limit to first 30 for readability)
-            if (i < 30 && rt != null && i < rt.getCounter()) {
-                Rectangle bounds = colony.getBounds();
-                int centerX = bounds.x + bounds.width / 2;
-                int centerY = bounds.y + bounds.height / 2;
-                
-                double area = rt.getValue("Area", i);
-                String labelText = String.format("C%d(%.0f)", i + 1, area);
-                
-                TextRoi sizeLabel = new TextRoi(centerX - 15, centerY - 8, labelText);
-                sizeLabel.setStrokeColor(new Color(0, 100, 0));
-                sizeLabel.setFillColor(new Color(255, 255, 255, 220));
-                sizeLabel.setFont(new Font("Arial", Font.PLAIN, 9));
-                labeledOverlay.add(sizeLabel);
-            }
-        }
-        
-        // Add summary statistics
-        if (rt != null && colonyCount > 0) {
-            double[] areas = rt.getColumn("Area");
-            double avgSize = java.util.Arrays.stream(areas).average().orElse(0);
-            
-            String statsText = String.format("Count: %d | Avg Size: %.0f", colonyCount, avgSize);
-            TextRoi statsLabel = new TextRoi(10, 10, statsText);
-            statsLabel.setStrokeColor(new Color(0, 100, 0));
-            statsLabel.setFillColor(new Color(255, 255, 255, 240));
-            statsLabel.setFont(new Font("Arial", Font.BOLD, 12));
-            labeledOverlay.add(statsLabel);
-        }
-        
-        return labeledOverlay;
-    }
     
-    /**
-     * Tool: export_colony_analysis
-     * Export colony analysis results with labeled overlays for presentations and documentation
-     */
-    public JSONObject exportColonyAnalysis(JSONObject args) {
-        try {
-            // Apply comprehensive handle protection
-            HandleGuard.HandleValidationResult protection = handleGuard.protectToolCall(args, "export_colony_analysis");
-            
-            if (!protection.isValid()) {
-                JSONObject errorResponse = protection.createErrorResponse();
-                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
-                return errorResponse;
-            }
-            
-            SessionStore.ImageRecord img = store.getImage(protection.imageHandle);
-            String filename = args.optString("filename", "colony_analysis_" + System.currentTimeMillis());
-            String outputDir = args.optString("output_directory", System.getProperty("user.home") + "/Downloads");
-            String title = args.optString("title", "Colony Count Analysis");
-            boolean includeSizes = args.optBoolean("include_sizes", false);
-            int maxWidth = args.optInt("max_width", 1000);
-            
-            Path outputPath = Path.of(outputDir, filename + ".png");
-            
-            // Create comprehensive colony overlay
-            Overlay exportOverlay = createColonyExportOverlay(protection.imageHandle, title, includeSizes);
-            
-            // Scale for export
-            ImagePlus exportImage = img.image.duplicate();
-            if (exportImage.getWidth() > maxWidth) {
-                double scale = maxWidth / (double)exportImage.getWidth();
-                int newHeight = (int)(exportImage.getHeight() * scale);
-                ImageProcessor proc = exportImage.getProcessor();
-                proc = proc.resize(maxWidth, newHeight);
-                exportImage.setProcessor(proc);
-            }
-            
-            // Apply overlay and save
-            exportImage.setOverlay(exportOverlay);
-            exportImage = exportImage.flatten();
-            
-            Files.createDirectories(outputPath.getParent());
-            FileSaver fs = new FileSaver(exportImage);
-            fs.saveAsPng(outputPath.toString());
-            
-            // Get colony statistics for summary
-            int colonyCount = 0;
-            List<String> analyses = store.getAnalysesForImage(protection.imageHandle);
-            for (String analysisHandle : analyses) {
-                SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
-                if ("colonies".equals(analysis.type)) {
-                    colonyCount = (Integer) analysis.data;
-                    break;
-                }
-            }
-            
-            return new JSONObject()
-                .put("exported_file", outputPath.toString())
-                .put("title", title)
-                .put("colony_count", colonyCount)
-                .put("dimensions", new JSONObject()
-                    .put("width", exportImage.getWidth())
-                    .put("height", exportImage.getHeight()))
-                .put("image_handle", img.handle)
-                .put("visual_elements", "Colonies labeled C1, C2, C3... with count summary")
-                .put("measurement_warning", "CRITICAL: Use original image data for all measurements, not this labeled PNG")
-                .put("usage", "Perfect for lab notebooks, presentations, and colony counting documentation");
-            
-        } catch (Exception e) {
-            return recovery.createRecoveryResponse("export_colony_analysis", e);
-        }
-    }
-    
-    /**
-     * Create comprehensive overlay for colony export
-     */
-    private Overlay createColonyExportOverlay(String imageHandle, String title, boolean includeSizes) throws Exception {
-        SessionStore.ImageRecord img = store.getImage(imageHandle);
-        Overlay exportOverlay = new Overlay();
-        
-        // Get colony analysis data
-        List<String> analyses = store.getAnalysesForImage(imageHandle);
-        int colonyCount = 0;
-        
-        for (String analysisHandle : analyses) {
-            SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
-            if ("colonies".equals(analysis.type)) {
-                colonyCount = (Integer) analysis.data;
-                break;
-            }
-        }
-        
-        // Get current overlay (should have colony detections)
-        Overlay currentOverlay = img.currentOverlay;
-        if (currentOverlay != null) {
-            // Copy and enhance existing colony overlays
-            for (int i = 0; i < Math.min(currentOverlay.size() - 1, colonyCount); i++) { // -1 to skip count label
-                Roi colony = currentOverlay.get(i + 1); // Skip the count label at index 0
-                if (colony instanceof TextRoi && colony.getName() != null && colony.getName().startsWith("Total")) {
-                    continue; // Skip summary labels
-                }
-                
-                // Colony boundary
-                Roi colonyRoi = (Roi) colony.clone();
-                colonyRoi.setStrokeColor(new Color(255, 100, 0, 180)); // Orange for export
-                colonyRoi.setStrokeWidth(2.5);
-                exportOverlay.add(colonyRoi);
-                
-                // Colony number label (show first 40)
-                if (i < 40) {
-                    Rectangle bounds = colony.getBounds();
-                    int centerX = bounds.x + bounds.width / 2;
-                    int centerY = bounds.y + bounds.height / 2;
-                    
-                    String labelText = "C" + (i + 1);
-                    if (includeSizes) {
-                        // Would include size if available from analysis
-                        labelText += "(S)"; // Placeholder for size
-                    }
-                    
-                    TextRoi colonyLabel = new TextRoi(centerX - 10, centerY - 6, labelText);
-                    colonyLabel.setStrokeColor(new Color(200, 50, 0));
-                    colonyLabel.setFillColor(new Color(255, 255, 255, 230));
-                    colonyLabel.setFont(new Font("Arial", Font.BOLD, 11));
-                    exportOverlay.add(colonyLabel);
-                }
-            }
-        }
-        
-        // Add title and summary at bottom
-        int titleY = img.image.getHeight() - 25;
-        TextRoi titleLabel = new TextRoi(10, titleY, title);
-        titleLabel.setStrokeColor(new Color(0, 0, 0));
-        titleLabel.setFillColor(new Color(255, 255, 255, 240));
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 16));
-        exportOverlay.add(titleLabel);
-        
-        String summary = String.format("Total Colonies: %d", colonyCount);
-        TextRoi summaryLabel = new TextRoi(10, titleY - 20, summary);
-        summaryLabel.setStrokeColor(new Color(64, 64, 64));
-        summaryLabel.setFillColor(new Color(255, 255, 255, 200));
-        summaryLabel.setFont(new Font("Arial", Font.PLAIN, 14));
-        exportOverlay.add(summaryLabel);
-        
-        return exportOverlay;
-    }
 
-    private JSONObject errorResponse(Exception e) {
-        return new JSONObject()
-            .put("error", true)
-            .put("message", e.getMessage());
-    }
-    
-    private JSONObject errorResponse(String message) {
-        return new JSONObject()
-            .put("error", true)
-            .put("message", message);
-    }
     
     /**
      * Create a cache key for preprocessing operations.
@@ -2345,4 +1865,5 @@ public class GelAnalysisTools {
         }
         return duplicate;
     }
+    
 }

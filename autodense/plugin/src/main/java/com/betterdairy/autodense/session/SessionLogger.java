@@ -35,9 +35,7 @@ public class SessionLogger {
     // Enhanced configuration
     private static final int MAX_LOG_SIZE_MB = 50;   // Max 50MB per log file
     private static final int MAX_LOG_FILES = 100;    // Keep max 100 log files
-    private static final boolean DEFAULT_ENABLED = true; // Opt-out by default
     private static final String OPT_OUT_PROPERTY = "autodense.logging.disabled";
-    private static final String LOG_LEVEL_PROPERTY = "autodense.logging.level";
     
     private final String sessionId;
     private final Path logFile;
@@ -58,7 +56,6 @@ public class SessionLogger {
     private volatile int currentLaneCount = 0;
     private volatile int currentBandCount = 0;
     private volatile int currentImageCount = 0;
-    private volatile long currentLogSizeBytes = 0;
     
     public SessionLogger(String sessionId) {
         this.sessionId = sessionId;

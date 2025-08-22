@@ -3,6 +3,8 @@ package com.betterdairy.autodense.orchestrator;
 import com.betterdairy.autodense.session.SessionStore;
 import com.betterdairy.autodense.session.SessionLogger;
 import com.betterdairy.autodense.tools.GelAnalysisTools;
+import com.betterdairy.autodense.tools.PlateAnalysisTools;
+import com.betterdairy.autodense.tools.ColonyAnalysisTools;
 import com.betterdairy.autodense.plugin.GeminiApiClient;
 import com.betterdairy.autodense.plugin.GeminiApiClient.GelAnalysisResponse;
 import ij.ImagePlus;
@@ -23,7 +25,8 @@ public class GeminiOrchestrator {
     
     private final SessionStore sessionStore;
     private final SessionLogger sessionLogger;
-    private final GelAnalysisTools analysisTools;
+    private final GelAnalysisTools gelAnalysisTools;
+    private final PlateAnalysisTools plateAnalysisTools;
     private final GeminiApiClient geminiClient;
     private final ExecutorService executorService;
     
@@ -34,7 +37,8 @@ public class GeminiOrchestrator {
         // Initialize core components
         this.sessionStore = new SessionStore();
         this.sessionLogger = new SessionLogger(sessionStore.getSessionId());
-        this.analysisTools = new GelAnalysisTools(sessionStore);
+        this.gelAnalysisTools = new GelAnalysisTools(sessionStore);
+        this.plateAnalysisTools = new PlateAnalysisTools(sessionStore);
         this.geminiClient = new GeminiApiClient(apiKey);
         
         // Single thread executor for sequential processing
@@ -182,28 +186,42 @@ public class GeminiOrchestrator {
             
             // Execute the tool
             result = switch (toolName) {
-                case "open_image" -> analysisTools.openImage(parameters);
-                case "preprocess" -> analysisTools.preprocess(parameters);
-                case "detect_lanes" -> analysisTools.detectLanes(parameters);
-                case "detect_bands" -> analysisTools.detectBands(parameters);
-                case "adjust_lanes" -> analysisTools.adjustLanes(parameters);
-                case "quantify_bands" -> analysisTools.quantifyBands(parameters);
-                case "render_overlay_png" -> analysisTools.renderOverlayPng(parameters);
-                case "export_results" -> analysisTools.exportResults(parameters);
-                case "calibrate_molecular_weight" -> analysisTools.calibrateMolecularWeight(parameters);
-                case "enable_band_assist" -> analysisTools.enableBandAssist(parameters);
-                case "disable_band_assist" -> analysisTools.disableBandAssist(parameters);
-                case "configure_band_assist" -> analysisTools.configureBandAssist(parameters);
-                case "normalize_intensities" -> analysisTools.normalizeIntensities(parameters);
-                case "detect_colonies" -> analysisTools.detectColonies(parameters);
-                case "count_colonies_by_color" -> analysisTools.countColoniesByColor(parameters);
-                case "measure_colony_sizes" -> analysisTools.measureColonySizes(parameters);
-                case "check_contamination" -> analysisTools.checkContamination(parameters);
-                case "create_labeled_reference" -> analysisTools.createLabeledReference(parameters);
-                case "export_for_notebook" -> analysisTools.exportForNotebook(parameters);
-                case "export_for_presentation" -> analysisTools.exportForPresentation(parameters);
-                case "export_colony_analysis" -> analysisTools.exportColonyAnalysis(parameters);
-                case "clear_session" -> analysisTools.clearSession(parameters);
+                case "open_image" -> gelAnalysisTools.openImage(parameters);
+                case "preprocess" -> gelAnalysisTools.preprocess(parameters);
+                case "detect_lanes" -> gelAnalysisTools.detectLanes(parameters);
+                case "detect_bands" -> gelAnalysisTools.detectBands(parameters);
+                case "adjust_lanes" -> gelAnalysisTools.adjustLanes(parameters);
+                case "quantify_bands" -> gelAnalysisTools.quantifyBands(parameters);
+                case "render_overlay_png" -> gelAnalysisTools.renderOverlayPng(parameters);
+                case "export_results" -> gelAnalysisTools.exportResults(parameters);
+                case "calibrate_molecular_weight" -> gelAnalysisTools.calibrateMolecularWeight(parameters);
+                case "enable_band_assist" -> gelAnalysisTools.enableBandAssist(parameters);
+                case "disable_band_assist" -> gelAnalysisTools.disableBandAssist(parameters);
+                case "configure_band_assist" -> gelAnalysisTools.configureBandAssist(parameters);
+                case "normalize_intensities" -> gelAnalysisTools.normalizeIntensities(parameters);
+                // Colony analysis tools (new functional API)
+                case "detect_plate" -> ColonyAnalysisTools.detectPlate(parameters, sessionStore);
+                case "count_colonies" -> ColonyAnalysisTools.countColonies(parameters, sessionStore);
+                case "classify_colonies" -> ColonyAnalysisTools.classifyColonies(parameters, sessionStore);
+                case "bin_colonies" -> ColonyAnalysisTools.binColonies(parameters, sessionStore);
+                case "normalize_colonies" -> ColonyAnalysisTools.normalizeColonies(parameters, sessionStore);
+                case "export_colonies" -> ColonyAnalysisTools.exportColonies(parameters, sessionStore);
+                // Colony assist tools
+                case "enable_colony_assist" -> ColonyAnalysisTools.enableColonyAssist(parameters, sessionStore);
+                case "disable_colony_assist" -> ColonyAnalysisTools.disableColonyAssist(parameters, sessionStore);
+                case "colony_assist_click" -> ColonyAnalysisTools.colonyAssistClick(parameters, sessionStore);
+                case "propagate_colony_class" -> ColonyAnalysisTools.propagateColonyClass(parameters, sessionStore);
+                case "relabel_colony" -> ColonyAnalysisTools.relabelColony(parameters, sessionStore);
+                // Legacy colony tools (keeping for compatibility)
+                case "detect_colonies" -> plateAnalysisTools.detectColonies(parameters);
+                case "count_colonies_by_color" -> plateAnalysisTools.countColoniesByColor(parameters);
+                case "measure_colony_sizes" -> plateAnalysisTools.measureColonySizes(parameters);
+                case "check_contamination" -> plateAnalysisTools.checkContamination(parameters);
+                case "create_labeled_reference" -> plateAnalysisTools.createLabeledReference(parameters);
+                case "export_for_notebook" -> plateAnalysisTools.exportForNotebook(parameters);
+                case "export_for_presentation" -> plateAnalysisTools.exportForPresentation(parameters);
+                case "export_colony_analysis" -> plateAnalysisTools.exportColonyAnalysis(parameters);
+                case "clear_session" -> gelAnalysisTools.clearSession(parameters);
                 default -> new JSONObject().put("error", true).put("message", "Unknown tool: " + toolName);
             };
             // Record last active image handle if returned by tool
