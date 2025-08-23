@@ -4,7 +4,12 @@ import org.json.JSONObject;
 
 import java.util.List;
 
-/** Minimal context API used by ActionExecutor; implementations will be added later. */
+/**
+ * @deprecated This context is unused. Use SessionStore via GelAnalysisTools instead.
+ * All active functionality is in GeminiOrchestrator → GelAnalysisTools → SessionStore.
+ * This class exists only for backward compatibility and will be removed.
+ */
+@Deprecated
 public final class GelContext {
     public void setLadder(int lane, String ladderId) {
         // TODO

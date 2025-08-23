@@ -1,0 +1,28 @@
+# API Configuration (contains sensitive keys)
+api-config.properties
+
+# Build outputs
+target/
+build/
+*.jar
+*.class
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp

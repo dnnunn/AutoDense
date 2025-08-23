@@ -13,20 +13,25 @@ import java.util.function.ToDoubleFunction;
  */
 public final class StreamlinedColonyClassifier {
 
-    // Use comprehensive parameter system
-    public static final class Params extends ColonyAnalysisParams.ColorParams {
+    // Use comprehensive parameter system via composition
+    public static final class Params {
+        public final ColonyAnalysisParams.ColorParams colorParams;
+        
         public Params() {
-            super();
+            this.colorParams = new ColonyAnalysisParams.ColorParams();
         }
         
         public Params(ColonyAnalysisParams.ColorParams colorParams) {
-            this.bDeltaPos = colorParams.bDeltaPos;
-            this.bDeltaMed = colorParams.bDeltaMed;
-            this.bDeltaDark = colorParams.bDeltaDark;
-            this.minDE = colorParams.minDE;
-            this.minSNRL = colorParams.minSNRL;
-            this.autoCalibrate = colorParams.autoCalibrate;
+            this.colorParams = colorParams;
         }
+        
+        // Delegate methods for convenience
+        public double getBDeltaPos() { return colorParams.bDeltaPos; }
+        public double getBDeltaMed() { return colorParams.bDeltaMed; }
+        public double getBDeltaDark() { return colorParams.bDeltaDark; }
+        public double getMinDE() { return colorParams.minDE; }
+        public double getMinSNRL() { return colorParams.minSNRL; }
+        public boolean isAutoCalibrate() { return colorParams.autoCalibrate; }
     }
 
     /**
@@ -83,7 +88,7 @@ public final class StreamlinedColonyClassifier {
      */
     public static void classifyLab(ImagePlus imp, List<MutableColony> colonies, Roi plateRoi, Params p) {
         ColonyAnalysisParams.AnalysisConfig config = new ColonyAnalysisParams.AnalysisConfig();
-        config.colorParams = p;
+        config.colorParams = p.colorParams;
         classifyLab(imp, colonies, plateRoi, config);
     }
 

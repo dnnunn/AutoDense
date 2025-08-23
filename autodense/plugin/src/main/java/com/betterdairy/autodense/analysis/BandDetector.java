@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Arrays;
 import java.util.Collections;
+import java.awt.Rectangle;
 
 public final class BandDetector {
     private BandDetector() {}
@@ -315,5 +316,104 @@ public final class BandDetector {
         int mid = n / 2;
         if ((n & 1) == 1) return a[mid];
         return 0.5 * (a[mid - 1] + a[mid]);
+    }
+
+    // ============================================================================
+    // ADVANCED QUANTIFICATION METHODS (from FijiBandDetector)
+    // ============================================================================
+    
+    /**
+     * Quantifies a single band using advanced Fiji algorithms.
+     * Provides comprehensive measurements including background correction.
+     */
+    public static BandQuantification quantifyBand(
+            ImagePlus imp, ij.gui.Roi roi,
+            BandQuantification.BackgroundRegion region,
+            BandQuantification.BackgroundMethod method,
+            int expansionPixels,
+            BandQuantification.ChannelWeights channelWeights,
+            boolean resetScale,
+            String laneId, String bandId) {
+        
+        // Apply channel weights if specified
+        if (channelWeights != null) {
+            ij.IJ.run(imp, "RGB Weights...", 
+                String.format("red=%f green=%f blue=%f", 
+                    channelWeights.getRed(), 
+                    channelWeights.getGreen(), 
+                    channelWeights.getBlue()));
+        }
+        
+        // Reset scale for consistent measurements
+        if (resetScale) {
+            ij.IJ.run(imp, "Set Scale...", "distance=0 known=0 pixel=1 unit=pixel global");
+        }
+        
+        // Get band measurements
+        imp.setRoi(roi);
+        ij.process.ImageStatistics stats = imp.getStatistics();
+        
+        // Calculate background based on specified method
+        ij.gui.Roi backgroundRoi = createBackgroundRoi(roi, region, expansionPixels, imp);
+        double backgroundValue = calculateBackground(imp, backgroundRoi, method);
+        
+        // Calculate signal and total using Fiji standard formulas
+        double signal = stats.area * (stats.mean - backgroundValue);
+        double total = stats.area * stats.mean;
+        
+        return new BandQuantification(
+            signal, total, stats.area, stats.mean, backgroundValue,
+            region, method, expansionPixels, channelWeights,
+            roi.getBounds(), roi.getName(), laneId, bandId, resetScale
+        );
+    }
+    
+    /**
+     * Creates background ROI based on specified region method
+     */
+    private static ij.gui.Roi createBackgroundRoi(ij.gui.Roi bandRoi, 
+            BandQuantification.BackgroundRegion region,
+            int expansionPixels, ImagePlus imp) {
+        
+        Rectangle bounds = bandRoi.getBounds();
+        
+        switch (region) {
+            case ALL:
+                // Expand ROI by specified pixels
+                int x = Math.max(0, bounds.x - expansionPixels);
+                int y = Math.max(0, bounds.y - expansionPixels);
+                int w = Math.min(imp.getWidth() - x, bounds.width + 2 * expansionPixels);
+                int h = Math.min(imp.getHeight() - y, bounds.height + 2 * expansionPixels);
+                return new ij.gui.Roi(x, y, w, h);
+                
+            case TOP_BOTTOM:
+                // Create ROIs above/below band
+                int adjY = bounds.y + bounds.height + 5;
+                return new ij.gui.Roi(bounds.x, adjY, bounds.width, Math.min(20, imp.getHeight() - adjY));
+                
+            case SIDES:
+            default:
+                // Sample from lane edges (left side)
+                return new ij.gui.Roi(Math.max(0, bounds.x - 10), bounds.y, 
+                                    Math.min(10, bounds.x), bounds.height);
+        }
+    }
+    
+    /**
+     * Calculates background value using specified statistical method
+     */
+    private static double calculateBackground(ImagePlus imp, ij.gui.Roi backgroundRoi, 
+            BandQuantification.BackgroundMethod method) {
+        
+        if (backgroundRoi == null) return 0.0;
+        
+        imp.setRoi(backgroundRoi);
+        ij.process.ImageStatistics stats = imp.getStatistics();
+        
+        switch (method) {
+            case MEDIAN: return stats.median;
+            case MEAN:
+            default: return stats.mean;
+        }
     }
 }

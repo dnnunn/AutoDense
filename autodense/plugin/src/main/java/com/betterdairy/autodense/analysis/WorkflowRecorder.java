@@ -12,8 +12,17 @@ import java.util.HashMap;
 import java.util.UUID;
 
 /**
+ * METHOD PROVENANCE SYSTEM for gel analysis workflows.
+ * 
+ * PURPOSE: Record what/when/params/outputs for method reproducibility and replay.
+ * NOT FOR: Runtime logging (use SessionLogger for that).
+ * 
  * Records and manages custom gel analysis workflows.
  * Enables users to create, save, and replay complex analysis sequences.
+ * 
+ * SEPARATION OF CONCERNS:
+ * - WorkflowRecorder: Method provenance (what/when/params/outputs for replay)
+ * - SessionLogger: Runtime logs (info/warn/error, performance, API calls)
  */
 public final class WorkflowRecorder {
     

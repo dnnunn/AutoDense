@@ -11,9 +11,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
+ * @deprecated Use OverlayRenderer.createClassificationOverlay() instead.
+ * 
  * Visual overlay system for colony classification results.
  * Uses intuitive color mapping: deep blue = dark X-gal, orange = negative, etc.
+ * 
+ * CONSOLIDATION NOTE: OverlayRenderer is now the single source of truth
+ * for all overlay rendering (gels and colonies) with consistent styling.
  */
+@Deprecated
 public final class ColonyVisualizer {
     
     // Color mapping for X-gal classification

@@ -11,9 +11,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
+ * @deprecated Use OverlayRenderer.createColonyOverlay() instead.
+ * 
  * Pure functional overlay rendering for colony visualization.
  * Creates color-coded overlays based on classification results.
+ * 
+ * CONSOLIDATION NOTE: OverlayRenderer is now the single source of truth
+ * for all overlay rendering (gels and colonies) with consistent styling.
  */
+@Deprecated
 public final class ColonyOverlay {
     
     /**

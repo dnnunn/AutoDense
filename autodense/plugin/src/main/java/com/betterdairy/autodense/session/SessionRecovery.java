@@ -1,12 +1,7 @@
 package com.betterdairy.autodense.session;
 
 import org.json.JSONObject;
-import org.json.JSONArray;
-import ij.ImagePlus;
-import ij.gui.Overlay;
 import java.util.List;
-import java.util.ArrayList;
-import java.util.Map;
 import java.time.Instant;
 
 /**

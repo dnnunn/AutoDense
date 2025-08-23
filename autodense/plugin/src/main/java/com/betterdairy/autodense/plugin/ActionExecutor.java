@@ -3,9 +3,16 @@ package com.betterdairy.autodense.plugin;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+/**
+ * @deprecated This dispatcher is unused. Use GelAnalysisTools via GeminiOrchestrator instead.
+ * All active routing goes through GeminiOrchestrator → GelAnalysisTools.
+ * This class exists only for backward compatibility and will be removed.
+ */
+@Deprecated
 public final class ActionExecutor {
     private ActionExecutor() {}
 
+    @Deprecated
     public static void execute(JSONObject plan, GelContext ctx) {
         String intent = plan.optString("intent", "");
         if (!"multi_action".equals(intent)) {

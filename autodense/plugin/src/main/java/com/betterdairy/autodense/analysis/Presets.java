@@ -19,22 +19,14 @@ public final class Presets {
         return new JSONArray()
             // Bandpass filter to suppress speckle and gradients
             .put(new JSONObject()
-                .put("action", "bandpass")
-                .put("low", 2)
-                .put("high", 200)
-                .put("suppress", "none")
-                .put("tolerance", 5))
+                .put("op", "bandpass")
+                .put("filter_large", 200)
+                .put("filter_small", 2))
             // Rolling ball background subtraction
             .put(new JSONObject()
-                .put("action", "background")
+                .put("op", "background")
                 .put("method", "rolling_ball")
-                .put("radius_px", 120)
-                .put("sliding", true)
-                .put("smoothing", false))
-            // Saturation quality control
-            .put(new JSONObject()
-                .put("action", "qc_saturation")
-                .put("clip_frac", 0.0005));
+                .put("radius_px", 120));
     }
     
     /**
@@ -45,28 +37,20 @@ public final class Presets {
         return new JSONArray()
             // CLAHE to lift faint DNA bands
             .put(new JSONObject()
-                .put("action", "clahe")
+                .put("op", "clahe")
                 .put("blocksize", 127)
                 .put("histogram", 256)
                 .put("maximum", 3.0))
             // Bandpass filter  
             .put(new JSONObject()
-                .put("action", "bandpass")
-                .put("low", 2)
-                .put("high", 200)
-                .put("suppress", "none")
-                .put("tolerance", 5))
+                .put("op", "bandpass")
+                .put("filter_large", 200)
+                .put("filter_small", 2))
             // Larger rolling ball for UV illumination gradients
             .put(new JSONObject()
-                .put("action", "background")
+                .put("op", "background")
                 .put("method", "rolling_ball")
-                .put("radius_px", 200)
-                .put("sliding", true)
-                .put("smoothing", false))
-            // Saturation quality control
-            .put(new JSONObject()
-                .put("action", "qc_saturation")
-                .put("clip_frac", 0.0005));
+                .put("radius_px", 200));
     }
     
     /**
@@ -77,28 +61,23 @@ public final class Presets {
         return new JSONArray()
             // Gentle bandpass first to avoid amplifying noise with CLAHE
             .put(new JSONObject()
-                .put("action", "bandpass")
-                .put("low", 2)
-                .put("high", 200)
-                .put("suppress", "none")
-                .put("tolerance", 5))
+                .put("op", "bandpass")
+                .put("filter_small", 2)
+                .put("filter_large", 200)
+)
             // CLAHE to lift very faint bands (stronger than default)
             .put(new JSONObject()
-                .put("action", "clahe")
+                .put("op", "clahe")
                 .put("blocksize", 127)
                 .put("histogram", 256)
                 .put("maximum", 3.5))
             // Larger rolling ball for broad background haze
             .put(new JSONObject()
-                .put("action", "background")
+                .put("op", "background")
                 .put("method", "rolling_ball")
                 .put("radius_px", 160)
-                .put("sliding", true)
-                .put("smoothing", false))
-            // Saturation quality control
-            .put(new JSONObject()
-                .put("action", "qc_saturation")
-                .put("clip_frac", 0.0005));
+)
+;
     }
     
     /**
@@ -109,28 +88,23 @@ public final class Presets {
         return new JSONArray()
             // Milder CLAHE to avoid ringing/halos
             .put(new JSONObject()
-                .put("action", "clahe")
+                .put("op", "clahe")
                 .put("blocksize", 127)
                 .put("histogram", 256)
                 .put("maximum", 2.0))
             // Bandpass filter
             .put(new JSONObject()
-                .put("action", "bandpass")
-                .put("low", 2)
-                .put("high", 200)
-                .put("suppress", "none")
-                .put("tolerance", 5))
+                .put("op", "bandpass")
+                .put("filter_small", 2)
+                .put("filter_large", 200)
+)
             // Heavy background removal for UV falloff
             .put(new JSONObject()
-                .put("action", "background")
+                .put("op", "background")
                 .put("method", "rolling_ball")
                 .put("radius_px", 240)
-                .put("sliding", true)
-                .put("smoothing", false))
-            // Saturation quality control
-            .put(new JSONObject()
-                .put("action", "qc_saturation")
-                .put("clip_frac", 0.0005));
+)
+;
     }
     
     /**
@@ -141,14 +115,13 @@ public final class Presets {
         return new JSONArray()
             // Remove salt-and-pepper noise
             .put(new JSONObject()
-                .put("action", "bandpass")
-                .put("low", 2)
-                .put("high", 200)
-                .put("suppress", "none")
-                .put("tolerance", 5))
+                .put("op", "bandpass")
+                .put("filter_small", 2)
+                .put("filter_large", 200)
+)
             // Remove hot pixels
             .put(new JSONObject()
-                .put("action", "background")
+                .put("op", "background")
                 .put("method", "median")
                 .put("radius_px", 1));
     }
@@ -163,13 +136,13 @@ public final class Presets {
         // Rotate to horizontal if needed
         if (Math.abs(rotationAngle) > 0.1) {
             sequence.put(new JSONObject()
-                .put("action", "rotate")
-                .put("angle", rotationAngle));
+                .put("op", "rotate")
+                .put("angle_deg", rotationAngle));
         }
         
         // Could add flip if wells detected at bottom
         // sequence.put(new JSONObject()
-        //     .put("action", "flip")
+        //     .put("op", "flip")
         //     .put("axis", "vertical"));
         
         return sequence;

@@ -14,10 +14,16 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * Enhanced session logging for AutoDense gel analysis sessions.
+ * RUNTIME LOGGING SYSTEM for AutoDense gel analysis sessions.
+ * 
+ * PURPOSE: System events, performance monitoring, error tracking, debugging info.
+ * NOT FOR: Workflow recording/replay (use WorkflowRecorder for that).
+ * 
  * Captures all Gemini conversations, tool calls, and session events with:
  * - Comprehensive tool logging (name, args after clamping, runtime, handles)
  * - Path sanitization for privacy
@@ -25,6 +31,10 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * - JSONL log rotation with size caps
  * - Opt-out functionality
  * - Thread-safe operation
+ * 
+ * SEPARATION OF CONCERNS:
+ * - SessionLogger: Runtime logs (info/warn/error, performance, API calls)
+ * - WorkflowRecorder: Method provenance (what/when/params/outputs for replay)
  */
 public class SessionLogger {
     
@@ -50,6 +60,9 @@ public class SessionLogger {
     private int conversationCount = 0;
     private int toolCallCount = 0;
     private int errorCount = 0;
+    
+    // Session-scoped deprecation tracking
+    private final Set<String> loggedDeprecations = ConcurrentHashMap.newKeySet();
     private final Instant sessionStartTime;
     
     // Telemetry tracking for Gemini planning
@@ -256,6 +269,15 @@ public class SessionLogger {
      */
     public void warn(String category, String message) {
         if (!isActive) return;
+        
+        // Session-scoped deprecation warnings: log each deprecated tool only once per session
+        if ("deprecated_tool".equals(category)) {
+            String deprecationKey = category + ":" + message;
+            if (!loggedDeprecations.add(deprecationKey)) {
+                // Already logged this deprecation in this session, skip
+                return;
+            }
+        }
         
         JSONObject entry = new JSONObject()
             .put("type", "warning")

@@ -43,15 +43,12 @@ public class GeminiApiClient {
     }
     
     /**
-     * Analyze gel image with natural language command and return structured response
+     * Pure HTTP client method - send prompt and image to Gemini API
+     * @param prompt The complete prompt text to send
+     * @param gelImage The image to analyze (optional)
+     * @return Raw JSON response from Gemini API
      */
-    public GelAnalysisResponse analyzeGel(String userCommand, ImagePlus gelImage) throws Exception {
-        String base64Image = encodeImageToBase64(gelImage);
-        
-        // Create structured prompt for gel analysis
-        String systemPrompt = createSystemPrompt();
-        String analysisPrompt = createAnalysisPrompt(userCommand);
-        
+    public JSONObject sendRequest(String prompt, ImagePlus gelImage) throws Exception {
         JSONObject requestBody = new JSONObject();
         JSONArray contents = new JSONArray();
         JSONObject content = new JSONObject();
@@ -59,16 +56,19 @@ public class GeminiApiClient {
         
         // Add text part
         JSONObject textPart = new JSONObject();
-        textPart.put("text", systemPrompt + "\n\n" + analysisPrompt);
+        textPart.put("text", prompt);
         parts.put(textPart);
         
-        // Add image part
-        JSONObject imagePart = new JSONObject();
-        JSONObject inlineData = new JSONObject();
-        inlineData.put("mime_type", "image/jpeg");
-        inlineData.put("data", base64Image);
-        imagePart.put("inline_data", inlineData);
-        parts.put(imagePart);
+        // Add image part if provided
+        if (gelImage != null) {
+            String base64Image = encodeImageToBase64(gelImage);
+            JSONObject imagePart = new JSONObject();
+            JSONObject inlineData = new JSONObject();
+            inlineData.put("mime_type", "image/jpeg");
+            inlineData.put("data", base64Image);
+            imagePart.put("inline_data", inlineData);
+            parts.put(imagePart);
+        }
         
         content.put("parts", parts);
         contents.put(content);
@@ -88,7 +88,6 @@ public class GeminiApiClient {
             .timeout(Duration.ofSeconds(40))
             .build();
         
-        // Set per-call timeout of 40 seconds for Gemini API calls
         HttpResponse<String> response = httpClient.send(request, 
             HttpResponse.BodyHandlers.ofString());
         
@@ -96,7 +95,21 @@ public class GeminiApiClient {
             throw new RuntimeException("Gemini API error: " + response.statusCode() + " - " + response.body());
         }
         
-        return parseResponse(response.body(), userCommand);
+        return new JSONObject(response.body());
+    }
+    
+    /**
+     * @deprecated Use sendRequest() instead. This method contains business logic that should be in GeminiOrchestrator.
+     */
+    @Deprecated
+    public GelAnalysisResponse analyzeGel(String userCommand, ImagePlus gelImage) throws Exception {
+        // For backward compatibility, delegate to the old logic
+        String systemPrompt = createSystemPrompt();
+        String analysisPrompt = createAnalysisPrompt(userCommand);
+        String fullPrompt = systemPrompt + "\n\n" + analysisPrompt;
+        
+        JSONObject rawResponse = sendRequest(fullPrompt, gelImage);
+        return parseResponse(rawResponse.toString(), userCommand);
     }
     
     private String createSystemPrompt() {

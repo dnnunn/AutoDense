@@ -2,7 +2,7 @@ package com.betterdairy.autodense.tools;
 
 import com.betterdairy.autodense.session.SessionStore;
 import com.betterdairy.autodense.session.SessionRecovery;
-import com.betterdairy.autodense.analysis.*;
+// Analysis imports added dynamically as needed
 import com.betterdairy.autodense.model.Models.*;
 import com.betterdairy.autodense.plugin.ToolSchemaValidator;
 import ij.IJ;

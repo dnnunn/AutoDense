@@ -3,37 +3,128 @@ package com.betterdairy.autodense.analysis;
 import ij.ImagePlus;
 import ij.IJ;
 import ij.process.ImageProcessor;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 /**
- * Comprehensive image preprocessing operations based on proven Fiji algorithms.
- * Implements the full stack of gel preparation techniques from University research.
+ * SINGLE SOURCE OF TRUTH for all image preprocessing operations.
+ * Implements proven Fiji algorithms with standardized parameters.
+ * All tool executors must delegate to these methods.
  */
 public final class ImagePreprocessor {
     
     private ImagePreprocessor() {}
     
     /**
+     * Apply a sequence of preprocessing steps to an image.
+     * This is the main entry point for all preprocessing operations.
+     * 
+     * @param imp The input image
+     * @param steps JSON array of preprocessing steps
+     * @param destructive If true, modifies original image; if false, works on duplicate
+     * @return The processed image (original or duplicate depending on destructive flag)
+     */
+    public static ImagePlus apply(ImagePlus imp, JSONArray steps, boolean destructive) {
+        ImagePlus workingImg = destructive ? imp : imp.duplicate();
+        
+        for (int i = 0; i < steps.length(); i++) {
+            JSONObject step = steps.getJSONObject(i);
+            String op = step.getString("op");
+            
+            switch (op) {
+                case "rotate" -> {
+                    double angle = step.getDouble("angle_deg");
+                    angle = clamp(angle, -180, 180);
+                    workingImg = rotate(workingImg, angle, true);
+                }
+                case "flip" -> {
+                    String axis = step.getString("axis");
+                    workingImg = flip(workingImg, axis, true);
+                }
+                case "crop" -> {
+                    int x = step.getInt("x");
+                    int y = step.getInt("y");
+                    int width = step.getInt("width");
+                    int height = step.getInt("height");
+                    workingImg = crop(workingImg, x, y, width, height);
+                }
+                case "clahe" -> {
+                    int blocksize = step.optInt("blocksize", 127);
+                    int histogram = step.optInt("histogram", 256);
+                    double maximum = step.optDouble("maximum", 3.0);
+                    workingImg = clahe(workingImg, blocksize, histogram, maximum);
+                }
+                case "bandpass" -> {
+                    double filterLarge = step.optDouble("filter_large", 40.0);
+                    double filterSmall = step.optDouble("filter_small", 3.0);
+                    workingImg = bandpassFilter(workingImg, filterLarge, filterSmall);
+                }
+                case "background" -> {
+                    String method = step.optString("method", "rolling_ball");
+                    int radius = step.optInt("radius_px", 50);
+                    boolean sliding = step.optBoolean("sliding", false);
+                    boolean smoothing = step.optBoolean("smoothing", false);
+                    workingImg = subtractBackground(workingImg, method, radius, sliding, smoothing);
+                }
+                default -> throw new IllegalArgumentException("Unknown preprocessing operation: " + op);
+            }
+        }
+        
+        return workingImg;
+    }
+    
+    // Internal utility for angle normalization (not parameter validation)
+    private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
+    }
+    
+    /**
      * Rotate image by specified angle (negative to deskew)
      * Used to make wells perfectly horizontal for accurate band analysis
      */
-    public static ImagePlus rotate(ImagePlus imp, double angle) {
-        ImagePlus result = imp.duplicate();
-        IJ.run(result, "Rotate...", "angle=" + angle + " grid=1 interpolation=None");
+    public static ImagePlus rotate(ImagePlus imp, double angle, boolean inPlace) {
+        ImagePlus result = inPlace ? imp : imp.duplicate();
+        
+        // Use optimized direct API for 90-degree rotations, IJ.run for arbitrary angles
+        if (Math.abs(angle - 90) < 0.001) {
+            ImageProcessor proc = result.getProcessor();
+            proc.setInterpolationMethod(ImageProcessor.BILINEAR);
+            result.setProcessor(proc.rotateLeft());
+        } else if (Math.abs(angle + 90) < 0.001 || Math.abs(angle - 270) < 0.001) {
+            ImageProcessor proc = result.getProcessor();
+            proc.setInterpolationMethod(ImageProcessor.BILINEAR);
+            result.setProcessor(proc.rotateRight());
+        } else {
+            // Use consistent interpolation method (Bilinear for quality)
+            IJ.run(result, "Rotate...", "angle=" + angle + " interpolation=Bilinear");
+        }
         return result;
+    }
+    
+    // Legacy method for backward compatibility
+    public static ImagePlus rotate(ImagePlus imp, double angle) {
+        return rotate(imp, angle, false);
     }
     
     /**
      * Flip image horizontally or vertically
      * Used to standardize "wells at top" orientation
      */
-    public static ImagePlus flip(ImagePlus imp, String axis) {
-        ImagePlus result = imp.duplicate();
+    public static ImagePlus flip(ImagePlus imp, String axis, boolean inPlace) {
+        ImagePlus result = inPlace ? imp : imp.duplicate();
+        ImageProcessor proc = result.getProcessor();
+        
         switch (axis.toLowerCase()) {
-            case "horizontal" -> IJ.run(result, "Flip Horizontally", "");
-            case "vertical" -> IJ.run(result, "Flip Vertically", "");
+            case "horizontal" -> proc.flipHorizontal();
+            case "vertical" -> proc.flipVertical();
             default -> throw new IllegalArgumentException("Invalid flip axis: " + axis);
         }
         return result;
+    }
+    
+    // Legacy method for backward compatibility
+    public static ImagePlus flip(ImagePlus imp, String axis) {
+        return flip(imp, axis, false);
     }
     
     /**
@@ -78,6 +169,17 @@ public final class ImagePreprocessor {
         ImagePlus result = imp.duplicate();
         String params = "filter_large=" + high + " filter_small=" + low + 
                        " suppress=" + suppress + " tolerance=" + tolerance;
+        IJ.run(result, "Bandpass Filter...", params);
+        return result;
+    }
+    
+    /**
+     * Bandpass filter with standard parameters (used by apply method)
+     */
+    public static ImagePlus bandpassFilter(ImagePlus imp, double filterLarge, double filterSmall) {
+        ImagePlus result = imp.duplicate();
+        String params = "filter_large=" + filterLarge + " filter_small=" + filterSmall + 
+                       " suppress=None tolerance=5";
         IJ.run(result, "Bandpass Filter...", params);
         return result;
     }

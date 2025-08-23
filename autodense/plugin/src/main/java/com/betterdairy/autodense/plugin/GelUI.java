@@ -28,6 +28,8 @@ import com.betterdairy.autodense.analysis.LaneDetector;
 import com.betterdairy.autodense.analysis.BandDetector;
 import com.betterdairy.autodense.model.Models.Lane;
 import com.betterdairy.autodense.model.Models.Band;
+import com.betterdairy.autodense.workflow.WorkflowPreset;
+import com.betterdairy.autodense.workflow.WorkflowPresetManager;
 
 /** AI-Powered Gel Analysis Interface with Natural Language Control */
 public class GelUI {
@@ -41,11 +43,13 @@ public class GelUI {
     private HttpClient httpClient;
     private ImagePlus currentImage;
     private GeminiApiClient geminiClient;
-    // Stores the most recent Gemini analysis to enable follow-up actions (e.g., refine params)
-    private GeminiApiClient.GelAnalysisResponse lastGeminiAnalysis;
+    // Removed: lastGeminiAnalysis (no longer used after UI cleanup)
     // Conversation history for context
     private List<String> conversationHistory = new ArrayList<>();
     private static final int MAX_HISTORY = 10; // Keep last 10 exchanges
+    
+    // Workflow preset management
+    private WorkflowPresetManager workflowManager;
     
     public GelUI(Context context) {
         // Context not used in new architecture
@@ -62,6 +66,9 @@ public class GelUI {
         } else {
             System.out.println("⚠ GEMINI_API_KEY not found - using fallback NLP");
         }
+        
+        // Initialize workflow preset manager
+        this.workflowManager = new WorkflowPresetManager();
     }
 
     public void show() {
@@ -165,20 +172,15 @@ public class GelUI {
         loadImageButton.addActionListener(e -> loadImage());
         actionsPanel.add(loadImageButton);
         
-        JButton quickDetect = new JButton("🔍 AI Detect");
-        quickDetect.setToolTipText("AI-guided lane and band detection");
-        quickDetect.addActionListener(e -> executeAIGuidedDetect());
-        actionsPanel.add(quickDetect);
+        JButton demoButton = new JButton("🎭 Demo");
+        demoButton.setToolTipText("Load predefined workflow demos with chat examples");
+        demoButton.addActionListener(e -> showDemoDialog());
+        actionsPanel.add(demoButton);
         
-        JButton quickQuantify = new JButton("📊 Quick Quantify");
-        quickQuantify.setToolTipText("Quantify detected bands");
-        quickQuantify.addActionListener(e -> executeQuickQuantify());
-        actionsPanel.add(quickQuantify);
-        
-        JButton refineButton = new JButton("🔧 Refine");
-        refineButton.setToolTipText("Refine using last Gemini analysis");
-        refineButton.addActionListener(e -> refineAnalysisWithLastGemini());
-        actionsPanel.add(refineButton);
+        JButton workflowsButton = new JButton("⚙️ Workflows");
+        workflowsButton.setToolTipText("Manage workflow presets and create custom workflows");
+        workflowsButton.addActionListener(e -> showWorkflowDialog());
+        actionsPanel.add(workflowsButton);
         
         JButton clearChatButton = new JButton("🗑️ Clear");
         clearChatButton.setToolTipText("Clear conversation history");
@@ -415,21 +417,6 @@ public class GelUI {
         }
     }
     
-    private void refineAnalysisWithLastGemini() {
-        // Uses stored lastGeminiAnalysis to refine parameters
-        if (lastGeminiAnalysis != null) {
-            appendToChatArea("🔄 Refining analysis with confidence: " + 
-                           String.format("%.1f%%", lastGeminiAnalysis.confidence * 100) + "\n");
-            
-            // Apply refined parameters from last analysis
-            if (lastGeminiAnalysis.parameters.containsKey("lane_count")) {
-                int refinedLanes = ((Number) lastGeminiAnalysis.parameters.get("lane_count")).intValue();
-                appendToChatArea("   Adjusting to " + refinedLanes + " lanes\n");
-            }
-        } else {
-            appendToChatArea("❌ No previous Gemini analysis to refine\n");
-        }
-    }
     
     private void clearConversation() {
         // Clear conversation history
@@ -458,16 +445,14 @@ public class GelUI {
             @Override
             protected Boolean doInBackground() throws Exception {
                 try {
-                    HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create("http://127.0.0.1:8080/health"))
-                        .GET()
-                        .timeout(Duration.ofSeconds(5))
-                        .build();
+                    // Check if Gemini API key is available
+                    String apiKey = System.getProperty("GEMINI_API_KEY");
+                    if (apiKey == null || apiKey.trim().isEmpty()) {
+                        return false;
+                    }
                     
-                    HttpResponse<String> response = httpClient.send(request,
-                        HttpResponse.BodyHandlers.ofString());
-                    
-                    return response.statusCode() == 200;
+                    // Test Gemini API connectivity 
+                    return geminiClient != null;
                 } catch (Exception e) {
                     return false;
                 }
@@ -478,13 +463,14 @@ public class GelUI {
                 try {
                     boolean connected = get();
                     if (connected) {
-                        statusLabel.setText("🟢 AI Server Connected - Ready for commands");
+                        statusLabel.setText("🟢 Gemini AI Connected - Ready for analysis");
                         statusLabel.setForeground(new Color(0, 120, 0));
                     } else {
-                        statusLabel.setText("🔴 AI Server not responding - Check connection");
+                        statusLabel.setText("🔴 Gemini API not available - Check configuration");
                         statusLabel.setForeground(Color.RED);
-                        appendToChatArea("⚠️  AI Server not available. Start server with:\n");
-                        appendToChatArea("   ./llama-server-arm64 --model ... --port 8080\n\n");
+                        appendToChatArea("⚠️  Gemini API not available. Please check:\n");
+                        appendToChatArea("   • API key is set in api-config.properties\n");
+                        appendToChatArea("   • Internet connection is working\n\n");
                     }
                 } catch (Exception e) {
                     statusLabel.setText("🔴 Connection error: " + e.getMessage());
@@ -635,146 +621,6 @@ public class GelUI {
         component.setDropTarget(dropTarget);
     }
     
-    private void executeAIGuidedDetect() {
-        appendToChatArea("👤 You: AI Detect\n");
-        
-        // Get current image
-        ImagePlus imp = getCurrentImage();
-        if (imp == null) {
-            appendToChatArea("❌ No image loaded. Please load an image first.\n\n");
-            return;
-        }
-        
-        // Check if Gemini is available
-        if (geminiClient == null) {
-            appendToChatArea("❌ Gemini API not available. Please set GEMINI_API_KEY.\n\n");
-            return;
-        }
-        
-        appendToChatArea("🤖 AutoDense: Analyzing gel with Gemini vision...\n");
-        
-        // Disable buttons during analysis
-        inputField.setEnabled(false);
-        sendButton.setEnabled(false);
-        
-        SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
-            @Override
-            protected Void doInBackground() throws Exception {
-                try {
-                    // Use Gemini to analyze the gel and determine optimal parameters
-                    publish("🔍 Gemini analyzing gel structure...");
-                    
-                    String analysisCommand = "Analyze this gel image and determine: " +
-                        "1) How many lanes are present? Count them precisely. " +
-                        "2) Are the lanes evenly spaced? " +
-                        "3) What's the optimal lane width fraction (0.0-1.0)? " +
-                        "4) Do lanes need offset adjustment (left/right)? " +
-                        "5) Identify all visible protein/DNA bands.";
-                    
-                    GeminiApiClient.GelAnalysisResponse geminiResponse = 
-                        geminiClient.analyzeGel(analysisCommand, imp);
-                    
-                    // Store the analysis for future use (enables follow-up refinements)
-                    lastGeminiAnalysis = geminiResponse;
-                    
-                    publish("📊 Gemini analysis: " + geminiResponse.analysis);
-                    
-                    // Extract parameters from Gemini's response
-                    int laneCount = 0;
-                    double laneWidth = 0.55;
-                    double gridOffset = 0.0;
-                    
-                    if (geminiResponse.parameters.containsKey("lane_count")) {
-                        laneCount = ((Number) geminiResponse.parameters.get("lane_count")).intValue();
-                    }
-                    if (geminiResponse.parameters.containsKey("lane_width")) {
-                        laneWidth = ((Number) geminiResponse.parameters.get("lane_width")).doubleValue();
-                    }
-                    if (geminiResponse.parameters.containsKey("grid_offset")) {
-                        gridOffset = ((Number) geminiResponse.parameters.get("grid_offset")).doubleValue();
-                    }
-                    
-                    publish("⚙️ Applying Gemini-optimized parameters:");
-                    publish("   Lane count: " + laneCount);
-                    publish("   Lane width: " + String.format("%.2f", laneWidth));
-                    publish("   Grid offset: " + String.format("%.3f", gridOffset));
-                    
-                    // Detect lanes with Gemini's parameters
-                    publish("🔍 Detecting lanes with Gemini parameters...");
-                    List<Lane> lanes = LaneDetector.findLanes(imp, 
-                        laneCount, 
-                        true,  // constant spacing
-                        laneWidth,
-                        gridOffset,
-                        true); // preprocess
-                    
-                    publish("✅ Detected " + lanes.size() + " lanes");
-                    
-                    // Step 4: Detect bands
-                    publish("🎯 Detecting bands in each lane...");
-                    int totalBands = 0;
-                    Overlay overlay = new Overlay();
-                    
-                    for (int i = 0; i < lanes.size(); i++) {
-                        Lane lane = lanes.get(i);
-                        List<Band> bands = BandDetector.findBands(imp, lane);
-                        totalBands += bands.size();
-                        
-                        // Add lane overlay (green) - thicker for better visibility
-                        Roi laneRoi = new Roi(lane.xStart(), 0, 
-                            Math.max(1, lane.xEnd() - lane.xStart() + 1), imp.getHeight());
-                        laneRoi.setStrokeColor(new Color(0, 255, 0, 180));
-                        laneRoi.setStrokeWidth(3.0);
-                        overlay.add(laneRoi);
-                        
-                        // Add band overlays (red) - more prominent
-                        for (Band band : bands) {
-                            int bandWidth = Math.max(6, lane.xEnd() - lane.xStart() + 1);
-                            Roi bandRoi = new Roi(lane.xStart(), band.y(), bandWidth, 8);
-                            bandRoi.setStrokeColor(new Color(255, 0, 0, 200));
-                            bandRoi.setStrokeWidth(4.0);
-                            overlay.add(bandRoi);
-                        }
-                    }
-                    
-                    // Apply overlay to image
-                    SwingUtilities.invokeLater(() -> {
-                        imp.setOverlay(overlay);
-                        imp.updateAndDraw();
-                    });
-                    
-                    publish("✅ Gemini vision analysis complete!");
-                    publish("   Lanes detected: " + lanes.size());
-                    publish("   Bands detected: " + totalBands);
-                    publish("   🟢 Green = lanes, 🔴 Red = bands");
-                    publish("💡 Gemini confidence: " + String.format("%.1f%%", geminiResponse.confidence * 100));
-                    
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    publish("❌ Gemini analysis failed: " + e.getMessage());
-                }
-                
-                return null;
-            }
-            
-            @Override
-            protected void process(List<String> chunks) {
-                for (String message : chunks) {
-                    appendToChatArea(message + "\n");
-                }
-            }
-            
-            @Override
-            protected void done() {
-                appendToChatArea("\n");
-                inputField.setEnabled(true);
-                sendButton.setEnabled(true);
-                inputField.requestFocus();
-            }
-        };
-        
-        worker.execute();
-    }
     
     // Removed old AI analysis methods - now using Gemini directly
     /*
@@ -901,56 +747,642 @@ public class GelUI {
     // Helper class for AI analysis results - REMOVED - now using Gemini
     */
     
-    private void executeQuickQuantify() {
-        appendToChatArea("👤 You: Quick Quantify\n");
+    
+    private void showDemoDialog() {
+        JDialog demoDialog = new JDialog(frame, "🎭 AutoDense Workflow Demos", true);
+        demoDialog.setSize(600, 500);
+        demoDialog.setLocationRelativeTo(frame);
         
-        ImagePlus imp = getCurrentImage();
-        if (imp == null) {
-            appendToChatArea("❌ No image loaded. Please run detection first.\n\n");
-            return;
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        
+        // Demo list
+        String[] demoTitles = {
+            "🧬 12-Lane SDS-PAGE with MW Marker",
+            "🧬 15-Lane Protein Gel Analysis", 
+            "🦠 Colony Counting - X-gal Blue/White",
+            "🦠 Bacterial Growth Quantification",
+            "🔬 Custom Gel Workflow Template"
+        };
+        
+        JList<String> demoList = new JList<>(demoTitles);
+        demoList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        demoList.setSelectedIndex(0);
+        
+        JScrollPane listScroll = new JScrollPane(demoList);
+        listScroll.setPreferredSize(new Dimension(280, 300));
+        
+        // Demo description panel
+        JTextArea descArea = new JTextArea();
+        descArea.setEditable(false);
+        descArea.setLineWrap(true);
+        descArea.setWrapStyleWord(true);
+        descArea.setBackground(new Color(245, 245, 245));
+        descArea.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        JScrollPane descScroll = new JScrollPane(descArea);
+        descScroll.setPreferredSize(new Dimension(300, 300));
+        
+        // Update description when selection changes
+        demoList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                int selected = demoList.getSelectedIndex();
+                descArea.setText(getDemoDescription(selected));
+            }
+        });
+        
+        // Initial description
+        descArea.setText(getDemoDescription(0));
+        
+        // Layout
+        JPanel centerPanel = new JPanel(new BorderLayout());
+        centerPanel.add(listScroll, BorderLayout.WEST);
+        centerPanel.add(descScroll, BorderLayout.CENTER);
+        
+        mainPanel.add(centerPanel, BorderLayout.CENTER);
+        
+        // Buttons
+        JPanel buttonPanel = new JPanel(new FlowLayout());
+        
+        JButton loadDemoButton = new JButton("🎬 Load Demo");
+        loadDemoButton.addActionListener(e -> {
+            int selected = demoList.getSelectedIndex();
+            if (selected >= 0) {
+                loadDemo(selected);
+                demoDialog.dispose();
+            }
+        });
+        
+        JButton cancelButton = new JButton("Cancel");
+        cancelButton.addActionListener(e -> demoDialog.dispose());
+        
+        buttonPanel.add(loadDemoButton);
+        buttonPanel.add(cancelButton);
+        mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+        
+        demoDialog.add(mainPanel);
+        demoDialog.setVisible(true);
+    }
+    
+    private String getDemoDescription(int demoIndex) {
+        return switch (demoIndex) {
+            case 0 -> """
+                🧬 12-Lane SDS-PAGE Analysis with MW Marker
+                
+                Workflow:
+                • 12-lane polyacrylamide gel
+                • Lane 1: Molecular weight standards
+                • Lanes 2-12: Protein samples
+                • Automatic MW calibration
+                
+                Natural Language Examples:
+                "Analyze this 12-lane gel with MW marker in lane 1"
+                "Detect protein bands and calculate molecular weights"
+                "Export results with MW calculations to CSV"
+                
+                This demo shows the complete workflow for SDS-PAGE analysis with automatic molecular weight determination.
+                """;
+            case 1 -> """
+                🧬 15-Lane Protein Gel Analysis
+                
+                Workflow:
+                • 15-lane large format gel
+                • High-resolution band detection
+                • Optimized for faint bands
+                
+                Natural Language Examples:
+                "Find 15 lanes in this protein gel"
+                "Use high sensitivity for faint bands"
+                "Quantify all bands with background subtraction"
+                
+                Demonstrates handling of large format gels with many samples.
+                """;
+            case 2 -> """
+                🦠 X-gal Blue/White Colony Screening
+                
+                Workflow:
+                • Bacterial transformation plates
+                • Blue/white colony classification
+                • X-gal indicator system
+                • Automated colony counting by color
+                
+                Natural Language Examples:
+                "Count blue and white colonies separately"
+                "Classify colonies by X-gal reaction"
+                "Export colony data with positions and colors"
+                
+                Perfect for cloning experiments and transformation efficiency.
+                """;
+            case 3 -> """
+                🦠 Bacterial Growth Quantification
+                
+                Workflow:
+                • Growth curve analysis plates
+                • Colony size measurements
+                • Statistical analysis
+                
+                Natural Language Examples:
+                "Measure all colony sizes on this plate"
+                "Group colonies by size ranges"
+                "Calculate growth statistics"
+                
+                Ideal for antibiotic sensitivity and growth studies.
+                """;
+            case 4 -> """
+                🔬 Custom Workflow Template
+                
+                Create your own reusable workflow:
+                • Define gel/plate parameters
+                • Set default lane counts
+                • Configure analysis preferences
+                • Save natural language templates
+                
+                This option lets you build custom workflows for your specific laboratory protocols.
+                """;
+            default -> "Unknown demo selected.";
+        };
+    }
+    
+    private void loadDemo(int demoIndex) {
+        appendToChatArea("🎭 Loading demo: " + getDemoTitle(demoIndex) + "\n\n");
+        
+        // Clear any existing conversation
+        conversationHistory.clear();
+        
+        // Load demo-specific sample data and chat examples
+        switch (demoIndex) {
+            case 0 -> load12LaneSdPageDemo();
+            case 1 -> load15LaneProteinDemo();
+            case 2 -> loadXgalColonyDemo();
+            case 3 -> loadGrowthQuantDemo();
+            case 4 -> loadCustomWorkflowDemo();
         }
         
-        Overlay overlay = imp.getOverlay();
-        if (overlay == null || overlay.size() == 0) {
-            appendToChatArea("❌ No bands detected. Please run 'Quick Detect' first.\n\n");
-            return;
-        }
+        statusLabel.setText("🎭 Demo loaded - Try the example commands!");
+    }
+    
+    private String getDemoTitle(int index) {
+        String[] titles = {
+            "12-Lane SDS-PAGE with MW Marker",
+            "15-Lane Protein Gel Analysis", 
+            "Colony Counting - X-gal Blue/White",
+            "Bacterial Growth Quantification",
+            "Custom Workflow Template"
+        };
+        return titles[index];
+    }
+    
+    private void load12LaneSdPageDemo() {
+        appendToChatArea("🧬 12-Lane SDS-PAGE Demo Loaded!\n\n");
+        appendToChatArea("📝 Try these natural language commands:\n");
+        appendToChatArea("  💬 \"Analyze this 12-lane gel with MW marker in lane 1\"\n");
+        appendToChatArea("  💬 \"Detect protein bands and calculate molecular weights\"\n");
+        appendToChatArea("  💬 \"Export results with MW calculations to CSV\"\n");
+        appendToChatArea("  💬 \"Show me the quantification results\"\n\n");
+        appendToChatArea("🎯 Demo Features:\n");
+        appendToChatArea("  • Automatic 12-lane detection\n");
+        appendToChatArea("  • MW marker calibration in lane 1\n");
+        appendToChatArea("  • High-precision band quantification\n");
+        appendToChatArea("  • Professional CSV export\n\n");
+        appendToChatArea("💡 Load a gel image and try the commands above!\n\n");
+    }
+    
+    private void load15LaneProteinDemo() {
+        appendToChatArea("🧬 15-Lane Protein Gel Demo Loaded!\n\n");
+        appendToChatArea("📝 Try these natural language commands:\n");
+        appendToChatArea("  💬 \"Find 15 lanes in this protein gel\"\n");
+        appendToChatArea("  💬 \"Use high sensitivity for faint bands\"\n");
+        appendToChatArea("  💬 \"Quantify all bands with background subtraction\"\n");
+        appendToChatArea("  💬 \"Create overlay showing all detected features\"\n\n");
+        appendToChatArea("🎯 Demo Features:\n");
+        appendToChatArea("  • Large format gel handling\n");
+        appendToChatArea("  • Enhanced sensitivity for weak bands\n");
+        appendToChatArea("  • Comprehensive quantification\n");
+        appendToChatArea("  • Visual overlay generation\n\n");
+        appendToChatArea("💡 Load a 15-lane gel and try the commands above!\n\n");
+    }
+    
+    private void loadXgalColonyDemo() {
+        appendToChatArea("🦠 X-gal Colony Screening Demo Loaded!\n\n");
+        appendToChatArea("📝 Try these natural language commands:\n");
+        appendToChatArea("  💬 \"Count blue and white colonies separately\"\n");
+        appendToChatArea("  💬 \"Classify colonies by X-gal reaction\"\n");
+        appendToChatArea("  💬 \"Show me transformation efficiency\"\n");
+        appendToChatArea("  💬 \"Export colony data with positions and colors\"\n\n");
+        appendToChatArea("🎯 Demo Features:\n");
+        appendToChatArea("  • Automatic color classification\n");
+        appendToChatArea("  • Blue/white discrimination\n");
+        appendToChatArea("  • Position mapping\n");
+        appendToChatArea("  • Transformation statistics\n\n");
+        appendToChatArea("💡 Load a bacterial plate and try the commands above!\n\n");
+    }
+    
+    private void loadGrowthQuantDemo() {
+        appendToChatArea("🦠 Growth Quantification Demo Loaded!\n\n");
+        appendToChatArea("📝 Try these natural language commands:\n");
+        appendToChatArea("  💬 \"Measure all colony sizes on this plate\"\n");
+        appendToChatArea("  💬 \"Group colonies by size ranges\"\n");
+        appendToChatArea("  💬 \"Calculate growth statistics\"\n");
+        appendToChatArea("  💬 \"Show size distribution histogram\"\n\n");
+        appendToChatArea("🎯 Demo Features:\n");
+        appendToChatArea("  • Precise size measurements\n");
+        appendToChatArea("  • Statistical analysis\n");
+        appendToChatArea("  • Size-based grouping\n");
+        appendToChatArea("  • Growth curve data export\n\n");
+        appendToChatArea("💡 Load a bacterial growth plate and try the commands above!\n\n");
+    }
+    
+    private void loadCustomWorkflowDemo() {
+        appendToChatArea("🔬 Custom Workflow Builder Demo Loaded!\n\n");
+        appendToChatArea("📝 Create your own workflow with commands like:\n");
+        appendToChatArea("  💬 \"Create workflow: 8-lane mini-gel with ladder\"\n");
+        appendToChatArea("  💬 \"Set default: 12 lanes, high sensitivity\"\n");
+        appendToChatArea("  💬 \"Save workflow as 'Weekly Protein Analysis'\"\n");
+        appendToChatArea("  💬 \"Load my saved workflow for SDS-PAGE\"\n\n");
+        appendToChatArea("🎯 Demo Features:\n");
+        appendToChatArea("  • Workflow template creation\n");
+        appendToChatArea("  • Parameter presets\n");
+        appendToChatArea("  • Natural language workflow definition\n");
+        appendToChatArea("  • Reusable analysis protocols\n\n");
+        appendToChatArea("💡 Design workflows that match your lab's protocols!\n\n");
+    }
+    
+    private void showWorkflowDialog() {
+        JDialog workflowDialog = new JDialog(frame, "⚙️ Workflow Presets Manager", true);
+        workflowDialog.setSize(800, 600);
+        workflowDialog.setLocationRelativeTo(frame);
         
-        appendToChatArea("🤖 AutoDense: Quantifying band intensities...\n");
+        JPanel mainPanel = new JPanel(new BorderLayout());
         
-        try {
-            // Count bands and calculate basic measurements
-            int bandCount = 0;
-            double totalIntensity = 0;
-            
-            for (int i = 0; i < overlay.size(); i++) {
-                Roi roi = overlay.get(i);
-                if (roi.getStrokeColor() != null && roi.getStrokeColor().equals(Color.RED)) {
-                    bandCount++;
-                    
-                    // Basic intensity measurement
-                    imp.setRoi(roi);
-                    double mean = imp.getStatistics().mean;
-                    totalIntensity += mean;
+        // Create tabbed pane for different views
+        JTabbedPane tabbedPane = new JTabbedPane();
+        
+        // Tab 1: Browse and use existing presets
+        JPanel browsePanel = createBrowsePresetsPanel();
+        tabbedPane.addTab("📚 Browse Presets", browsePanel);
+        
+        // Tab 2: Create custom workflow
+        JPanel createPanel = createCustomWorkflowPanel();
+        tabbedPane.addTab("🛠️ Create Custom", createPanel);
+        
+        // Tab 3: Manage presets (edit/delete)
+        JPanel managePanel = createManagePresetsPanel();
+        tabbedPane.addTab("⚙️ Manage", managePanel);
+        
+        mainPanel.add(tabbedPane, BorderLayout.CENTER);
+        
+        // Close button
+        JPanel buttonPanel = new JPanel(new FlowLayout());
+        JButton closeButton = new JButton("Close");
+        closeButton.addActionListener(e -> workflowDialog.dispose());
+        buttonPanel.add(closeButton);
+        mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+        
+        workflowDialog.add(mainPanel);
+        workflowDialog.setVisible(true);
+    }
+    
+    private JPanel createBrowsePresetsPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        
+        // Preset list
+        List<WorkflowPreset> presets = workflowManager.getAllPresets();
+        String[] presetNames = presets.stream()
+            .map(WorkflowPreset::getName)
+            .toArray(String[]::new);
+        
+        JList<String> presetList = new JList<>(presetNames);
+        presetList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        JScrollPane listScroll = new JScrollPane(presetList);
+        listScroll.setPreferredSize(new Dimension(300, 400));
+        
+        // Preset details panel
+        JTextArea detailsArea = new JTextArea();
+        detailsArea.setEditable(false);
+        detailsArea.setLineWrap(true);
+        detailsArea.setWrapStyleWord(true);
+        detailsArea.setBackground(new Color(248, 248, 248));
+        detailsArea.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        JScrollPane detailsScroll = new JScrollPane(detailsArea);
+        detailsScroll.setPreferredSize(new Dimension(400, 400));
+        
+        // Update details when selection changes
+        presetList.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                String selected = presetList.getSelectedValue();
+                if (selected != null) {
+                    WorkflowPreset preset = workflowManager.getPreset(selected);
+                    detailsArea.setText(formatPresetDetails(preset));
                 }
             }
+        });
+        
+        // Layout
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, listScroll, detailsScroll);
+        splitPane.setResizeWeight(0.4);
+        panel.add(splitPane, BorderLayout.CENTER);
+        
+        // Buttons
+        JPanel buttonPanel = new JPanel(new FlowLayout());
+        
+        JButton loadPresetButton = new JButton("📥 Load Preset");
+        loadPresetButton.addActionListener(e -> {
+            String selected = presetList.getSelectedValue();
+            if (selected != null) {
+                loadWorkflowPreset(selected);
+            }
+        });
+        
+        JButton copyExamplesButton = new JButton("📋 Copy Examples");
+        copyExamplesButton.addActionListener(e -> {
+            String selected = presetList.getSelectedValue();
+            if (selected != null) {
+                copyPresetExamples(selected);
+            }
+        });
+        
+        buttonPanel.add(loadPresetButton);
+        buttonPanel.add(copyExamplesButton);
+        panel.add(buttonPanel, BorderLayout.SOUTH);
+        
+        return panel;
+    }
+    
+    private JPanel createCustomWorkflowPanel() {
+        JPanel panel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.anchor = GridBagConstraints.WEST;
+        
+        // Workflow name
+        gbc.gridx = 0; gbc.gridy = 0;
+        panel.add(new JLabel("Workflow Name:"), gbc);
+        gbc.gridx = 1; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL;
+        JTextField nameField = new JTextField(20);
+        panel.add(nameField, gbc);
+        
+        // Description
+        gbc.gridx = 0; gbc.gridy = 1; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE;
+        panel.add(new JLabel("Description:"), gbc);
+        gbc.gridx = 1; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL;
+        JTextField descField = new JTextField(20);
+        panel.add(descField, gbc);
+        
+        // Workflow type
+        gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 1; gbc.fill = GridBagConstraints.NONE;
+        panel.add(new JLabel("Type:"), gbc);
+        gbc.gridx = 1; gbc.gridwidth = 2; gbc.fill = GridBagConstraints.HORIZONTAL;
+        JComboBox<WorkflowPreset.WorkflowType> typeCombo = new JComboBox<>(WorkflowPreset.WorkflowType.values());
+        panel.add(typeCombo, gbc);
+        
+        // Parameters section
+        gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 3; gbc.fill = GridBagConstraints.HORIZONTAL;
+        JLabel paramLabel = new JLabel("Parameters (JSON format):");
+        panel.add(paramLabel, gbc);
+        
+        gbc.gridy = 4; gbc.fill = GridBagConstraints.BOTH; gbc.weightx = 1.0; gbc.weighty = 0.5;
+        JTextArea paramArea = new JTextArea(8, 40);
+        paramArea.setText("{\n  \"expected_lanes\": 12,\n  \"sensitivity\": 0.7,\n  \"background_method\": \"median\"\n}");
+        JScrollPane paramScroll = new JScrollPane(paramArea);
+        panel.add(paramScroll, gbc);
+        
+        // Natural language examples
+        gbc.gridy = 5; gbc.weighty = 0.0; gbc.fill = GridBagConstraints.HORIZONTAL;
+        JLabel exampleLabel = new JLabel("Natural Language Examples (one per line):");
+        panel.add(exampleLabel, gbc);
+        
+        gbc.gridy = 6; gbc.fill = GridBagConstraints.BOTH; gbc.weighty = 0.5;
+        JTextArea exampleArea = new JTextArea(6, 40);
+        exampleArea.setText("Analyze this 12-lane gel\nDetect protein bands\nExport results to CSV");
+        JScrollPane exampleScroll = new JScrollPane(exampleArea);
+        panel.add(exampleScroll, gbc);
+        
+        // Save button
+        gbc.gridy = 7; gbc.weighty = 0.0; gbc.fill = GridBagConstraints.NONE; gbc.anchor = GridBagConstraints.CENTER;
+        JButton saveButton = new JButton("💾 Save Custom Workflow");
+        saveButton.addActionListener(e -> saveCustomWorkflow(nameField, descField, typeCombo, paramArea, exampleArea));
+        panel.add(saveButton, gbc);
+        
+        return panel;
+    }
+    
+    private JPanel createManagePresetsPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        
+        // User presets only (can't edit built-in)
+        List<WorkflowPreset> userPresets = workflowManager.getAllPresets().stream()
+            .filter(p -> !workflowManager.isBuiltinPreset(p.getName()))
+            .collect(java.util.stream.Collectors.toList());
+        
+        String[] presetNames = userPresets.stream()
+            .map(WorkflowPreset::getName)
+            .toArray(String[]::new);
+        
+        JList<String> presetList = new JList<>(presetNames);
+        presetList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        JScrollPane listScroll = new JScrollPane(presetList);
+        
+        panel.add(listScroll, BorderLayout.CENTER);
+        
+        // Management buttons
+        JPanel buttonPanel = new JPanel(new FlowLayout());
+        
+        JButton editButton = new JButton("✏️ Edit");
+        editButton.addActionListener(e -> {
+            String selected = presetList.getSelectedValue();
+            if (selected != null) {
+                editWorkflowPreset(selected);
+            }
+        });
+        
+        JButton deleteButton = new JButton("🗑️ Delete");
+        deleteButton.addActionListener(e -> {
+            String selected = presetList.getSelectedValue();
+            if (selected != null) {
+                deleteWorkflowPreset(selected);
+                // Refresh list
+                // TODO: Implement list refresh
+            }
+        });
+        
+        JButton exportButton = new JButton("📤 Export");
+        exportButton.addActionListener(e -> exportWorkflows());
+        
+        JButton importButton = new JButton("📥 Import");
+        importButton.addActionListener(e -> importWorkflows());
+        
+        buttonPanel.add(editButton);
+        buttonPanel.add(deleteButton);
+        buttonPanel.add(exportButton);
+        buttonPanel.add(importButton);
+        panel.add(buttonPanel, BorderLayout.SOUTH);
+        
+        return panel;
+    }
+    
+    private String formatPresetDetails(WorkflowPreset preset) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("🏷️ Name: ").append(preset.getName()).append("\n\n");
+        sb.append("📋 Type: ").append(preset.getType().getDisplayName()).append("\n\n");
+        sb.append("📝 Description:\n").append(preset.getDescription()).append("\n\n");
+        
+        if (workflowManager.isBuiltinPreset(preset.getName())) {
+            sb.append("🔒 Built-in preset (read-only)\n\n");
+        }
+        
+        sb.append("📊 Usage Statistics:\n");
+        sb.append("  • Used ").append(preset.getUseCount()).append(" times\n");
+        sb.append("  • Created: ").append(preset.getCreated().toString().substring(0, 19)).append("\n");
+        if (preset.getLastUsed() != null) {
+            sb.append("  • Last used: ").append(preset.getLastUsed().toString().substring(0, 19)).append("\n");
+        }
+        sb.append("\n");
+        
+        sb.append("⚙️ Parameters:\n");
+        sb.append(preset.getParameters().toString(2)).append("\n\n");
+        
+        sb.append("💬 Natural Language Examples:\n");
+        for (String example : preset.getNaturalLanguageExamples()) {
+            sb.append("  • \"").append(example).append("\"\n");
+        }
+        
+        return sb.toString();
+    }
+    
+    private void loadWorkflowPreset(String presetName) {
+        WorkflowPreset preset = workflowManager.getPreset(presetName);
+        if (preset != null) {
+            appendToChatArea("⚙️ Loaded workflow preset: " + presetName + "\n\n");
             
-            appendToChatArea("✅ Quantified " + bandCount + " bands\n");
-            appendToChatArea("📊 Average intensity: " + String.format("%.1f", totalIntensity / Math.max(1, bandCount)) + "\n");
-            appendToChatArea("📋 Results added to ImageJ Log window\n");
-            appendToChatArea("💡 For detailed analysis, use: 'Quantify with background subtraction'\n\n");
+            // Show natural language examples
+            appendToChatArea("📝 Try these commands for this workflow:\n");
+            for (String example : preset.getNaturalLanguageExamples()) {
+                appendToChatArea("  💬 \"" + example + "\"\n");
+            }
+            appendToChatArea("\n");
             
-            // Log to ImageJ
-            IJ.log("=== AutoDense Quick Quantification ===");
-            IJ.log("Bands quantified: " + bandCount);
-            IJ.log("Average intensity: " + String.format("%.2f", totalIntensity / Math.max(1, bandCount)));
-            IJ.log("Image: " + imp.getTitle());
+            // Record usage
+            workflowManager.recordPresetUse(presetName);
             
-        } catch (Exception e) {
-            appendToChatArea("❌ Quantification failed: " + e.getMessage() + "\n\n");
+            statusLabel.setText("⚙️ Workflow preset loaded: " + presetName);
         }
     }
     
+    private void copyPresetExamples(String presetName) {
+        WorkflowPreset preset = workflowManager.getPreset(presetName);
+        if (preset != null) {
+            StringBuilder examples = new StringBuilder();
+            for (String example : preset.getNaturalLanguageExamples()) {
+                examples.append(example).append("\n");
+            }
+            
+            // Copy to system clipboard
+            java.awt.datatransfer.StringSelection selection = new java.awt.datatransfer.StringSelection(examples.toString());
+            java.awt.datatransfer.Clipboard clipboard = java.awt.Toolkit.getDefaultToolkit().getSystemClipboard();
+            clipboard.setContents(selection, selection);
+            
+            statusLabel.setText("📋 Examples copied to clipboard");
+        }
+    }
+    
+    private void saveCustomWorkflow(JTextField nameField, JTextField descField, 
+                                  JComboBox<WorkflowPreset.WorkflowType> typeCombo,
+                                  JTextArea paramArea, JTextArea exampleArea) {
+        try {
+            String name = nameField.getText().trim();
+            String desc = descField.getText().trim();
+            
+            if (name.isEmpty() || desc.isEmpty()) {
+                JOptionPane.showMessageDialog(frame, "Please fill in name and description", "Validation Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            
+            WorkflowPreset preset = new WorkflowPreset(name, desc, (WorkflowPreset.WorkflowType) typeCombo.getSelectedItem());
+            
+            // Parse parameters JSON
+            try {
+                org.json.JSONObject params = new org.json.JSONObject(paramArea.getText());
+                preset.setParameters(params);
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(frame, "Invalid JSON in parameters: " + e.getMessage(), "JSON Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            
+            // Parse examples
+            String[] examples = exampleArea.getText().split("\n");
+            for (String example : examples) {
+                if (!example.trim().isEmpty()) {
+                    preset.addNaturalLanguageExample(example.trim());
+                }
+            }
+            
+            // Save preset
+            workflowManager.savePreset(preset);
+            
+            // Clear fields
+            nameField.setText("");
+            descField.setText("");
+            paramArea.setText("{\n  \n}");
+            exampleArea.setText("");
+            
+            JOptionPane.showMessageDialog(frame, "Workflow preset saved successfully!", "Success", JOptionPane.INFORMATION_MESSAGE);
+            statusLabel.setText("💾 Custom workflow saved: " + name);
+            
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(frame, "Error saving workflow: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
+    private void editWorkflowPreset(String presetName) {
+        // TODO: Implement preset editing dialog
+        JOptionPane.showMessageDialog(frame, "Editing workflow: " + presetName + "\n(Feature coming soon)", "Edit Workflow", JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    private void deleteWorkflowPreset(String presetName) {
+        int result = JOptionPane.showConfirmDialog(frame, 
+            "Are you sure you want to delete the workflow preset '" + presetName + "'?\nThis action cannot be undone.",
+            "Confirm Delete", 
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.WARNING_MESSAGE);
+        
+        if (result == JOptionPane.YES_OPTION) {
+            if (workflowManager.deletePreset(presetName)) {
+                statusLabel.setText("🗑️ Deleted workflow preset: " + presetName);
+                JOptionPane.showMessageDialog(frame, "Workflow preset deleted successfully.", "Deleted", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(frame, "Could not delete preset. Built-in presets cannot be deleted.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+    
+    private void exportWorkflows() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("JSON files", "json"));
+        fileChooser.setSelectedFile(new File("autodense_workflows.json"));
+        
+        if (fileChooser.showSaveDialog(frame) == JFileChooser.APPROVE_OPTION) {
+            try {
+                workflowManager.exportPresets(fileChooser.getSelectedFile().toPath());
+                JOptionPane.showMessageDialog(frame, "Workflows exported successfully!", "Export Complete", JOptionPane.INFORMATION_MESSAGE);
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(frame, "Export failed: " + e.getMessage(), "Export Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+    
+    private void importWorkflows() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("JSON files", "json"));
+        
+        if (fileChooser.showOpenDialog(frame) == JFileChooser.APPROVE_OPTION) {
+            try {
+                workflowManager.importPresets(fileChooser.getSelectedFile().toPath());
+                JOptionPane.showMessageDialog(frame, "Workflows imported successfully!", "Import Complete", JOptionPane.INFORMATION_MESSAGE);
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(frame, "Import failed: " + e.getMessage(), "Import Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
     private ImagePlus getCurrentImage() {
         // First priority: Use our stored currentImage if it exists
         if (currentImage != null) {
@@ -1083,6 +1515,7 @@ public class GelUI {
     }
     
     // Legacy method for backward compatibility  
+    @SuppressWarnings("unused")
     private String executeLaneDetection(String command, ImagePlus imp) {
         try {
             // Parse lane count and offset from user command
@@ -1261,6 +1694,7 @@ public class GelUI {
     
     
     
+    @SuppressWarnings("unused")
     private String showContextualHelp() {
         return "🤖 AutoDense Help:\\n" +
                "🧬 Gel Analysis Commands:\\n" +
@@ -1278,6 +1712,7 @@ public class GelUI {
                "• 'Export results' - Save analysis data as CSV/JSON";
     }
     
+    @SuppressWarnings("unused")
     private String setGelType(String command, ImagePlus imp, Map<String, Object> params) {
         String gelType = "SDS-PAGE"; // Default
         if (params.containsKey("gel_type")) {

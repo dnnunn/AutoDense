@@ -341,6 +341,230 @@ public class CapabilityRegistry {
     }
     
     /**
+     * Generate gel_analysis_intents.json structure from Java registry
+     * This replaces the static JSON file with dynamically generated content
+     */
+    public JSONObject exportGelAnalysisIntents() {
+        JSONObject intents = new JSONObject();
+        JSONObject intentMap = new JSONObject();
+        
+        // Generate intents based on tool introspection
+        JSONObject tools = introspectAutoDenseTools();
+        
+        for (String toolName : tools.keySet()) {
+            JSONObject tool = tools.getJSONObject(toolName);
+            String category = tool.getString("category");
+            
+            // Create intent based on tool category and name
+            JSONObject intent = createIntentFromTool(toolName, tool);
+            String intentKey = getIntentKeyFromTool(toolName, category);
+            
+            intentMap.put(intentKey, intent);
+        }
+        
+        intents.put("intents", intentMap);
+        
+        // Add parameter extraction patterns
+        intents.put("parameter_extraction", createParameterExtractionPatterns());
+        
+        // Add context awareness
+        intents.put("context_awareness", createContextAwareness());
+        
+        // Add metadata
+        intents.put("generated_from", "CapabilityRegistry.java");
+        intents.put("generated_at", System.currentTimeMillis());
+        intents.put("version", "1.0.0");
+        
+        return intents;
+    }
+    
+    private JSONObject createIntentFromTool(String toolName, JSONObject tool) {
+        JSONObject intent = new JSONObject();
+        
+        // Generate patterns based on tool name and description
+        JSONArray patterns = generatePatternsFromTool(toolName, tool);
+        intent.put("patterns", patterns);
+        
+        // Convert tool parameters to intent parameters
+        JSONObject toolParams = tool.getJSONObject("parameters");
+        JSONObject intentParams = new JSONObject();
+        
+        for (String paramName : toolParams.keySet()) {
+            JSONObject toolParam = toolParams.getJSONObject(paramName);
+            JSONObject intentParam = convertToolParamToIntentParam(paramName, toolParam);
+            intentParams.put(paramName, intentParam);
+        }
+        
+        if (intentParams.length() > 0) {
+            intent.put("parameters", intentParams);
+        }
+        
+        // Map to tool execution method
+        intent.put("action", convertToolNameToAction(toolName));
+        
+        return intent;
+    }
+    
+    private JSONArray generatePatternsFromTool(String toolName, JSONObject tool) {
+        JSONArray patterns = new JSONArray();
+        String description = tool.getString("description");
+        
+        // Generate patterns based on tool name
+        String baseName = toolName.toLowerCase().replaceAll("([A-Z])", " $1").trim();
+        patterns.put(baseName);
+        patterns.put(toolName.toLowerCase());
+        
+        // Add verb forms from description
+        if (description.startsWith("Load")) {
+            patterns.put("open").put("load").put("import");
+        } else if (description.startsWith("Apply")) {
+            patterns.put("enhance").put("preprocess").put("adjust");
+        } else if (description.startsWith("Detect") || description.startsWith("Identify")) {
+            patterns.put("detect").put("find").put("identify").put("locate");
+        } else if (description.startsWith("Measure")) {
+            patterns.put("measure").put("quantify").put("analyze");
+        } else if (description.startsWith("Export") || description.startsWith("Save")) {
+            patterns.put("export").put("save").put("download");
+        }
+        
+        // Add specific patterns for known tools
+        switch (toolName) {
+            case "detectLanes":
+                patterns.put("detect lanes").put("find lanes").put("X lanes").put("lane detection");
+                break;
+            case "detectBands":
+                patterns.put("detect bands").put("find bands").put("protein bands").put("DNA bands");
+                break;
+            case "detectColonies":
+                patterns.put("detect colonies").put("count colonies").put("find colonies");
+                break;
+            case "calibrateMolecularWeight":
+                patterns.put("calibrate").put("molecular weight").put("MW ladder").put("protein ladder");
+                break;
+            case "normalizeIntensities":
+                patterns.put("normalize").put("normalization").put("reference").put("control");
+                break;
+        }
+        
+        return patterns;
+    }
+    
+    private JSONObject convertToolParamToIntentParam(String paramName, JSONObject toolParam) {
+        JSONObject intentParam = new JSONObject();
+        
+        String type = toolParam.getString("type");
+        JSONArray patterns = new JSONArray();
+        
+        // Generate patterns based on parameter name and type
+        switch (paramName) {
+            case "expected_lanes":
+            case "lane_count":
+                patterns.put("\\d+").put("one").put("two").put("three").put("four")
+                       .put("five").put("six").put("seven").put("eight").put("nine")
+                       .put("ten").put("eleven").put("twelve");
+                JSONObject mapping = new JSONObject();
+                mapping.put("one", 1).put("two", 2).put("three", 3).put("four", 4)
+                       .put("five", 5).put("six", 6).put("seven", 7).put("eight", 8)
+                       .put("nine", 9).put("ten", 10).put("eleven", 11).put("twelve", 12);
+                intentParam.put("mapping", mapping);
+                break;
+            case "sensitivity":
+                patterns.put("high sensitivity").put("low sensitivity").put("sensitive")
+                       .put("less sensitive").put("\\d*\\.?\\d+");
+                break;
+            case "ladder_type":
+                patterns.put("protein").put("DNA").put("RNA").put("NEB").put("Bio-Rad");
+                intentParam.put("default", "protein");
+                break;
+            case "color_groups":
+                patterns.put("white").put("pink").put("red").put("blue").put("green").put("yellow");
+                break;
+            default:
+                if (type.equals("integer")) {
+                    patterns.put("\\d+");
+                } else if (type.equals("number")) {
+                    patterns.put("\\d*\\.?\\d+");
+                } else if (type.equals("boolean")) {
+                    patterns.put("true").put("false").put("yes").put("no");
+                } else {
+                    patterns.put(".*"); // Generic string pattern
+                }
+                break;
+        }
+        
+        intentParam.put("patterns", patterns);
+        return intentParam;
+    }
+    
+    private String convertToolNameToAction(String toolName) {
+        // Convert camelCase tool names to action method names
+        return "execute" + toolName.substring(0, 1).toUpperCase() + toolName.substring(1);
+    }
+    
+    private String getIntentKeyFromTool(String toolName, String category) {
+        // Generate intent keys from tool names
+        switch (toolName) {
+            case "detectLanes": return "lane_detection";
+            case "adjustLanes": return "lane_adjustment";
+            case "detectBands": return "band_detection";
+            case "detectColonies": return "colony_detection";
+            case "countColoniesByColor": return "colony_counting";
+            case "quantifyBands": return "quantification";
+            case "preprocess": return "image_enhancement";
+            case "calibrateMolecularWeight": return "calibration";
+            case "exportResults": return "export_results";
+            case "openImage": return "image_loading";
+            default: return toolName.toLowerCase() + "_intent";
+        }
+    }
+    
+    private JSONObject createParameterExtractionPatterns() {
+        JSONObject extraction = new JSONObject();
+        
+        JSONObject numbers = new JSONObject();
+        JSONArray numberPatterns = new JSONArray();
+        numberPatterns.put("\\d+").put("\\d*\\.\\d+");
+        numbers.put("patterns", numberPatterns);
+        
+        JSONObject contextClues = new JSONObject();
+        contextClues.put("lanes", new JSONArray().put("lane").put("lanes"));
+        contextClues.put("offset", new JSONArray().put("offset").put("shift").put("move"));
+        contextClues.put("intensity", new JSONArray().put("intensity").put("brightness").put("contrast"));
+        contextClues.put("size", new JSONArray().put("kDa").put("bp").put("kb").put("Da"));
+        numbers.put("context_clues", contextClues);
+        
+        extraction.put("numbers", numbers);
+        
+        JSONObject ranges = new JSONObject();
+        JSONArray rangePatterns = new JSONArray();
+        rangePatterns.put("\\d+-\\d+").put("from \\d+ to \\d+").put("between \\d+ and \\d+");
+        ranges.put("patterns", rangePatterns);
+        extraction.put("ranges", ranges);
+        
+        return extraction;
+    }
+    
+    private JSONObject createContextAwareness() {
+        JSONObject context = new JSONObject();
+        
+        JSONObject gelState = new JSONObject();
+        gelState.put("loaded", "image_loaded");
+        gelState.put("lanes_detected", "lanes_available");
+        gelState.put("bands_detected", "bands_available");
+        gelState.put("calibrated", "calibration_available");
+        context.put("gel_state", gelState);
+        
+        JSONObject suggestedSteps = new JSONObject();
+        suggestedSteps.put("after_lane_detection", new JSONArray().put("detect bands").put("calibrate with ladder"));
+        suggestedSteps.put("after_band_detection", new JSONArray().put("quantify bands").put("export results"));
+        suggestedSteps.put("after_calibration", new JSONArray().put("calculate molecular weights"));
+        suggestedSteps.put("after_quantification", new JSONArray().put("normalize data").put("export results"));
+        context.put("suggested_next_steps", suggestedSteps);
+        
+        return context;
+    }
+
+    /**
      * Generate capability summary for Gemini system prompt
      */
     public String generateCapabilitySummary() {

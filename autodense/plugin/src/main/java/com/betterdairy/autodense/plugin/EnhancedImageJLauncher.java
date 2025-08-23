@@ -6,6 +6,12 @@ import ij.ImagePlus;
 import ij.gui.ProfilePlot;
 import ij.gui.Roi;
 import ij.measure.ResultsTable;
+import com.betterdairy.autodense.imageio.ImageIOServiceRegistry;
+
+import java.io.File;
+import java.lang.reflect.Method;
+import java.net.URL;
+import java.net.URLClassLoader;
 
 /**
  * Enhanced ImageJ launcher that provides essential gel analysis tools
@@ -14,6 +20,30 @@ import ij.measure.ResultsTable;
 public class EnhancedImageJLauncher {
     
     public static void main(String[] args) {
+        try {
+            // 1) Ensure TwelveMonkeys (and other deps) are on classpath
+            injectLibJars();
+            
+            // 2) Initialize ImageIO services for HEIC/format support
+            initializeImageIOServices();
+            
+            // 3) Run classpath audit to verify dependencies
+            ClasspathAudit.run();
+            
+            // 4) Launch ImageJ2 with enhanced capabilities
+            launchImageJ(args);
+            
+        } catch (Exception e) {
+            IJ.log("❌ Failed to start AutoDense: " + e.getMessage());
+            e.printStackTrace();
+            System.exit(1);
+        }
+    }
+    
+    /**
+     * Launch ImageJ with AutoDense integration
+     */
+    private static void launchImageJ(String[] args) {
         // Launch ImageJ2 with enhanced capabilities
         final ImageJ ij = new ImageJ();
         
@@ -36,6 +66,128 @@ public class EnhancedImageJLauncher {
         IJ.log("✓ AutoDense AI integration active");
         IJ.log("✓ Manual and AI workflows available");
         IJ.log("Access: Plugins > AutoDense > Open & Analyze");
+    }
+    
+    /**
+     * Add all JARs from AutoDense.app/Contents/Resources/java/lib to the system classloader
+     */
+    private static void injectLibJars() throws Exception {
+        File libDir = discoverLibDir();
+        if (libDir == null || !libDir.isDirectory()) {
+            IJ.log("⚠️  No lib directory found - TwelveMonkeys JARs may not be available");
+            return;
+        }
+        
+        IJ.log("📚 Injecting runtime JARs from: " + libDir.getAbsolutePath());
+        
+        ClassLoader systemClassLoader = ClassLoader.getSystemClassLoader();
+        
+        // Java 8/11/17 friendly path (URLClassLoader)
+        if (systemClassLoader instanceof URLClassLoader urlClassLoader) {
+            Method addURL = URLClassLoader.class.getDeclaredMethod("addURL", URL.class);
+            addURL.setAccessible(true);
+            
+            File[] jarFiles = libDir.listFiles((dir, name) -> name.endsWith(".jar"));
+            if (jarFiles != null) {
+                int injectedCount = 0;
+                for (File jarFile : jarFiles) {
+                    try {
+                        addURL.invoke(urlClassLoader, jarFile.toURI().toURL());
+                        IJ.log("  ✅ Injected: " + jarFile.getName());
+                        injectedCount++;
+                    } catch (Exception e) {
+                        IJ.log("  ⚠️  Failed to inject " + jarFile.getName() + ": " + e.getMessage());
+                    }
+                }
+                IJ.log("📊 Successfully injected " + injectedCount + " runtime JARs");
+            } else {
+                IJ.log("⚠️  No JAR files found in lib directory");
+            }
+            return;
+        }
+        
+        // Fallback for non-URLClassLoader
+        IJ.log("⚠️  System classloader is not URLClassLoader - JAR injection may not work");
+        IJ.log("⚠️  Classloader type: " + systemClassLoader.getClass().getName());
+    }
+    
+    /**
+     * Discover the lib directory containing runtime dependencies
+     */
+    private static File discoverLibDir() {
+        try {
+            // Get the location of this class
+            String classLocation = EnhancedImageJLauncher.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI().getPath();
+            
+            IJ.log("🔍 Class location: " + classLocation);
+            
+            // macOS app bundle layout:
+            // AutoDense.app/Contents/Resources/java/<plugin-jar>.jar
+            // AutoDense.app/Contents/Resources/java/lib/<dependency-jars>.jar
+            File classFile = new File(classLocation);
+            File javaDir = classFile.getParentFile();                // /java
+            File libDir = new File(javaDir, "lib");                  // /java/lib
+            
+            if (libDir.isDirectory()) {
+                IJ.log("✅ Found app bundle lib directory: " + libDir.getAbsolutePath());
+                return libDir;
+            }
+            
+            // Development mode fallback: look for Maven target/dependency directory
+            File currentDir = new File(System.getProperty("user.dir"));
+            File devLibDir = new File(currentDir, "autodense/plugin/target/dependency");
+            if (devLibDir.isDirectory()) {
+                IJ.log("✅ Found development lib directory: " + devLibDir.getAbsolutePath());
+                return devLibDir;
+            }
+            
+            // Alternative development paths
+            File altDevLib1 = new File("plugin/target/dependency");
+            if (altDevLib1.isDirectory()) {
+                IJ.log("✅ Found alternative dev lib directory: " + altDevLib1.getAbsolutePath());
+                return altDevLib1;
+            }
+            
+            File altDevLib2 = new File("target/dependency");
+            if (altDevLib2.isDirectory()) {
+                IJ.log("✅ Found target dependency directory: " + altDevLib2.getAbsolutePath());
+                return altDevLib2;
+            }
+            
+        } catch (Exception e) {
+            IJ.log("⚠️  Error discovering lib directory: " + e.getMessage());
+        }
+        
+        IJ.log("❌ Could not find lib directory for runtime dependencies");
+        return null;
+    }
+    
+    /**
+     * Initialize ImageIO services for HEIC support and format normalization
+     */
+    private static void initializeImageIOServices() {
+        IJ.log("Initializing ImageIO services for HEIC/iPhone image support...");
+        
+        try {
+            // Register TwelveMonkeys and HEIC providers
+            ImageIOServiceRegistry.initialize();
+            
+            // Log supported formats
+            String[] supportedFormats = ImageIOServiceRegistry.getSupportedReadFormats();
+            IJ.log("✓ ImageIO initialized - " + supportedFormats.length + " formats supported");
+            
+            // Check for HEIC support specifically
+            if (ImageIOServiceRegistry.isHEICSupported()) {
+                IJ.log("✓ HEIC/HEIF support available for iPhone images");
+            } else {
+                IJ.log("⚠ HEIC/HEIF support not available - iPhone images may need conversion");
+            }
+            
+        } catch (Exception e) {
+            IJ.log("⚠ ImageIO initialization failed: " + e.getMessage());
+            IJ.log("⚠ Some image formats may not be supported");
+        }
     }
     
     private static void initializeGelAnalysisTools() {

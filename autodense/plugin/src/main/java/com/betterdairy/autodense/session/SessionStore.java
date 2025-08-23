@@ -11,9 +11,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.Objects;
 import java.util.List;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.Collections;
-import java.util.Iterator;
+// Removed unused collection imports
 
 /**
  * Thread-safe, LRU-enabled handle-based state management for gel analysis sessions.

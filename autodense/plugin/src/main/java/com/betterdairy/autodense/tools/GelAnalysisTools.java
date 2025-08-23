@@ -12,14 +12,7 @@ import ij.gui.Roi;
 import ij.gui.TextRoi;
 import ij.io.FileSaver;
 import ij.process.ImageProcessor;
-import ij.plugin.filter.BackgroundSubtracter;
-import ij.plugin.filter.GaussianBlur;
-import ij.plugin.ContrastEnhancer;
-import ij.process.AutoThresholder;
-import ij.plugin.ImageCalculator;
-import java.awt.geom.AffineTransform;
-import ij.plugin.filter.EDM;
-import ij.process.ColorProcessor;
+// Removed unused ImageJ imports
 import org.json.JSONObject;
 import org.json.JSONArray;
 
@@ -76,22 +69,19 @@ public class GelAnalysisTools {
      * Standard error codes for Gemini self-correction
      */
     private static final String ERROR_MISSING_REQUIRED_FIELD = "missing_required_field";
+    @SuppressWarnings("unused")
     private static final String ERROR_INVALID_PARAM = "invalid_param";
     private static final String ERROR_IMAGE_NOT_FOUND = "image_not_found";
     private static final String ERROR_IMAGE_STATE_CONFLICT = "image_state_conflict";
     private static final String ERROR_IJ_RUNTIME_ERROR = "ij_runtime_error";
     protected static final String ERROR_ANALYSIS_FAILED = "analysis_failed";
     
-    /**
-     * Clamp value to valid range for determinism and self-documentation
-     */
+    // DEPRECATED PARAMETER CLAMPING: Use ParameterValidator for new code
+    // These methods remain only for backward compatibility in deprecated tools
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
     
-    /**
-     * Clamp double value to valid range
-     */
     private static double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
     }
@@ -205,130 +195,21 @@ public class GelAnalysisTools {
                 workingImg = store.getImage(resultHandle);
             }
             
-            JSONArray processedSteps = new JSONArray(); // Track what was actually applied
+            // Delegate all preprocessing to ImagePreprocessor (single source of truth)
+            ImagePlus processedImage = ImagePreprocessor.apply(workingImg.image, steps, destructive);
             
-            for (int i = 0; i < steps.length(); i++) {
-                JSONObject step = steps.getJSONObject(i);
-                String op = step.getString("op");
-                JSONObject processedStep = new JSONObject().put("op", op);
-                
-                switch (op) {
-                    case "rotate":
-                        // Clamp angle to reasonable range
-                        double angle = step.optDouble("angle_deg", 0.0);
-                        angle = clamp(angle, -180.0, 180.0);
-                        step.put("angle_deg", angle); // Echo actual value used
-                        processedStep.put("angle_deg", angle);
-                        // Use direct API for 90-degree rotation, IJ.run for arbitrary angles
-                        if (Math.abs(angle - 90) < 0.001) {
-                            ImageProcessor rotProc = workingImg.image.getProcessor();
-                            rotProc.setInterpolationMethod(ImageProcessor.BILINEAR);
-                            rotProc = rotProc.rotateLeft();
-                            workingImg.image.setProcessor(rotProc);
-                        } else if (Math.abs(angle + 90) < 0.001 || Math.abs(angle - 270) < 0.001) {
-                            ImageProcessor rotProc = workingImg.image.getProcessor();
-                            rotProc.setInterpolationMethod(ImageProcessor.BILINEAR);
-                            rotProc = rotProc.rotateRight();
-                            workingImg.image.setProcessor(rotProc);
-                        } else {
-                            // For non-90 degree rotations, fall back to IJ.run
-                            IJ.run(workingImg.image, "Rotate...", "angle=" + angle + " interpolation=Bilinear");
-                        }
-                        break;
-                        
-                    case "flip":
-                        String axis = step.optString("axis", "horizontal");
-                        // Validate axis parameter
-                        if (!axis.equals("vertical") && !axis.equals("horizontal")) {
-                            axis = "horizontal"; // Default fallback
-                        }
-                        step.put("axis", axis); // Echo actual value used
-                        processedStep.put("axis", axis);
-                        // Use direct API for flipping
-                        ImageProcessor proc = workingImg.image.getProcessor();
-                        if (axis.equals("vertical")) {
-                            proc.flipVertical();
-                        } else {
-                            proc.flipHorizontal();
-                        }
-                        break;
-                        
-                    case "enhance_contrast":
-                        // Clamp saturated percentage
-                        double saturated = step.optDouble("saturated", 0.35);
-                        saturated = clamp(saturated, 0.0, 1.0);
-                        step.put("saturated", saturated); // Echo actual value used
-                        processedStep.put("saturated", saturated);
-                        // Use direct API for contrast enhancement
-                        ContrastEnhancer enhancer = new ContrastEnhancer();
-                        enhancer.stretchHistogram(workingImg.image.getProcessor(), saturated);
-                        break;
-                        
-                    case "subtract_background":
-                        // Clamp rolling ball radius
-                        int radius = step.optInt("radius_px", 150);
-                        radius = clamp(radius, 10, 400);
-                        step.put("radius_px", radius); // Echo actual value used
-                        processedStep.put("radius_px", radius);
-                        // Use direct API for background subtraction
-                        BackgroundSubtracter bs = new BackgroundSubtracter();
-                        bs.rollingBallBackground(workingImg.image.getProcessor(), radius, false, false, false, false, false);
-                        break;
-                        
-                    case "smooth":
-                        processedStep.put("iterations", 1); // Document what smooth does
-                        // Use direct API for smoothing (Gaussian blur with sigma=0.5)
-                        GaussianBlur gb = new GaussianBlur();
-                        gb.blurGaussian(workingImg.image.getProcessor(), 0.5, 0.5, 0.02);
-                        break;
-                        
-                    case "clahe":
-                        // CLAHE (Contrast Limited Adaptive Histogram Equalization)
-                        int blockSize = step.optInt("block_size", 127);
-                        blockSize = clamp(blockSize, 10, 255);
-                        int histogram = step.optInt("histogram_bins", 256); 
-                        histogram = clamp(histogram, 64, 1024);
-                        double slope = step.optDouble("max_slope", 3.0);
-                        slope = clamp(slope, 1.0, 10.0);
-                        step.put("block_size", blockSize);
-                        step.put("histogram_bins", histogram);
-                        step.put("max_slope", slope);
-                        processedStep.put("block_size", blockSize)
-                                   .put("histogram_bins", histogram)
-                                   .put("max_slope", slope);
-                        // CLAHE is a plugin operation - use IJ.run as no direct API available
-                        IJ.run(workingImg.image, "Enhance Local Contrast (CLAHE)", 
-                               "blocksize=" + blockSize + " histogram=" + histogram + " maximum=" + slope);
-                        break;
-                        
-                    case "bandpass":
-                        // Bandpass filter parameters
-                        double filterLarge = step.optDouble("filter_large", 40.0);
-                        filterLarge = clamp(filterLarge, 1.0, 1000.0);
-                        double filterSmall = step.optDouble("filter_small", 3.0);
-                        filterSmall = clamp(filterSmall, 0.0, filterLarge - 1.0);
-                        step.put("filter_large", filterLarge);
-                        step.put("filter_small", filterSmall);
-                        processedStep.put("filter_large", filterLarge)
-                                   .put("filter_small", filterSmall);
-                        // Bandpass filter requires FFT - use IJ.run as it's a complex plugin operation
-                        IJ.run(workingImg.image, "Bandpass Filter...", 
-                               "filter_large=" + filterLarge + " filter_small=" + filterSmall + " suppress=None tolerance=5");
-                        break;
-                        
-                    case "sharpen":
-                        processedStep.put("iterations", 1); // Document what sharpen does
-                        // Use direct API for sharpening (unsharp mask)
-                        ImageProcessor sharpProc = workingImg.image.getProcessor();
-                        sharpProc.sharpen();
-                        break;
-                        
-                    default:
-                        return fail(ERROR_INVALID_PARAM, "Unknown preprocessing operation: " + op, "op");
-                }
-                
-                processedSteps.put(processedStep);
+            // Update the image in the session store with the processed result
+            if (destructive) {
+                // For destructive processing, we already modified the original image
+                workingImg.image.updateAndDraw();
+            } else {
+                // For non-destructive processing, replace the stored image with the processed version
+                store.replaceImageContent(resultHandle, processedImage);
+                workingImg = store.getImage(resultHandle);
             }
+            
+            // Echo back the original steps for transparency (ImagePreprocessor handles validation internally)
+            JSONArray processedSteps = steps;
             
             workingImg.image.updateAndDraw();
             
@@ -1864,6 +1745,391 @@ public class GelAnalysisTools {
             duplicate.setTitle(original.getTitle() + "_" + suffix);
         }
         return duplicate;
+    }
+    
+    // ==================== TIME-SERIES COLONY ANALYSIS TOOLS ====================
+    
+    /**
+     * Tool: start_timeseries_analysis
+     * Initialize time-series colony tracking for growth analysis
+     */
+    public JSONObject startTimeseriesAnalysis(JSONObject args) {
+        ToolSchemaValidator.require(args, "reference_image_handle");
+        try {
+            String referenceHandle = args.getString("reference_image_handle");
+            SessionStore.ImageRecord refImg = store.getImage(referenceHandle);
+            if (refImg == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Reference image not found", "reference_image_handle");
+            }
+            
+            // Create time-series tracker with options
+            TimeSeriesColonyTracker.TrackingOptions options = new TimeSeriesColonyTracker.TrackingOptions();
+            options.maxMatchingDistance = args.optDouble("max_matching_distance", 10.0);
+            options.sizeChangeThreshold = args.optDouble("size_change_threshold", 2.0);
+            options.trackNewColonies = args.optBoolean("track_new_colonies", true);
+            
+            TimeSeriesColonyTracker tracker = new TimeSeriesColonyTracker(options);
+            
+            // Analyze colonies in reference image
+            boolean measureMorphology = args.optBoolean("measure_morphology", true);
+            boolean measureXgalBlueness = args.optBoolean("xgal_analysis", false);
+            
+            List<TimeSeriesColonyTracker.Colony> colonies = 
+                TimeSeriesColonyTracker.analyzeColonies(refImg.image, measureMorphology, measureXgalBlueness);
+            
+            // Add first time point
+            java.time.LocalDateTime timestamp = java.time.LocalDateTime.now();
+            tracker.addTimePoint(timestamp, refImg.image, colonies);
+            
+            // Store tracker in session
+            String trackingHandle = "tracking_" + System.currentTimeMillis();
+            store.putAnalysis(trackingHandle, tracker, "Time-series colony tracking");
+            
+            JSONObject data = new JSONObject()
+                .put("tracking_handle", trackingHandle)
+                .put("reference_image_handle", referenceHandle)
+                .put("initial_colony_count", colonies.size())
+                .put("options", new JSONObject()
+                    .put("max_matching_distance", options.maxMatchingDistance)
+                    .put("size_change_threshold", options.sizeChangeThreshold)
+                    .put("track_new_colonies", options.trackNewColonies)
+                    .put("measure_morphology", measureMorphology)
+                    .put("xgal_analysis", measureXgalBlueness));
+            
+            return ok("start_timeseries_analysis", data);
+            
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("start_timeseries_analysis", e);
+        }
+    }
+    
+    /**
+     * Tool: add_timepoint
+     * Add a new time point to existing time-series analysis
+     */
+    public JSONObject addTimepoint(JSONObject args) {
+        ToolSchemaValidator.require(args, "tracking_handle");
+        ToolSchemaValidator.require(args, "image_handle");
+        try {
+            String trackingHandle = args.getString("tracking_handle");
+            String imageHandle = args.getString("image_handle");
+            
+            SessionStore.AnalysisRecord trackingRecord = store.getAnalysis(trackingHandle);
+            if (trackingRecord == null) {
+                return fail("tracking_not_found", "Time-series tracking not found", "tracking_handle");
+            }
+            
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            if (img == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found", "image_handle");
+            }
+            
+            TimeSeriesColonyTracker tracker = (TimeSeriesColonyTracker) trackingRecord.data;
+            
+            // Align image to reference if needed
+            boolean performAlignment = args.optBoolean("perform_alignment", true);
+            ImagePlus alignedImage = img.image;
+            
+            if (performAlignment) {
+                JSONObject alignmentResult = alignPlateImages(args);
+                if (alignmentResult.optBoolean("ok", false)) {
+                    String alignedHandle = alignmentResult.getJSONObject("data").getString("aligned_image_handle");
+                    SessionStore.ImageRecord alignedImg = store.getImage(alignedHandle);
+                    if (alignedImg != null) {
+                        alignedImage = alignedImg.image;
+                    }
+                }
+            }
+            
+            // Analyze colonies in new image
+            boolean measureMorphology = args.optBoolean("measure_morphology", true);
+            boolean measureXgalBlueness = args.optBoolean("xgal_analysis", false);
+            
+            List<TimeSeriesColonyTracker.Colony> colonies = 
+                TimeSeriesColonyTracker.analyzeColonies(alignedImage, measureMorphology, measureXgalBlueness);
+            
+            // Add time point to tracker
+            java.time.LocalDateTime timestamp = java.time.LocalDateTime.now();
+            tracker.addTimePoint(timestamp, alignedImage, colonies);
+            
+            // Update stored tracker
+            store.putAnalysis(trackingHandle, tracker, "Time-series colony tracking");
+            
+            // Get tracking statistics
+            Map<String, TimeSeriesColonyTracker.ColonyTrack> tracks = tracker.getTracks();
+            List<TimeSeriesColonyTracker.ColonyTrack> growingTracks = tracker.getGrowingTracks(0.1);
+            
+            JSONObject data = new JSONObject()
+                .put("tracking_handle", trackingHandle)
+                .put("image_handle", imageHandle)
+                .put("colonies_detected", colonies.size())
+                .put("total_tracks", tracks.size())
+                .put("growing_tracks", growingTracks.size())
+                .put("alignment_performed", performAlignment)
+                .put("timestamp", timestamp.toString());
+            
+            return ok("add_timepoint", data);
+            
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("add_timepoint", e);
+        }
+    }
+    
+    /**
+     * Tool: align_plate_images
+     * Align a target image to match a reference plate image
+     */
+    public JSONObject alignPlateImages(JSONObject args) {
+        ToolSchemaValidator.require(args, "reference_image_handle");
+        ToolSchemaValidator.require(args, "target_image_handle");
+        try {
+            String refHandle = args.getString("reference_image_handle");
+            String targetHandle = args.getString("target_image_handle");
+            
+            SessionStore.ImageRecord refImg = store.getImage(refHandle);
+            SessionStore.ImageRecord targetImg = store.getImage(targetHandle);
+            
+            if (refImg == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Reference image not found", "reference_image_handle");
+            }
+            if (targetImg == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Target image not found", "target_image_handle");
+            }
+            
+            // Configure alignment options
+            PlateAlignment.AlignmentOptions options = new PlateAlignment.AlignmentOptions();
+            options.method = args.optString("alignment_method", "feature_matching");
+            options.tolerancePx = args.optDouble("tolerance_px", 5.0);
+            options.allowRotation = args.optBoolean("allow_rotation", true);
+            options.allowSkewing = args.optBoolean("allow_skewing", true);
+            
+            // Perform alignment
+            PlateAlignment.AlignmentResult result = 
+                PlateAlignment.alignPlates(refImg.image, targetImg.image, options);
+            
+            if (result.confidence < 0.5) {
+                return fail("alignment_failed", "Could not reliably align images", "alignment_confidence");
+            }
+            
+            // Apply alignment transformation
+            ImagePlus alignedImage = PlateAlignment.applyAlignment(targetImg.image, result.transform);
+            String alignedHandle = store.putImage(alignedImage);
+            
+            JSONObject data = new JSONObject()
+                .put("aligned_image_handle", alignedHandle)
+                .put("reference_image_handle", refHandle)
+                .put("target_image_handle", targetHandle)
+                .put("alignment_confidence", result.confidence)
+                .put("alignment_method", result.method)
+                .put("key_points_found", result.keyPoints.size())
+                .put("metadata", result.metadata)
+                .put("parameters_used", new JSONObject()
+                    .put("method", options.method)
+                    .put("tolerance_px", options.tolerancePx)
+                    .put("allow_rotation", options.allowRotation)
+                    .put("allow_skewing", options.allowSkewing));
+            
+            return ok("align_plate_images", data);
+            
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("align_plate_images", e);
+        }
+    }
+    
+    /**
+     * Tool: analyze_xgal_blueness
+     * Analyze X-gal blueness for colonies in an image
+     */
+    public JSONObject analyzeXgalBlueness(JSONObject args) {
+        ToolSchemaValidator.requireImageHandle(args);
+        try {
+            JSONObject disciplineError = enforceHandleDiscipline(args);
+            if (disciplineError != null) return disciplineError;
+            
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            if (img == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found", "image_handle");
+            }
+            
+            // Configure blueness analysis options
+            XGalBluenessAnalyzer.BluenessOptions options = new XGalBluenessAnalyzer.BluenessOptions();
+            options.useRGBAnalysis = args.optBoolean("use_rgb_analysis", true);
+            options.analysisRadius = args.optInt("analysis_radius", 8);
+            options.normalizeForLighting = args.optBoolean("normalize_lighting", true);
+            
+            // Get colony positions from overlay or detect them
+            Map<String, java.awt.geom.Point2D> colonyPositions = extractColonyPositions(img);
+            
+            if (colonyPositions.isEmpty()) {
+                return fail("no_colonies_found", "No colonies found for blueness analysis", "colony_detection");
+            }
+            
+            // Analyze blueness for each colony
+            Map<String, XGalBluenessAnalyzer.BluenessResult> bluenessResults = 
+                XGalBluenessAnalyzer.analyzeMultipleColonies(img.image, colonyPositions, options);
+            
+            // Convert results to JSON
+            JSONObject coloniesData = new JSONObject();
+            JSONObject summary = new JSONObject();
+            int whiteCount = 0, lightBlueCount = 0, mediumBlueCount = 0, deepBlueCount = 0;
+            
+            for (Map.Entry<String, XGalBluenessAnalyzer.BluenessResult> entry : bluenessResults.entrySet()) {
+                String colonyId = entry.getKey();
+                XGalBluenessAnalyzer.BluenessResult result = entry.getValue();
+                
+                coloniesData.put(colonyId, result.toJSON());
+                
+                // Update classification counts
+                switch (result.classification) {
+                    case "white": whiteCount++; break;
+                    case "light_blue": lightBlueCount++; break;
+                    case "medium_blue": mediumBlueCount++; break;
+                    case "deep_blue": deepBlueCount++; break;
+                }
+            }
+            
+            summary.put("total_colonies", bluenessResults.size())
+                   .put("white_colonies", whiteCount)
+                   .put("light_blue_colonies", lightBlueCount)
+                   .put("medium_blue_colonies", mediumBlueCount)
+                   .put("deep_blue_colonies", deepBlueCount)
+                   .put("transformation_efficiency", 
+                        bluenessResults.size() > 0 ? 
+                        (double)(lightBlueCount + mediumBlueCount + deepBlueCount) / bluenessResults.size() : 0);
+            
+            JSONObject data = new JSONObject()
+                .put("image_handle", imageHandle)
+                .put("colonies", coloniesData)
+                .put("summary", summary)
+                .put("analysis_options", new JSONObject()
+                    .put("use_rgb_analysis", options.useRGBAnalysis)
+                    .put("analysis_radius", options.analysisRadius)
+                    .put("normalize_lighting", options.normalizeForLighting));
+            
+            return ok("analyze_xgal_blueness", data);
+            
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("analyze_xgal_blueness", e);
+        }
+    }
+    
+    /**
+     * Tool: export_timeseries_data
+     * Export time-series colony growth analysis data
+     */
+    public JSONObject exportTimeseriesData(JSONObject args) {
+        ToolSchemaValidator.require(args, "tracking_handle");
+        try {
+            String trackingHandle = args.getString("tracking_handle");
+            SessionStore.AnalysisRecord trackingRecord = store.getAnalysis(trackingHandle);
+            
+            if (trackingRecord == null) {
+                return fail("tracking_not_found", "Time-series tracking not found", "tracking_handle");
+            }
+            
+            TimeSeriesColonyTracker tracker = (TimeSeriesColonyTracker) trackingRecord.data;
+            
+            // Export data
+            JSONObject exportData = tracker.exportData();
+            
+            // Save to file if requested
+            JSONArray formats = args.optJSONArray("export_formats");
+            JSONArray exportedFiles = new JSONArray();
+            
+            if (formats != null) {
+                String baseFilename = args.optString("filename", "timeseries_analysis");
+                Path outputPath = tempDir;
+                
+                for (int i = 0; i < formats.length(); i++) {
+                    String format = formats.getString(i);
+                    
+                    switch (format) {
+                        case "json":
+                            Path jsonPath = outputPath.resolve(baseFilename + ".json");
+                            Files.writeString(jsonPath, exportData.toString(2));
+                            exportedFiles.put(new JSONObject()
+                                .put("format", "json")
+                                .put("path", jsonPath.toString())
+                                .put("description", "Complete time-series analysis data"));
+                            break;
+                            
+                        case "csv":
+                            Path csvPath = outputPath.resolve(baseFilename + ".csv");
+                            exportTimeseriesCSV(csvPath, tracker);
+                            exportedFiles.put(new JSONObject()
+                                .put("format", "csv")
+                                .put("path", csvPath.toString())
+                                .put("description", "Colony growth data in spreadsheet format"));
+                            break;
+                    }
+                }
+            }
+            
+            JSONObject data = new JSONObject()
+                .put("tracking_handle", trackingHandle)
+                .put("export_data", exportData)
+                .put("exported_files", exportedFiles)
+                .put("summary", exportData.getJSONObject("summary"));
+            
+            return ok("export_timeseries_data", data);
+            
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("export_timeseries_data", e);
+        }
+    }
+    
+    // Helper methods for time-series analysis
+    
+    private Map<String, java.awt.geom.Point2D> extractColonyPositions(SessionStore.ImageRecord img) {
+        Map<String, java.awt.geom.Point2D> positions = new java.util.HashMap<>();
+        
+        // Try to extract from existing overlay
+        if (img.currentOverlay != null) {
+            for (int i = 0; i < img.currentOverlay.size(); i++) {
+                Roi roi = img.currentOverlay.get(i);
+                if (roi.getName() != null && roi.getName().contains("Colony")) {
+                    Rectangle bounds = roi.getBounds();
+                    positions.put("colony_" + i, new java.awt.geom.Point2D.Double(
+                        bounds.x + bounds.width/2.0, bounds.y + bounds.height/2.0));
+                }
+            }
+        }
+        
+        // If no colonies in overlay, use simple detection
+        if (positions.isEmpty()) {
+            List<TimeSeriesColonyTracker.Colony> colonies = 
+                TimeSeriesColonyTracker.analyzeColonies(img.image, false, false);
+            for (int i = 0; i < colonies.size(); i++) {
+                TimeSeriesColonyTracker.Colony colony = colonies.get(i);
+                positions.put("detected_" + i, colony.center);
+            }
+        }
+        
+        return positions;
+    }
+    
+    private void exportTimeseriesCSV(Path csvPath, TimeSeriesColonyTracker tracker) throws Exception {
+        StringBuilder csv = new StringBuilder();
+        csv.append("Track_ID,Time_Point,Colony_ID,Center_X,Center_Y,Area_mm2,Diameter_mm,")
+           .append("Circularity,Solidity,Aspect_Ratio,Texture_Variance,Blueness\n");
+        
+        Map<String, TimeSeriesColonyTracker.ColonyTrack> tracks = tracker.getTracks();
+        
+        for (TimeSeriesColonyTracker.ColonyTrack track : tracks.values()) {
+            for (int t = 0; t < track.timePoints.size(); t++) {
+                TimeSeriesColonyTracker.Colony colony = track.timePoints.get(t);
+                csv.append(String.format("%s,%d,%s,%.2f,%.2f,%.4f,%.3f,%.3f,%.3f,%.3f,%.2f,%.3f\n",
+                    track.trackId, t, colony.id, 
+                    colony.center.getX(), colony.center.getY(),
+                    colony.area, colony.diameter,
+                    colony.morphology.circularity, colony.morphology.solidity, 
+                    colony.morphology.aspectRatio, colony.morphology.textureVariance,
+                    colony.blueness));
+            }
+        }
+        
+        Files.writeString(csvPath, csv.toString());
     }
     
 }

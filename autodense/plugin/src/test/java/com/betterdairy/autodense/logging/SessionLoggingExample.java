@@ -7,8 +7,13 @@ import ij.ImagePlus;
 import org.json.JSONObject;
 
 /**
+ * TEST/EXAMPLE ONLY - DO NOT USE IN PRODUCTION
+ * 
  * Example demonstrating session logging functionality for AutoDense.
  * This shows how all conversations, tool calls, and session events are captured.
+ * 
+ * This class is quarantined in test scope to prevent accidental production use.
+ * Use SessionLogger and WorkflowRecorder directly in production code.
  */
 public class SessionLoggingExample {
     
