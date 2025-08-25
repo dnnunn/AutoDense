@@ -4,7 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AutoDense is a gel densitometry application built as a standalone Mac-native Fiji/ImageJ2 app with AI-powered control via Google Gemini. The system uses a **handle-based architecture** where Gemini acts as the planner and ImageJ/Fiji executes the actual image analysis operations.
+AutoDense is a comprehensive laboratory image analysis application built as a standalone Mac-native Fiji/ImageJ2 app with AI-powered control via Google Gemini. The system uses a **handle-based architecture** where Gemini acts as the planner and ImageJ/Fiji executes the actual image analysis operations.
+
+**Key Features:**
+- 🧬 **Gel Densitometry**: Protein quantification with standards, %CV calculation, LOQ/LLOQ determination
+- 🦠 **Colony Analysis**: Counting, classification, time-series growth tracking
+- 🔬 **Advanced Statistics**: MW-aware lane comparison, Holm-Bonferroni multiple testing correction
+- 🧪 **PCR Analysis**: Semi-quantitative PCR with housekeeping normalization and ΔΔI calculation
+- 🎵 **Voice Input**: Hold-to-record voice commands for hands-free operation
+- 📄 **Document Upload**: Integration with CSV/Excel/TXT files containing experimental metadata
+- 🎯 **BandAssist**: User-assisted band identification across gel lanes
 
 ## Architecture (NEW - Handle-Based System)
 
@@ -30,11 +39,19 @@ AutoDense is a gel densitometry application built as a standalone Mac-native Fij
      - `detect_bands`: Find bands within lanes
      - `adjust_lanes`: Fine-tune lane positions
      - `render_overlay_png`: Export view for user
-     - `quantify_bands`: Measure band intensities
-     - `enable_band_assist`: **NEW** Enable user-assisted band identification
-     - `disable_band_assist`: **NEW** Disable user-assisted mode
-     - `configure_band_assist`: **NEW** Configure BandAssist parameters
-     - `export_results`: Save CSV/JSON/PNG
+     - `quantify_bands`: Measure band intensities with PCR normalization support
+     - `calibrate_standard_curve`: **NEW** Protein quantification with %CV and LOQ/LLOQ
+     - `compare_lanes`: **NEW** MW-aware statistical comparison with multiple testing
+     - `export_volcano_plot`: **NEW** Generate volcano plot PNG for lane comparisons
+     - `enable_band_assist`: Enable user-assisted band identification
+     - `disable_band_assist`: Disable user-assisted mode
+     - `configure_band_assist`: Configure BandAssist parameters
+     - `start_timeseries_analysis`: **NEW** Initialize colony growth tracking
+     - `add_timepoint`: **NEW** Add time point to growth analysis
+     - `align_plate_images`: **NEW** Align plates for time-series
+     - `analyze_xgal_blueness`: **NEW** X-gal colony classification
+     - `export_timeseries_data`: **NEW** Export growth data
+     - `export_results`: Save CSV/JSON/PNG with enhanced metadata
 
 3. **GeminiOrchestrator** (`/plugin/src/main/java/com/betterdairy/autodense/orchestrator/GeminiOrchestrator.java`)
    - Coordinates Gemini planning with ImageJ execution
@@ -89,14 +106,26 @@ mvn -q -f autodense/plugin/pom.xml exec:java \
 
 ## Core Analysis Components
 
+### Gel Analysis
 - **LaneDetector**: Finds gel lanes via vertical projection analysis
 - **BandDetector**: Identifies protein bands within lanes using 1D profile analysis  
 - **FijiBandDetector**: Enhanced band detection with Fiji algorithms
 - **BandQuantification**: Quantifies band intensities with background subtraction
-- **Calibrator**: Fits molecular weight calibration curves from ladder lanes
-- **Normalizer**: Applies various normalization strategies
+- **Calibrator**: Fits molecular weight calibration curves + **NEW StandardCurveFitter**
+- **LaneComparator**: **NEW** MW-aware statistical comparison with multiple testing correction
+- **Normalizer**: Applies various normalization strategies including **NEW PCR housekeeping**
 - **ImagePreprocessor**: Handles saturation, contrast, filtering
 - **WorkflowManager**: Manages analysis pipelines
+
+### Colony Analysis
+- **TimeSeriesColonyTracker**: **NEW** Individual colony tracking across time points
+- **PlateAlignment**: **NEW** Feature-based and orientation mark image registration
+- **XGalBluenessAnalyzer**: **NEW** X-gal colony classification and blueness quantification
+
+### User Interface
+- **GelUI**: Enhanced with voice input, document upload, and console management
+- **AssistBandTool**: **NEW** User-assisted band identification system
+- **OverlayRenderer**: Enhanced with volcano plot visualization
 
 ## Migration from Old Architecture
 
@@ -204,7 +233,40 @@ Enable debug output:
 - **API Latency**: Gemini responses typically 2-5 seconds
 - **Analysis Speed**: ImageJ operations are CPU-intensive, not GPU accelerated
 
-## Session Logging System (NEW)
+## Recent Major Enhancements
+
+### Protein Quantification with Standards (NEW)
+**StandardCurveFitter** provides comprehensive protein quantification:
+- Coefficient of Variation (%CV) calculation for quality assessment
+- LOQ (Limit of Quantification) and LLOQ determination at 20%/30% CV thresholds
+- Residual Standard Error (RSE) for statistical validation
+- Enhanced CSV export with quality flags and LOQ/LLOQ indicators
+
+### MW-Aware Lane Comparison (NEW)
+**LaneComparator** enables rigorous statistical analysis:
+- Peak grouping by molecular weight bins to prevent spurious associations
+- Holm-Bonferroni multiple testing correction (default, less conservative)
+- Volcano plot visualization (log₂ fold change vs -log₁₀ p-value)
+- Publication-quality PNG export with color-coded significance
+- Comprehensive statistical reporting with FDR control
+
+### Semi-Quantitative PCR Analysis (NEW)
+**PCR Housekeeping Normalization** for relative quantification:
+- `housekeeping_lane_idx` and `housekeeping_band_idx` parameters
+- ΔΔI (delta-delta intensity) calculation: log₂(sample/housekeeping)
+- Relative copy number estimation using 2^(ΔΔI)
+- Quality flagging: VERY_LOW, LOW, NORMAL, HIGH, VERY_HIGH
+- Enhanced CSV export with both raw and normalized values
+
+### Frontend Enhancements (NEW)
+**Modern user interface with AI integration:**
+- 🎵 **Voice Input**: Hold-to-record voice commands with speech-to-text framework
+- 📄 **Document Upload**: CSV/Excel/TXT integration for experimental metadata
+- 🖥️ **Console Management**: Hidden by default with menu toggle
+- 📋 **Enhanced Menus**: Comprehensive help system for new features
+- 🤖 **Context Integration**: Uploaded documents enhance Gemini AI understanding
+
+## Session Logging System
 
 ### Overview
 AutoDense now includes comprehensive session logging for troubleshooting, training, and quality assurance:
@@ -351,6 +413,252 @@ Display: Green=high confidence, Orange=medium, Red=low confidence
 - **Red bands**: Low confidence (<40%) - weak signals, may need verification
 - **Magenta outline**: Seed band (user-clicked, 100% confidence)
 
+## Time-Series Colony Growth Analysis (NEW)
+
+### Overview
+AutoDense now supports comprehensive time-series analysis for colony growth studies, including automatic plate alignment, morphology tracking, and X-gal blueness quantification over multiple time points.
+
+### Core Components
+
+**PlateAlignment.java:**
+- Feature-based and orientation mark-based image registration
+- Handles rotation, skewing, and translation correction
+- Supports both automated feature detection and manual orientation marks
+
+**TimeSeriesColonyTracker.java:**
+- Individual colony tracking across multiple time points
+- Growth rate calculations and morphology change analysis
+- Colony matching algorithms with configurable thresholds
+
+**XGalBluenessAnalyzer.java:**
+- Specialized X-gal blueness quantification using RGB/HSV analysis
+- Multi-colony batch analysis with confidence scoring
+- Time-series blueness comparison and trend analysis
+
+### New Tool Functions
+
+**start_timeseries_analysis:**
+- Initialize colony tracking for growth analysis
+- Configure tracking options and morphology measurements
+- Set up reference image as first time point
+
+**add_timepoint:**
+- Add new time point with automatic plate alignment
+- Track colony growth and morphology changes
+- Update growth rate calculations
+
+**align_plate_images:**
+- Standalone plate alignment tool
+- Supports feature matching or orientation mark methods
+- Returns alignment confidence and transformation matrix
+
+**analyze_xgal_blueness:**
+- Quantify X-gal blueness for colonies
+- Classify colonies as white/light_blue/medium_blue/deep_blue
+- Calculate transformation efficiency
+
+**export_timeseries_data:**
+- Export growth data as JSON or CSV
+- Include growth rates, morphology changes, blueness trends
+- Generate comprehensive statistical summaries
+
+### Workflow Integration
+
+**Colony Growth Analysis Workflow:**
+- Time-series analysis with plate matching and morphology tracking
+- Supports up to 20 time points with automatic colony matching
+- X-gal blueness analysis as user-configurable option
+- Growth rate calculations and statistical analysis
+- Comprehensive data export capabilities
+
+### Usage Examples
+
+**Natural Language:**
+- "Track colony growth over multiple time points"
+- "Align plates using orientation marks"
+- "Measure X-gal blueness development over time"
+- "Calculate growth rates for each colony"
+- "Correct for plate rotation and skewing"
+- "Export time-series growth data"
+
+**Tool Call Sequence:**
+```json
+// Initialize tracking
+{"tool": "start_timeseries_analysis", "reference_image_handle": "img_t0", "measure_morphology": true, "xgal_analysis": true}
+
+// Add time points
+{"tool": "add_timepoint", "tracking_handle": "tracking_123", "image_handle": "img_t1", "perform_alignment": true}
+{"tool": "add_timepoint", "tracking_handle": "tracking_123", "image_handle": "img_t2", "perform_alignment": true}
+
+// Export results
+{"tool": "export_timeseries_data", "tracking_handle": "tracking_123", "export_formats": ["csv", "json"]}
+```
+
+### Configuration Parameters
+
+**Tracking Options:**
+- `max_matching_distance`: Maximum pixel distance for colony matching (default: 10.0)
+- `size_change_threshold`: Maximum diameter ratio between time points (default: 2.0)
+- `morphology_threshold`: Maximum morphology change tolerance (default: 0.3)
+- `colony_matching_threshold`: Confidence threshold for colony matches (default: 0.8)
+
+**Alignment Options:**
+- `alignment_method`: "feature_matching" or "orientation_marks"
+- `tolerance_px`: Alignment tolerance in pixels (default: 5.0)
+- `allow_rotation`: Enable rotation correction (default: true)
+- `allow_skewing`: Enable skew correction (default: true)
+
+**X-gal Analysis Options:**
+- `analysis_radius`: Radius for colony color analysis (default: 8)
+- `use_rgb_analysis`: Use RGB color space analysis (default: true)
+- `normalize_lighting`: Correct for lighting variations (default: true)
+
+### Data Export
+
+**CSV Format:**
+```csv
+Track_ID,Time_Point,Colony_ID,Center_X,Center_Y,Area_mm2,Diameter_mm,Circularity,Solidity,Aspect_Ratio,Texture_Variance,Blueness
+track_1,0,colony_50_60,50.0,60.0,2.341,1.72,0.89,0.94,1.12,15.3,0.23
+track_1,1,colony_52_61,52.0,61.0,3.127,1.99,0.87,0.92,1.15,18.7,0.35
+```
+
+**JSON Format:**
+```json
+{
+  "tracks": [
+    {
+      "track_id": "track_1",
+      "statistics": {
+        "total_area_growth_mm2": 0.786,
+        "total_diameter_growth_mm": 0.27,
+        "max_blueness": 0.35,
+        "time_points_count": 2
+      },
+      "time_points": [...]
+    }
+  ],
+  "summary": {
+    "total_tracks": 45,
+    "growing_tracks": 38,
+    "avg_final_area_mm2": 2.87
+  }
+}
+```
+
+### Performance Considerations
+
+- **Memory Usage**: Stores full ImagePlus objects for each time point
+- **Processing Time**: Alignment and tracking scale with colony count
+- **Storage**: JSON exports can be large for long time series
+- **Accuracy**: Alignment quality affects tracking accuracy
+
+### Testing
+
+```bash
+# Run time-series analysis test
+mvn -f autodense/plugin/pom.xml exec:java \
+  -Dexec.mainClass=com.betterdairy.autodense.analysis.TimeSeriesTest
+```
+
+## 🔴 ARCHITECTURAL ENFORCEMENT DOCUMENT - CRITICAL REMINDERS 🔴
+
+### MANDATORY FIRST ACTION
+🚨 **ALWAYS READ CLAUDE.md BEFORE STARTING ANY WORK** 🚨
+- This is not optional
+- This is not a suggestion  
+- This is a REQUIREMENT that must be followed EVERY time
+- Failure to read CLAUDE.md first is unacceptable
+
+### CORE ARCHITECTURE - NEVER FORGET
+The AutoDense system uses a **HANDLE-BASED ARCHITECTURE** where:
+
+#### Gemini's ONLY Role = Tool Orchestrator/Planner
+- ✅ **Gemini ONLY**: Emits structured tool calls in JSON format
+- ✅ **Gemini ONLY**: Plans multi-step workflows
+- ✅ **Gemini ONLY**: Parses user commands into tool parameters
+- ❌ **Gemini NEVER**: Processes pixels directly
+- ❌ **Gemini NEVER**: Performs image analysis itself  
+- ❌ **Gemini NEVER**: Acts as a vision AI describing images
+- ❌ **Gemini NEVER**: Bypasses the tool system
+
+#### ImageJ's ONLY Role = Executor
+- ✅ **ImageJ ONLY**: Performs all actual image operations
+- ✅ **ImageJ ONLY**: Maintains all image state
+- ✅ **ImageJ ONLY**: Executes tool calls from Gemini
+- ❌ **ImageJ NEVER**: Makes planning decisions
+
+#### Handle-Based System = References Only
+- ✅ **Handles**: Images referenced as `img_abc123`, overlays as `ov_def456`
+- ✅ **SessionStore**: Maintains all state using handles
+- ✅ **No Pixels**: Never pass raw image data to LLM
+- ❌ **No Direct Access**: Tools never access images without handles
+
+### PROPER WORKFLOW - ALWAYS FOLLOW
+```
+User Command → GeminiOrchestrator → Gemini API → Tool JSON → ImageJ Execution → Handle Results
+```
+
+### WRONG ARCHITECTURES - NEVER IMPLEMENT
+- ❌ Direct Gemini vision analysis instead of tool orchestration
+- ❌ GelUI calling GeminiApiClient directly (bypasses orchestrator)
+- ❌ Passing pixels to Gemini for image processing
+- ❌ Local LLM integration (removed from architecture)
+- ❌ Pattern matching instead of structured tool calls
+
+### KEY FILES TO UNDERSTAND
+- **GeminiOrchestrator.java**: Central coordinator (lines 21-767)
+- **CanonicalTools.java**: Streamlined tool surface (8 core actions)
+- **SessionStore.java**: Handle-based state management
+- **GelAnalysisTools.java**: Detailed ImageJ tool implementations
+
+### IMPLEMENTATION RULES
+1. **GelUI must use GeminiOrchestrator** - Never call GeminiApiClient directly
+2. **All image references are handles** - No pixel data in API calls
+3. **Sequential tool execution** - One tool call at a time
+4. **SessionStore maintains state** - Not in LLM memory
+5. **Canonical actions preferred** - Use 8 core actions when possible
+
+### ERROR PATTERNS TO AVOID
+- Using deprecated `analyzeGel()` method instead of `processCommand()`
+- Creating vision-based Gemini responses instead of tool orchestration
+- Bypassing handle system with direct image manipulation
+- Forgetting to read this document before starting work
+
+### SUCCESS CRITERIA
+- ✅ User commands result in structured tool calls
+- ✅ Gemini acts purely as planner, never as vision processor
+- ✅ All image operations happen in ImageJ with handles
+- ✅ SessionStore maintains complete analysis state
+- ✅ Workflow: User → Orchestrator → Tool Calls → ImageJ → Results
+
+**🔥 THIS ARCHITECTURE IS NON-NEGOTIABLE AND MUST BE FOLLOWED EXACTLY 🔥**
+
+### 🚨 **CRITICAL: SYSTEM PROMPT ENFORCEMENT** 🚨
+The GeminiOrchestrator system prompt MUST enforce the handle-based architecture:
+
+**❌ NEVER allow Gemini to:**
+- Analyze images directly ("I see 10 lanes")
+- Count lanes, bands, or colonies itself  
+- Provide vision descriptions ("The gel appears to...")
+- Act as an image analysis AI
+
+**✅ ALWAYS force Gemini to:**
+- Emit structured JSON tool calls only
+- Extract parameters from user commands
+- Let ImageJ tools do ALL image processing
+- Act as a pure tool orchestrator/planner
+
+**System Prompt Must Include:**
+```
+🔥 CRITICAL: You are a TOOL ORCHESTRATOR, NOT an image analysis AI.
+❌ NEVER analyze images directly or describe what you see
+✅ ALWAYS respond with structured JSON tool calls
+Your job: translate user commands → tool calls
+ImageJ's job: process pixels and return measurements
+```
+
+**If Gemini starts providing vision analysis instead of tool orchestration, the system prompt has been corrupted and must be fixed immediately.**
+
 ## Security Notes
 
 - **API Keys**: Never commit keys to repository, use environment variables
@@ -368,3 +676,4 @@ Display: Green=high confidence, Orange=medium, Red=low confidence
 - Batch processing pipelines
 - Local caching of Gemini responses
 - GPU-accelerated analysis kernels
+- Always open lint and fix linter errors as they arise. Do not let them accumulate

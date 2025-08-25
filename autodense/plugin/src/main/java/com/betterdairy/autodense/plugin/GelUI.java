@@ -6,7 +6,8 @@ import ij.ImagePlus;
 import ij.WindowManager;
 import ij.gui.Overlay;
 import ij.gui.Roi;
-// Removed unused JSON imports - now handled by new architecture
+import org.json.JSONObject;
+import org.json.JSONArray;
 
 import javax.swing.*;
 import javax.swing.event.DocumentListener;
@@ -15,6 +16,9 @@ import java.awt.*;
 import java.awt.dnd.*;
 import java.awt.datatransfer.*;
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -23,6 +27,9 @@ import java.time.Duration;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
+import javax.sound.sampled.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.betterdairy.autodense.analysis.LaneDetector;
 import com.betterdairy.autodense.analysis.BandDetector;
@@ -30,6 +37,7 @@ import com.betterdairy.autodense.model.Models.Lane;
 import com.betterdairy.autodense.model.Models.Band;
 import com.betterdairy.autodense.workflow.WorkflowPreset;
 import com.betterdairy.autodense.workflow.WorkflowPresetManager;
+import com.betterdairy.autodense.orchestrator.GeminiOrchestrator;
 
 /** AI-Powered Gel Analysis Interface with Natural Language Control */
 public class GelUI {
@@ -42,7 +50,7 @@ public class GelUI {
     private JLabel statusLabel;
     private HttpClient httpClient;
     private ImagePlus currentImage;
-    private GeminiApiClient geminiClient;
+    private GeminiOrchestrator orchestrator;
     // Removed: lastGeminiAnalysis (no longer used after UI cleanup)
     // Conversation history for context
     private List<String> conversationHistory = new ArrayList<>();
@@ -51,20 +59,28 @@ public class GelUI {
     // Workflow preset management
     private WorkflowPresetManager workflowManager;
     
+    // Voice input components
+    private JButton voiceButton;
+    private AtomicBoolean isRecording = new AtomicBoolean(false);
+    private AudioFormat audioFormat;
+    private TargetDataLine targetDataLine;
+    
+    // Document upload components  
+    private List<File> uploadedDocuments = new ArrayList<>();
+    
     public GelUI(Context context) {
         // Context not used in new architecture
         this.httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
         
-        // Initialize Gemini API client 
-        // API key now retrieved from environment variable or config file
+        // Initialize GeminiOrchestrator (proper architecture)
         String geminiApiKey = System.getProperty("GEMINI_API_KEY", System.getenv("GEMINI_API_KEY"));
         if (geminiApiKey != null && !geminiApiKey.isEmpty()) {
-            this.geminiClient = new GeminiApiClient(geminiApiKey);
-            System.out.println("✓ Gemini API client initialized");
+            this.orchestrator = new GeminiOrchestrator(geminiApiKey);
+            System.out.println("✓ GeminiOrchestrator initialized with handle-based architecture");
         } else {
-            System.out.println("⚠ GEMINI_API_KEY not found - using fallback NLP");
+            System.out.println("⚠ GEMINI_API_KEY not found - AI features not available");
         }
         
         // Initialize workflow preset manager
@@ -101,6 +117,10 @@ public class GelUI {
         System.out.println("DEBUG: Creating main window");
         frame = new JFrame("🤖 AutoDense - AI Gel Analysis");
         frame.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        
+        // Create menu bar
+        JMenuBar menuBar = createMenuBar();
+        frame.setJMenuBar(menuBar);
         frame.setSize(new Dimension(900, 700));
         System.out.println("DEBUG: Frame created, setting up layout");
         frame.setLocationByPlatform(true);
@@ -187,6 +207,11 @@ public class GelUI {
         clearChatButton.addActionListener(e -> clearConversation());
         actionsPanel.add(clearChatButton);
         
+        JButton uploadButton = new JButton("📄 Upload Docs");
+        uploadButton.setToolTipText("Upload CSV/Excel/TXT files with lane information");
+        uploadButton.addActionListener(e -> showDocumentUploadDialog());
+        actionsPanel.add(uploadButton);
+        
         JButton helpButton = new JButton("❓ Help");
         helpButton.addActionListener(e -> showHelp());
         actionsPanel.add(helpButton);
@@ -241,6 +266,23 @@ public class GelUI {
         inputScroll.setPreferredSize(new Dimension(600, 50));
         inputScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         
+        // Voice input button
+        voiceButton = new JButton("🎤");
+        voiceButton.setPreferredSize(new Dimension(50, 50));
+        voiceButton.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        voiceButton.setToolTipText("Hold to record voice input (experimental)");
+        voiceButton.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mousePressed(java.awt.event.MouseEvent e) {
+                startVoiceRecording();
+            }
+            
+            @Override
+            public void mouseReleased(java.awt.event.MouseEvent e) {
+                stopVoiceRecording();
+            }
+        });
+        
         // Send button - now just sends the text from the area
         sendButton = new JButton("Send 📤");
         sendButton.setPreferredSize(new Dimension(100, 50));
@@ -282,8 +324,13 @@ public class GelUI {
             }
         });
         
+        // Button panel for voice and send
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
+        buttonPanel.add(voiceButton);
+        buttonPanel.add(sendButton);
+        
         panel.add(inputScroll, BorderLayout.CENTER);
-        panel.add(sendButton, BorderLayout.EAST);
+        panel.add(buttonPanel, BorderLayout.EAST);
         
         // Request focus after UI is built
         SwingUtilities.invokeLater(() -> {
@@ -342,78 +389,177 @@ public class GelUI {
     }
     
     private String processCommand(String command) throws Exception {
-        // Add to conversation history
-        conversationHistory.add("user: " + command);
+        System.out.println("DEBUG: processCommand() called with: " + command);
+        System.out.flush();
+        
+        try {
+            // Add to conversation history
+            conversationHistory.add("user: " + command);
+            System.out.println("DEBUG: Added to history, size now: " + conversationHistory.size());
+            System.out.flush();
+        } catch (Exception e) {
+            System.out.println("DEBUG: Exception adding to history: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
         if (conversationHistory.size() > MAX_HISTORY * 2) {
             conversationHistory = conversationHistory.subList(
                 conversationHistory.size() - MAX_HISTORY * 2, 
                 conversationHistory.size()
             );
         }
+        System.out.println("DEBUG: History processing complete");
+        System.out.flush();
         
         // Build messages with history for context
+        System.out.println("DEBUG: Building messages JSON");
+        System.out.flush();
         StringBuilder messagesJson = new StringBuilder();
         messagesJson.append("[\n");
         messagesJson.append("  {\"role\": \"system\", \"content\": \"You are AutoDense AI for laboratory image analysis. You analyze: 1) Gel electrophoresis (SDS-PAGE, DNA gels) 2) Agar plates with microbial colonies (yeast, bacteria). When users ask you to perform analysis, you should EXECUTE the analysis immediately and show results, not just describe what you would do. Parse user requests for: Gels - Number of lanes, lane types (ladder vs sample), analysis type (detect, quantify, etc). Plates - Colony counting, color analysis, size measurements. Always execute the requested action and provide results.\"},\n");
+        System.out.println("DEBUG: Added system message");
+        System.out.flush();
         
         // Add conversation history
+        System.out.println("DEBUG: Processing conversation history, size: " + conversationHistory.size());
+        System.out.flush();
         for (int i = 0; i < conversationHistory.size() - 1; i++) {
+            System.out.println("DEBUG: Processing history item " + i + ": " + conversationHistory.get(i));
+            System.out.flush();
             String msg = conversationHistory.get(i);
             String role = msg.startsWith("user:") ? "user" : "assistant";
             String content = msg.substring(msg.indexOf(":") + 1).trim();
             messagesJson.append(String.format("  {\"role\": \"%s\", \"content\": \"%s\"},\n", 
                 role, content.replace("\"", "\\\"").replace("\n", "\\n")));
         }
+        System.out.println("DEBUG: History loop complete");
+        System.out.flush();
         
         // Add current message
+        System.out.println("DEBUG: Adding current message: " + command);
+        System.out.flush();
         messagesJson.append(String.format("  {\"role\": \"user\", \"content\": \"%s\"}\n", 
             command.replace("\"", "\\\"").replace("\n", "\\n")));
         messagesJson.append("]");
+        System.out.println("DEBUG: Messages JSON built successfully");
+        System.out.flush();
         
         // Create request to AI server
+        System.out.println("DEBUG: Creating AI server request body");
+        System.out.flush();
         String requestBody = String.format("""
             {
               "messages": %s,
               "temperature": 0.1,
               "max_tokens": 512
             }""", messagesJson.toString());
+        System.out.println("DEBUG: Request body created, length: " + requestBody.length());
+        System.out.flush();
         
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create("http://127.0.0.1:8080/v1/chat/completions"))
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-            .timeout(Duration.ofSeconds(30))
-            .build();
+        // Use GeminiOrchestrator for proper handle-based architecture
+        System.out.println("DEBUG: Using GeminiOrchestrator for command processing");
+        System.out.flush();
         
-        HttpResponse<String> response = httpClient.send(request, 
-            HttpResponse.BodyHandlers.ofString());
-        
-        if (response.statusCode() != 200) {
-            throw new RuntimeException("AI Server error: " + response.statusCode());
+        if (orchestrator == null) {
+            return "❌ GeminiOrchestrator not available. Please check API key configuration.";
         }
         
-        // Parse response (simplified - in production would use JSON library)
-        String responseBody = response.body();
-        int contentStart = responseBody.indexOf("\"content\":\"") + 11;
-        int contentEnd = responseBody.indexOf("\"", contentStart);
+        // Get current image (can be null for text-only commands)
+        ImagePlus currentImg = getCurrentImage();
+        System.out.println("DEBUG: Current image: " + (currentImg != null ? currentImg.getTitle() : "none"));
+        System.out.flush();
         
-        if (contentStart > 10 && contentEnd > contentStart) {
-            String aiResponse = responseBody.substring(contentStart, contentEnd)
-                .replace("\\n", "\n")
-                .replace("\\\"", "\"");
+        try {
+            // Use orchestrator's processCommand method (proper architecture)
+            var futureResult = orchestrator.processCommand(command, currentImg);
+            var orchestrationResult = futureResult.get(); // Block for UI thread
             
-            // Add AI response to history
-            conversationHistory.add("assistant: " + aiResponse);
+            System.out.println("DEBUG: Got orchestration result: " + orchestrationResult);
+            if (orchestrationResult.toolResult != null) {
+                System.out.println("DEBUG: Tool result JSON: " + orchestrationResult.toolResult.toString(2));
+            }
+            System.out.flush();
             
-            // Execute actual analysis based on user command
-            String executionResult = executeAnalysisFromUserCommand(command, aiResponse);
-            if (executionResult != null) {
-                return aiResponse + "\n\n" + executionResult;
+            if (orchestrationResult.success) {
+                // ARCHITECTURAL FIX: Show tool results as primary response, not Gemini's orchestration plan
+                String fullResponse = "";
+                
+                if (orchestrationResult.toolResult != null && !orchestrationResult.toolResult.optBoolean("error", false)) {
+                    // Primary response: actual tool execution results
+                    String message = orchestrationResult.toolResult.optString("message", "");
+                    if (!message.isEmpty()) {
+                        fullResponse = "✅ " + message;
+                    } else {
+                        // Extract meaningful results from tool response
+                        if (orchestrationResult.toolResult.has("lanes_found")) {
+                            int lanes = orchestrationResult.toolResult.optInt("lanes_found", 0);
+                            fullResponse = "✅ Detected " + lanes + " lanes successfully";
+                        } else if (orchestrationResult.toolResult.has("bands_total")) {
+                            int bands = orchestrationResult.toolResult.optInt("bands_total", 0);
+                            fullResponse = "✅ Detected " + bands + " protein bands";
+                        } else if (orchestrationResult.toolResult.has("total_colonies")) {
+                            int colonies = orchestrationResult.toolResult.optInt("total_colonies", 0);
+                            fullResponse = "✅ Counted " + colonies + " colonies";
+                        } else if (orchestrationResult.toolResult.has("success")) {
+                            String action = orchestrationResult.geminiResponse.action;
+                            fullResponse = "✅ " + action.replace("_", " ") + " completed successfully";
+                        } else {
+                            fullResponse = "✅ Tool executed successfully";
+                        }
+                    }
+                    
+                    // Add technical details if available
+                    StringBuilder details = new StringBuilder();
+                    if (orchestrationResult.toolResult.has("lanes_found")) {
+                        details.append("\n📏 Lanes: ").append(orchestrationResult.toolResult.optInt("lanes_found"));
+                    }
+                    if (orchestrationResult.toolResult.has("bands_total")) {
+                        details.append("\n🧬 Bands: ").append(orchestrationResult.toolResult.optInt("bands_total"));
+                    }
+                    if (orchestrationResult.toolResult.has("visual_feedback_generated") && 
+                        orchestrationResult.toolResult.optBoolean("visual_feedback_generated", false)) {
+                        details.append("\n🖼️ Visual feedback PNG generated");
+                        // Show PNG file paths if available
+                        if (orchestrationResult.toolResult.has("visual_feedback_files")) {
+                            org.json.JSONArray files = orchestrationResult.toolResult.optJSONArray("visual_feedback_files");
+                            if (files != null && files.length() > 0) {
+                                details.append("\n📁 PNG file: ").append(files.optString(0));
+                            }
+                        }
+                    }
+                    // Also check for direct PNG generation (from renderOverlayPng)
+                    if (orchestrationResult.toolResult.has("png_path")) {
+                        details.append("\n🖼️ PNG saved to: ").append(orchestrationResult.toolResult.optString("png_path"));
+                    }
+                    if (orchestrationResult.toolResult.has("exported_files")) {
+                        details.append("\n📁 Files exported");
+                    }
+                    if (details.length() > 0) {
+                        fullResponse += details.toString();
+                    }
+                } else {
+                    // Fallback to Gemini's orchestration message only if no tool results
+                    fullResponse = orchestrationResult.geminiResponse.analysis;
+                }
+                
+                // Add AI response to history
+                conversationHistory.add("assistant: " + fullResponse);
+                
+                return fullResponse;
+            } else {
+                String errorMessage = "❌ Processing failed: " + orchestrationResult.errorMessage;
+                conversationHistory.add("assistant: " + errorMessage);
+                return errorMessage;
             }
             
-            return aiResponse;
-        } else {
-            throw new RuntimeException("Could not parse AI response");
+        } catch (Exception e) {
+            System.out.println("DEBUG: GeminiOrchestrator processing failed: " + e.getMessage());
+            System.out.flush();
+            e.printStackTrace();
+            
+            String errorMessage = "❌ Command processing failed: " + e.getMessage();
+            conversationHistory.add("assistant: " + errorMessage);
+            return errorMessage;
         }
     }
     
@@ -446,13 +592,13 @@ public class GelUI {
             protected Boolean doInBackground() throws Exception {
                 try {
                     // Check if Gemini API key is available
-                    String apiKey = System.getProperty("GEMINI_API_KEY");
+                    String apiKey = System.getProperty("GEMINI_API_KEY", System.getenv("GEMINI_API_KEY"));
                     if (apiKey == null || apiKey.trim().isEmpty()) {
                         return false;
                     }
                     
-                    // Test Gemini API connectivity 
-                    return geminiClient != null;
+                    // Test GeminiOrchestrator availability
+                    return orchestrator != null;
                 } catch (Exception e) {
                     return false;
                 }
@@ -468,8 +614,8 @@ public class GelUI {
                     } else {
                         statusLabel.setText("🔴 Gemini API not available - Check configuration");
                         statusLabel.setForeground(Color.RED);
-                        appendToChatArea("⚠️  Gemini API not available. Please check:\n");
-                        appendToChatArea("   • API key is set in api-config.properties\n");
+                        appendToChatArea("⚠️  GeminiOrchestrator not available. Please check:\n");
+                        appendToChatArea("   • GEMINI_API_KEY environment variable is set\n");
                         appendToChatArea("   • Internet connection is working\n\n");
                     }
                 } catch (Exception e) {
@@ -1412,46 +1558,37 @@ public class GelUI {
         System.out.println("DEBUG: Current image found: " + currentImg.getTitle() + 
                           " (Width: " + currentImg.getWidth() + ", Height: " + currentImg.getHeight() + ")");
         
-        // Try Gemini API first (if available), then fall back to local NLP
-        if (geminiClient != null) {
+        // Use GeminiOrchestrator for proper handle-based processing
+        System.out.println("DEBUG: orchestrator != null: " + (orchestrator != null));
+        System.out.flush();
+        if (orchestrator != null) {
             try {
-                System.out.println("DEBUG: Using Gemini API for analysis");
-                GeminiApiClient.GelAnalysisResponse geminiResponse = geminiClient.analyzeGel(userCommand, currentImg);
-                System.out.println("DEBUG: Gemini response: " + geminiResponse);
+                System.out.println("DEBUG: Using GeminiOrchestrator for analysis");
+                System.out.flush();
+                var futureResult = orchestrator.processCommand(userCommand, currentImg);
+                var result = futureResult.get();
+                System.out.println("DEBUG: Orchestrator result: " + result);
+                System.out.flush();
                 
-                return executeActionFromGeminiResponse(geminiResponse, currentImg);
+                if (result.success) {
+                    return result.geminiResponse.analysis + "\n\n✅ " + result.toolResult.optString("message", "Processing completed");
+                } else {
+                    return "❌ Processing failed: " + result.errorMessage;
+                }
                 
             } catch (Exception e) {
-                System.out.println("DEBUG: Gemini API failed, falling back to local NLP: " + e.getMessage());
+                System.out.println("DEBUG: GeminiOrchestrator failed: " + e.getMessage());
+                System.out.flush();
+                return "❌ Command processing failed: " + e.getMessage();
             }
         }
         
-        // No local NLP processor - Gemini only
-        System.out.println("DEBUG: No local NLP available");
-        return null;
+        // No orchestrator available
+        System.out.println("DEBUG: No GeminiOrchestrator available");
+        return "❌ GeminiOrchestrator not initialized - check API key configuration";
     }
     
-    private String executeActionFromGeminiResponse(GeminiApiClient.GelAnalysisResponse response, ImagePlus imp) {
-        System.out.println("DEBUG: Executing Gemini-guided action: " + response.action);
-        
-        switch (response.action) {
-            case "executeLaneDetection":
-            case "executeLaneAdjustment":
-                return executeLaneDetectionWithParams(response.originalCommand, imp, response.parameters);
-                
-            case "executeBandDetection":
-                return executeBandDetection(response.originalCommand, imp);
-                
-            case "executeQuantification":
-            case "executeCalibration":
-                return "🔄 Action not yet implemented: " + response.action;
-                
-            default:
-                return "✅ Gemini Analysis: " + response.analysis + "\\n" +
-                       "🤖 Intent: " + response.intent + " (confidence: " + String.format("%.1f", response.confidence * 100) + "%)\\n" +
-                       "💡 Action not yet implemented: " + response.action;
-        }
-    }
+    // Method removed - using GeminiOrchestrator handle-based architecture
     
     private String executeLaneDetectionWithParams(String command, ImagePlus imp, Map<String, Object> params) {
         try {
@@ -1773,5 +1910,524 @@ public class GelUI {
                 """;
             appendToChatArea(gelHelp);
         }
+    }
+    
+    /**
+     * Create menu bar with View and Help menus
+     */
+    private JMenuBar createMenuBar() {
+        JMenuBar menuBar = new JMenuBar();
+        
+        // View Menu
+        JMenu viewMenu = new JMenu("View");
+        
+        JMenuItem showConsoleItem = new JMenuItem("Show Console Window");
+        showConsoleItem.addActionListener(e -> {
+            // Show ImageJ Log window
+            IJ.log("Console window opened from menu");
+            try {
+                if (IJ.getTextPanel() != null) {
+                    java.awt.Window logWindow = SwingUtilities.getWindowAncestor(IJ.getTextPanel());
+                    if (logWindow != null) {
+                        logWindow.setVisible(true);
+                        logWindow.toFront();
+                    }
+                }
+            } catch (Exception ex) {
+                statusLabel.setText("Could not show console: " + ex.getMessage());
+            }
+        });
+        viewMenu.add(showConsoleItem);
+        
+        JMenuItem hideConsoleItem = new JMenuItem("Hide Console Window");
+        hideConsoleItem.addActionListener(e -> {
+            try {
+                if (IJ.getTextPanel() != null) {
+                    java.awt.Window logWindow = SwingUtilities.getWindowAncestor(IJ.getTextPanel());
+                    if (logWindow != null) {
+                        logWindow.setVisible(false);
+                    }
+                }
+            } catch (Exception ex) {
+                statusLabel.setText("Could not hide console: " + ex.getMessage());
+            }
+        });
+        viewMenu.add(hideConsoleItem);
+        
+        menuBar.add(viewMenu);
+        
+        // Help Menu
+        JMenu helpMenu = new JMenu("Help");
+        
+        JMenuItem aboutItem = new JMenuItem("About AutoDense");
+        aboutItem.addActionListener(e -> showAboutDialog());
+        helpMenu.add(aboutItem);
+        
+        JMenuItem voiceHelpItem = new JMenuItem("Voice Input Help");
+        voiceHelpItem.addActionListener(e -> showVoiceHelpDialog());
+        helpMenu.add(voiceHelpItem);
+        
+        JMenuItem docHelpItem = new JMenuItem("Document Upload Help");
+        docHelpItem.addActionListener(e -> showDocumentHelpDialog());
+        helpMenu.add(docHelpItem);
+        
+        helpMenu.addSeparator();
+        
+        // Demo submenu
+        JMenu demoMenu = new JMenu("Demos & Tutorials");
+        
+        // Gel Analysis Demos
+        JMenu gelDemoMenu = new JMenu("Gel Analysis");
+        gelDemoMenu.add(createDemoMenuItem("Band Assist Demo", "com.betterdairy.autodense.demos.gelanalysis.BandAssistDemo", 
+            "Interactive band identification across lanes"));
+        gelDemoMenu.add(createDemoMenuItem("Core Detection Demo", "com.betterdairy.autodense.demos.gelanalysis.CoreDetectorDemo",
+            "Core lane and band detection algorithms"));
+        gelDemoMenu.add(createDemoMenuItem("Standard Curve Demo", "com.betterdairy.autodense.demos.gelanalysis.StandardCurveDemo",
+            "Molecular weight calibration"));
+        gelDemoMenu.add(createDemoMenuItem("Lane Comparison Demo", "com.betterdairy.autodense.demos.gelanalysis.LaneComparisonDemo",
+            "Compare protein expressions between lanes"));
+        gelDemoMenu.add(createDemoMenuItem("PCR Normalization Demo", "com.betterdairy.autodense.demos.gelanalysis.PCRNormalizationDemo",
+            "Normalize gel bands to reference samples"));
+        gelDemoMenu.add(createDemoMenuItem("Purification Tracker Demo", "com.betterdairy.autodense.demos.gelanalysis.PurificationTrackerDemo",
+            "Track protein purification yield and purity across fractions"));
+        gelDemoMenu.add(createDemoMenuItem("Isoform Profiling Demo", "com.betterdairy.autodense.demos.gelanalysis.IsoformProfilingDemo",
+            "Analyze protein isoforms within molecular weight windows"));
+        gelDemoMenu.add(createDemoMenuItem("HCP Composition Demo", "com.betterdairy.autodense.demos.gelanalysis.HcpCompositionDemo",
+            "Quantify host cell protein contamination and identify contaminants"));
+        gelDemoMenu.add(createDemoMenuItem("Dephosphorylation Shift Demo", "com.betterdairy.autodense.demos.gelanalysis.DephosphorylationShiftDemo",
+            "Compare control vs phosphatase-treated samples for MW shifts and sharpening"));
+        gelDemoMenu.add(createDemoMenuItem("Protease Digest Kinetics Demo", "com.betterdairy.autodense.demos.gelanalysis.ProteaseDigestKineticsDemo",
+            "Track parent protein decay and fragment emergence over time series"));
+        
+        // Colony Analysis Demos
+        JMenu colonyDemoMenu = new JMenu("Colony Analysis");
+        colonyDemoMenu.add(createDemoMenuItem("Colony Classifier Demo", "com.betterdairy.autodense.demos.colonyanalysis.ColonyClassifierDemo",
+            "X-gal color classification with background sampling"));
+        colonyDemoMenu.add(createDemoMenuItem("Colony Detection Demo", "com.betterdairy.autodense.demos.colonyanalysis.ColonyAnalysisDemo",
+            "Automated colony counting and sizing"));
+        colonyDemoMenu.add(createDemoMenuItem("Colony Assist Demo", "com.betterdairy.autodense.demos.colonyanalysis.ColonyAssistDemo",
+            "User-guided colony identification"));
+        
+        // Integration & Performance Demos
+        JMenu systemDemoMenu = new JMenu("System & Performance");
+        systemDemoMenu.add(createDemoMenuItem("Integration Demo", "com.betterdairy.autodense.demos.integration.IntegrationDemo",
+            "Complete workflow pipeline demonstration"));
+        systemDemoMenu.add(createDemoMenuItem("Synthetic Gel Performance", "com.betterdairy.autodense.demos.performance.SyntheticGelTest",
+            "Performance testing with synthetic data"));
+        systemDemoMenu.add(createDemoMenuItem("Response Shape Demo", "com.betterdairy.autodense.demos.performance.ResponseShapeDemo",
+            "Tool response standardization"));
+        
+        demoMenu.add(gelDemoMenu);
+        demoMenu.add(colonyDemoMenu);
+        demoMenu.add(systemDemoMenu);
+        
+        helpMenu.add(demoMenu);
+        
+        menuBar.add(helpMenu);
+        
+        return menuBar;
+    }
+    
+    /**
+     * Create a demo menu item that runs a demo class
+     */
+    private JMenuItem createDemoMenuItem(String name, String className, String description) {
+        JMenuItem item = new JMenuItem(name);
+        item.setToolTipText(description);
+        item.addActionListener(e -> runDemo(className, name, description));
+        return item;
+    }
+    
+    /**
+     * Run a demo class in a background thread
+     */
+    private void runDemo(String className, String name, String description) {
+        statusLabel.setText("🎬 Running demo: " + name + "...");
+        
+        SwingWorker<Void, String> worker = new SwingWorker<Void, String>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                try {
+                    publish("🎬 Starting " + name + "...\n");
+                    publish("📋 " + description + "\n\n");
+                    
+                    // Capture System.out during demo execution
+                    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                    java.io.PrintStream originalOut = System.out;
+                    java.io.PrintStream demoOut = new java.io.PrintStream(baos);
+                    
+                    try {
+                        System.setOut(demoOut);
+                        
+                        // Load and run the demo class
+                        Class<?> demoClass = Class.forName(className);
+                        java.lang.reflect.Method mainMethod = demoClass.getMethod("main", String[].class);
+                        mainMethod.invoke(null, (Object) new String[]{});
+                        
+                        demoOut.flush();
+                        String output = baos.toString(StandardCharsets.UTF_8);
+                        if (!output.trim().isEmpty()) {
+                            publish("📤 Demo Output:\n");
+                            publish(output + "\n");
+                        }
+                        
+                    } finally {
+                        System.setOut(originalOut);
+                    }
+                    
+                    publish("✅ " + name + " completed successfully!\n\n");
+                    
+                } catch (ClassNotFoundException e) {
+                    publish("❌ Demo class not found: " + className + "\n");
+                    publish("   This may indicate the demo was moved or renamed.\n\n");
+                } catch (NoSuchMethodException e) {
+                    publish("❌ Demo class missing main method: " + className + "\n\n");
+                } catch (Exception e) {
+                    publish("❌ Demo execution failed: " + e.getMessage() + "\n\n");
+                    e.printStackTrace();
+                }
+                
+                return null;
+            }
+            
+            @Override
+            protected void process(List<String> chunks) {
+                for (String chunk : chunks) {
+                    appendToChatArea(chunk);
+                }
+            }
+            
+            @Override
+            protected void done() {
+                statusLabel.setText("🟢 Ready for next command");
+            }
+        };
+        
+        worker.execute();
+    }
+    
+    /**
+     * Start voice recording
+     */
+    private void startVoiceRecording() {
+        if (isRecording.get()) return;
+        
+        try {
+            // Configure audio format for speech recognition
+            audioFormat = new AudioFormat(
+                AudioFormat.Encoding.PCM_SIGNED,
+                16000, // Sample rate
+                16,    // Sample size in bits
+                1,     // Channels (mono)
+                2,     // Frame size
+                16000, // Frame rate
+                false  // Big endian
+            );
+            
+            DataLine.Info info = new DataLine.Info(TargetDataLine.class, audioFormat);
+            
+            if (!AudioSystem.isLineSupported(info)) {
+                showVoiceError("Audio input not supported on this system");
+                return;
+            }
+            
+            targetDataLine = (TargetDataLine) AudioSystem.getLine(info);
+            targetDataLine.open(audioFormat);
+            targetDataLine.start();
+            
+            isRecording.set(true);
+            voiceButton.setText("🔴");
+            voiceButton.setBackground(Color.RED);
+            statusLabel.setText("🎤 Recording voice input... Release to send");
+            
+            // Note: Actual speech-to-text would require integration with
+            // speech recognition service (Google Speech API, Azure Cognitive Services, etc.)
+            // For now, this sets up the audio recording framework
+            
+        } catch (LineUnavailableException e) {
+            showVoiceError("Could not access microphone: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Stop voice recording and process audio
+     */
+    private void stopVoiceRecording() {
+        if (!isRecording.get()) return;
+        
+        try {
+            isRecording.set(false);
+            
+            if (targetDataLine != null) {
+                targetDataLine.stop();
+                targetDataLine.close();
+            }
+            
+            voiceButton.setText("🎤");
+            voiceButton.setBackground(null);
+            statusLabel.setText("🎤 Voice recording stopped - Speech-to-text processing...");
+            
+            // Simulate processing delay
+            SwingWorker<String, Void> worker = new SwingWorker<String, Void>() {
+                @Override
+                protected String doInBackground() throws Exception {
+                    Thread.sleep(1000); // Simulate processing
+                    // TODO: Integrate with actual speech-to-text service
+                    return "Voice input detected: 'Analyze this gel with 12 lanes'";
+                }
+                
+                @Override
+                protected void done() {
+                    try {
+                        String transcribedText = get();
+                        // For demo, just show what would happen
+                        appendToChatArea("🎤 " + transcribedText + " (Demo)\n");
+                        statusLabel.setText("🎤 Voice input complete - Add speech-to-text API key for full functionality");
+                    } catch (Exception e) {
+                        showVoiceError("Speech processing failed: " + e.getMessage());
+                    }
+                }
+            };
+            worker.execute();
+            
+        } catch (Exception e) {
+            showVoiceError("Recording error: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Show voice input error
+     */
+    private void showVoiceError(String message) {
+        statusLabel.setText("🎤 Voice input error: " + message);
+        voiceButton.setText("🎤");
+        voiceButton.setBackground(null);
+        isRecording.set(false);
+    }
+    
+    /**
+     * Show document upload dialog
+     */
+    private void showDocumentUploadDialog() {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        fileChooser.setMultiSelectionEnabled(true);
+        
+        // Add file filters for supported document types
+        FileNameExtensionFilter csvFilter = new FileNameExtensionFilter(
+            "CSV Files (*.csv)", "csv");
+        FileNameExtensionFilter excelFilter = new FileNameExtensionFilter(
+            "Excel Files (*.xlsx, *.xls)", "xlsx", "xls");
+        FileNameExtensionFilter textFilter = new FileNameExtensionFilter(
+            "Text Files (*.txt)", "txt");
+        FileNameExtensionFilter allFilter = new FileNameExtensionFilter(
+            "All Supported (*.csv, *.xlsx, *.xls, *.txt)", "csv", "xlsx", "xls", "txt");
+        
+        fileChooser.addChoosableFileFilter(csvFilter);
+        fileChooser.addChoosableFileFilter(excelFilter);
+        fileChooser.addChoosableFileFilter(textFilter);
+        fileChooser.addChoosableFileFilter(allFilter);
+        fileChooser.setFileFilter(allFilter);
+        
+        int result = fileChooser.showOpenDialog(frame);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            File[] selectedFiles = fileChooser.getSelectedFiles();
+            for (File file : selectedFiles) {
+                processUploadedDocument(file);
+            }
+        }
+    }
+    
+    /**
+     * Process uploaded document
+     */
+    private void processUploadedDocument(File file) {
+        try {
+            uploadedDocuments.add(file);
+            String fileName = file.getName();
+            String fileExtension = fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase();
+            
+            appendToChatArea("📄 Uploaded: " + fileName + "\n");
+            
+            // Process different file types
+            String content = "";
+            switch (fileExtension) {
+                case "csv":
+                    content = processCsvFile(file);
+                    break;
+                case "txt":
+                    content = processTextFile(file);
+                    break;
+                case "xlsx":
+                case "xls":
+                    content = processExcelFile(file);
+                    break;
+                default:
+                    appendToChatArea("⚠️ Unsupported file type: " + fileExtension + "\n");
+                    return;
+            }
+            
+            if (!content.isEmpty()) {
+                // Add document context to conversation
+                String documentContext = String.format(
+                    "📄 Document uploaded: %s\n" +
+                    "Content summary: %s\n" +
+                    "This information can be used to enhance gel analysis with lane identities, " +
+                    "protein standards, sample amounts, and other experimental metadata.\n\n",
+                    fileName, content
+                );
+                
+                appendToChatArea(documentContext);
+                conversationHistory.add("system: " + documentContext);
+                
+                statusLabel.setText("📄 Document processed: " + fileName);
+            }
+            
+        } catch (Exception e) {
+            appendToChatArea("❌ Error processing " + file.getName() + ": " + e.getMessage() + "\n");
+        }
+    }
+    
+    /**
+     * Process CSV file
+     */
+    private String processCsvFile(File file) {
+        try {
+            List<String> lines = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
+            if (lines.isEmpty()) return "Empty file";
+            
+            String header = lines.get(0);
+            int rowCount = lines.size() - 1;
+            
+            // Analyze CSV structure
+            if (header.toLowerCase().contains("lane")) {
+                return String.format("Lane information data with %d entries. Headers: %s", 
+                    rowCount, header.substring(0, Math.min(100, header.length())));
+            } else if (header.toLowerCase().contains("protein") || header.toLowerCase().contains("standard")) {
+                return String.format("Protein/standard data with %d entries. Headers: %s", 
+                    rowCount, header.substring(0, Math.min(100, header.length())));
+            } else {
+                return String.format("CSV data with %d rows and headers: %s", 
+                    rowCount, header.substring(0, Math.min(100, header.length())));
+            }
+            
+        } catch (IOException e) {
+            return "Error reading CSV file: " + e.getMessage();
+        }
+    }
+    
+    /**
+     * Process text file
+     */
+    private String processTextFile(File file) {
+        try {
+            List<String> lines = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
+            int lineCount = lines.size();
+            String preview = lines.stream()
+                .limit(3)
+                .reduce("", (a, b) -> a + " " + b)
+                .substring(0, Math.min(100, lines.get(0).length()));
+            
+            return String.format("Text file with %d lines. Preview: %s...", lineCount, preview);
+            
+        } catch (IOException e) {
+            return "Error reading text file: " + e.getMessage();
+        }
+    }
+    
+    /**
+     * Process Excel file (placeholder - would need Apache POI)
+     */
+    private String processExcelFile(File file) {
+        // TODO: Integrate Apache POI for Excel processing
+        return String.format("Excel file detected: %s (Excel processing requires Apache POI integration)", 
+            file.getName());
+    }
+    
+    /**
+     * Show about dialog
+     */
+    private void showAboutDialog() {
+        String aboutText = """
+            🤖 AutoDense AI Assistant
+            Version 12.01 Enhanced
+            
+            Features:
+            • 🧬 Gel electrophoresis analysis
+            • 🦠 Colony counting and classification
+            • 🎤 Voice input support (experimental)
+            • 📄 Document upload integration
+            • 🤖 Gemini AI-powered analysis
+            
+            Developed by BetterDairy
+            Built with ImageJ2 and Gemini AI
+            """;
+        
+        JOptionPane.showMessageDialog(frame, aboutText, 
+            "About AutoDense", JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    /**
+     * Show voice input help
+     */
+    private void showVoiceHelpDialog() {
+        String voiceHelpText = """
+            🎤 Voice Input Help
+            
+            How to use voice input:
+            1. Hold down the microphone button (🎤)
+            2. Speak your command clearly
+            3. Release the button to stop recording
+            
+            Voice commands work best with:
+            • Clear, direct instructions
+            • Lab-specific terminology
+            • Short, focused requests
+            
+            Examples:
+            • "Detect twelve lanes in this gel"
+            • "Find all protein bands"
+            • "Count blue colonies on this plate"
+            
+            Note: Full speech-to-text requires API integration
+            (Google Speech API, Azure Cognitive Services, etc.)
+            """;
+        
+        JOptionPane.showMessageDialog(frame, voiceHelpText, 
+            "Voice Input Help", JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    /**
+     * Show document upload help
+     */
+    private void showDocumentHelpDialog() {
+        String docHelpText = """
+            📄 Document Upload Help
+            
+            Supported file types:
+            • CSV files (.csv) - Lane information, protein standards
+            • Excel files (.xlsx, .xls) - Experimental data sheets
+            • Text files (.txt) - Lab notes, protocols
+            
+            What you can upload:
+            • Lane identities and sample names
+            • Protein standard concentrations
+            • Molecular weight ladder information
+            • Sample loading amounts
+            • Experimental conditions
+            • Protocol notes
+            
+            Benefits:
+            • Automatic lane labeling
+            • Enhanced analysis context
+            • Improved AI understanding
+            • Streamlined workflow
+            
+            The AI will use this information to provide more
+            accurate and contextually relevant analysis.
+            """;
+        
+        JOptionPane.showMessageDialog(frame, docHelpText, 
+            "Document Upload Help", JOptionPane.INFORMATION_MESSAGE);
     }
 }

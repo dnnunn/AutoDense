@@ -116,6 +116,26 @@ public final class SessionStore {
         }
     }
     
+    /**
+     * Fraction mapping for purification tracking (yield & purity)
+     */
+    public static final class FractionMap {
+        public final java.util.Map<String, java.util.List<Integer>> lanesByName; // 1-based lane numbers
+        public final java.util.Map<String, java.util.List<Double>> volumesMlByName; // per-lane or single per fraction
+        public final double loadedUlPerLaneDefault;
+        public final double targetMwKda; // for selecting target bands
+        
+        public FractionMap(java.util.Map<String, java.util.List<Integer>> lanesByName,
+                           java.util.Map<String, java.util.List<Double>> volumesMlByName,
+                           double loadedUlPerLaneDefault,
+                           double targetMwKda) {
+            this.lanesByName = lanesByName;
+            this.volumesMlByName = volumesMlByName;
+            this.loadedUlPerLaneDefault = loadedUlPerLaneDefault;
+            this.targetMwKda = targetMwKda;
+        }
+    }
+    
     // Thread-safe storage with enhanced tracking
     private final Map<String, ImageRecord> images = new ConcurrentHashMap<>();
     private final Map<String, OverlayRecord> overlays = new ConcurrentHashMap<>();
@@ -138,6 +158,9 @@ public final class SessionStore {
     // Session tracking
     private String sessionId = UUID.randomUUID().toString().substring(0, 8);
     private final long sessionStartTime = System.currentTimeMillis();
+    
+    // Purification tracking
+    private FractionMap fractionMap;
     
     /**
      * Store an image and return its handle (thread-safe with LRU management)
@@ -576,5 +599,19 @@ public final class SessionStore {
         }
         
         return report.toString();
+    }
+    
+    /**
+     * Set fraction map for purification tracking
+     */
+    public void setFractionMap(FractionMap fm) { 
+        this.fractionMap = fm; 
+    }
+    
+    /**
+     * Get fraction map for purification tracking
+     */
+    public FractionMap getFractionMap() { 
+        return this.fractionMap; 
     }
 }

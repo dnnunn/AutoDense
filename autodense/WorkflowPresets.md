@@ -11,7 +11,7 @@ AutoDense includes 6 built-in workflow presets designed for common laboratory an
 3. **Compare Lanes** - Statistical comparison of densitometry profiles between lanes
 4. **Semi-Quantitative PCR** - EtBr gel analysis with dual-lane normalization for PCR quantification
 5. **X-gal Blue/White Colony Screening** - Bacterial transformation analysis
-6. **Bacterial Growth Quantification** - Colony size and growth measurements
+6. **Colony Growth Analysis** - Time-series colony growth analysis with plate matching and morphology tracking
 
 Each preset contains pre-configured parameters and natural language examples to streamline analysis workflows.
 
@@ -497,10 +497,10 @@ Each preset contains pre-configured parameters and natural language examples to 
 
 ---
 
-### 6. Bacterial Growth Quantification
+### 6. Colony Growth Analysis
 
 **Type:** Colony Counting  
-**Description:** Colony size measurements for growth studies and antibiotic sensitivity
+**Description:** Time-series colony growth analysis with plate matching and morphology tracking
 
 #### Parameters
 ```json
@@ -510,39 +510,81 @@ Each preset contains pre-configured parameters and natural language examples to 
   "size_bins": [0.5, 1.0, 2.0, 4.0],
   "min_colony_size_mm": 0.1,
   "max_colony_size_mm": 15.0,
-  "statistical_analysis": true
+  "statistical_analysis": true,
+  "time_series_analysis": true,
+  "plate_alignment_method": "feature_matching",
+  "track_morphology": true,
+  "measure_circularity": true,
+  "measure_texture": true,
+  "xgal_blueness_analysis": false,
+  "growth_rate_calculation": true,
+  "max_time_points": 20,
+  "alignment_tolerance_px": 5,
+  "colony_matching_threshold": 0.8
 }
 ```
 
 #### Workflow Steps
-1. **Plate Image Analysis** - Load and process growth plate
-2. **Colony Detection** - Identify all colonies regardless of size
-3. **Size Measurement** - Precise diameter calculation for each colony
-4. **Size Grouping** - Categorize colonies into predefined size bins
-5. **Statistical Analysis** - Calculate growth metrics and distributions
-6. **Growth Assessment** - Analyze size patterns and variations
-7. **Results Export** - Comprehensive growth data and statistics
+1. **Reference Image Setup** - Load first time point as reference
+2. **Initial Colony Detection** - Identify and measure all colonies (size, morphology, position)
+3. **Subsequent Time Points** - Load additional time point images
+4. **Plate Alignment** - Automatically align plates using feature matching or orientation marks
+5. **Colony Tracking** - Match colonies across time points based on position and characteristics
+6. **Growth Analysis** - Calculate growth rates, morphology changes, and X-gal development
+7. **Statistical Analysis** - Analyze growth patterns, track statistics, and confidence metrics
+8. **Results Export** - Comprehensive time-series data with growth curves and statistics
 
 #### Expected Outputs
-- **Colony Count by Size Group** - Distribution across size bins (0.5-1.0mm, 1.0-2.0mm, etc.)
-- **Size Statistics** - Mean, median, standard deviation of colony diameters
-- **Growth Metrics** - Total biomass, average growth, size variance
-- **Size Distribution Histogram** - Visual representation of growth patterns
-- **Individual Colony Data** - Position, diameter, and size category for each colony
-- **Export Files** - Statistical summary and detailed colony measurements
+- **Colony Tracks** - Individual colony growth over time with position tracking
+- **Growth Rates** - Area and diameter growth rates per hour for each colony
+- **Morphology Analysis** - Circularity, solidity, aspect ratio, and texture changes
+- **X-gal Progression** - Blueness development over time (if enabled)
+- **Alignment Results** - Plate alignment confidence and transformation matrices
+- **Statistical Summary** - Total tracks, growing colonies, average final sizes
+- **Time-Series Data** - Complete CSV and JSON export with all measurements
+- **Visual Overlays** - Growth tracking visualization with confidence indicators
 
 #### Natural Language Examples
-- "Measure all colony sizes on this plate"
-- "Group colonies by size ranges"
-- "Calculate growth statistics"
-- "Show size distribution histogram"
+- "Track colony growth over multiple time points"
+- "Align plates using orientation marks"
+- "Measure colony size and morphology changes"
+- "Analyze X-gal blueness development over time"
+- "Calculate growth rates for each colony"
+- "Match colonies across different imaging sessions"
+- "Correct for plate rotation and skewing"
+- "Export time-series growth data"
+
+#### Time-Series Analysis Features
+- **Automatic Plate Alignment** - Corrects for rotation, translation, and skewing between time points
+- **Colony Matching Algorithm** - Tracks individual colonies across time with confidence scoring
+- **Growth Rate Calculations** - Area and diameter growth per hour with statistical analysis
+- **Morphology Tracking** - Changes in shape, texture, and circularity over time
+- **X-gal Integration** - Optional blueness quantification for transformation studies
+- **Quality Control** - Confidence metrics and alignment validation
+
+#### Alignment Methods
+1. **Feature Matching** - Uses colony positions and plate edges as alignment features
+2. **Orientation Marks** - Detects user-placed marks (dots, crosses) for precise alignment
+3. **Hybrid Approach** - Combines both methods for maximum robustness
+
+#### Export Formats
+**CSV Format:**
+```csv
+Track_ID,Time_Point,Colony_ID,Center_X,Center_Y,Area_mm2,Diameter_mm,Circularity,Blueness
+track_1,0,colony_50_60,50.0,60.0,2.341,1.72,0.89,0.23
+track_1,1,colony_52_61,52.0,61.0,3.127,1.99,0.87,0.35
+```
+
+**JSON Format:** Complete analysis data with tracking statistics and metadata
 
 #### Best Use Cases
-- Antibiotic sensitivity testing
-- Growth condition optimization
-- Strain comparison studies
-- Drug resistance screening
-- Growth kinetics analysis
+- **Longitudinal Growth Studies** - Track colony development over hours or days
+- **Antibiotic Time-Kill Assays** - Monitor colony response to treatments
+- **Transformation Efficiency Over Time** - X-gal development tracking
+- **Growth Kinetics Analysis** - Detailed growth rate measurements
+- **Morphology Studies** - Shape and texture changes during growth
+- **Multi-timepoint Screening** - Large-scale time-series experiments
+- **Quality Control** - Growth consistency across batches
 
 ---
 

@@ -12,6 +12,7 @@ import java.io.File;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.net.URLClassLoader;
+import javax.swing.SwingUtilities;
 
 /**
  * Enhanced ImageJ launcher that provides essential gel analysis tools
@@ -50,8 +51,23 @@ public class EnhancedImageJLauncher {
         // Initialize essential gel analysis components
         initializeGelAnalysisTools();
         
-        // Show the UI
+        // Show the UI but hide console by default
         ij.ui().showUI();
+        
+        // Hide ImageJ Log window by default
+        SwingUtilities.invokeLater(() -> {
+            try {
+                // Hide the log window after startup
+                if (IJ.getTextPanel() != null) {
+                    java.awt.Window logWindow = SwingUtilities.getWindowAncestor(IJ.getTextPanel());
+                    if (logWindow != null) {
+                        logWindow.setVisible(false);
+                    }
+                }
+            } catch (Exception e) {
+                // Silently ignore if console hiding fails
+            }
+        });
         
         // Register essential ImageJ commands that users expect
         registerEssentialCommands();

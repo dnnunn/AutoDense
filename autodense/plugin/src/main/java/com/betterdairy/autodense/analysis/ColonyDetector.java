@@ -6,10 +6,8 @@ import com.betterdairy.autodense.model.Models.ColonySize;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.OvalRoi;
-import ij.gui.Roi;
 import ij.measure.ResultsTable;
 import ij.plugin.filter.EDM;
-import ij.process.ByteProcessor;
 import ij.process.ImageProcessor;
 
 import java.util.ArrayList;

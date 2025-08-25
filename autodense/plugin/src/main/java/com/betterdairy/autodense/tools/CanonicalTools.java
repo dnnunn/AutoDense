@@ -28,14 +28,11 @@ import org.json.JSONObject;
 public final class CanonicalTools {
     
     private final GelAnalysisTools gelTools;
-    private final ColonyAnalysisTools colonyTools; 
     private final PlateAnalysisTools plateTools;
     private final SessionStore sessionStore;
     
-    public CanonicalTools(GelAnalysisTools gelTools, ColonyAnalysisTools colonyTools,
-                         PlateAnalysisTools plateTools, SessionStore sessionStore) {
+    public CanonicalTools(GelAnalysisTools gelTools, PlateAnalysisTools plateTools, SessionStore sessionStore) {
         this.gelTools = gelTools;
-        this.colonyTools = colonyTools;
         this.plateTools = plateTools;
         this.sessionStore = sessionStore;
     }
@@ -97,6 +94,18 @@ public final class CanonicalTools {
             result.put("bands_quantified", quantResult.optBoolean("success", false));
             if (quantResult.has("lanes_quantified")) {
                 result.put("lanes_quantified", quantResult.getInt("lanes_quantified"));
+            }
+            
+            // Step 5: Generate visual feedback PNG with annotations
+            JSONObject pngArgs = new JSONObject();
+            if (args.has("image_handle")) pngArgs.put("image_handle", args.getString("image_handle"));
+            
+            JSONObject pngResult = gelTools.renderOverlayPng(pngArgs);
+            if (pngResult.optBoolean("success", false)) {
+                result.put("visual_feedback_generated", true);
+                if (pngResult.has("exported_files")) {
+                    result.put("visual_feedback_files", pngResult.getJSONArray("exported_files"));
+                }
             }
             
             result.put("success", true);
@@ -190,40 +199,40 @@ public final class CanonicalTools {
         try {
             JSONObject result = new JSONObject();
             
-            // Step 1: Open image (if path provided)
-            if (args.has("image_path")) {
-                JSONObject openArgs = new JSONObject().put("path", args.getString("image_path"));
-                JSONObject openResult = gelTools.openImage(openArgs); // Uses same image loader
-                if (!openResult.optBoolean("success", false)) {
-                    return openResult;
-                }
-                result.put("image_loaded", true);
-                result.put("image_handle", openResult.optString("image_handle"));
-            }
+            // Step 1: Detect plate boundaries
+            JSONObject plateArgs = new JSONObject();
+            if (args.has("image_handle")) plateArgs.put("image_handle", args.getString("image_handle"));
+            if (args.has("dish_diameter_mm")) plateArgs.put("dish_diameter_mm", args.getDouble("dish_diameter_mm"));
             
-            // Step 2: Detect plate boundaries
-            JSONObject plateResult = ColonyAnalysisTools.detectPlate(args, sessionStore);
+            JSONObject plateResult = plateTools.detectPlate(plateArgs);
             if (!plateResult.optBoolean("success", false)) {
-                return plateResult;
+                return plateResult; // Return error
             }
             result.put("plate_detected", true);
-            if (plateResult.has("colonies_found")) {
-                result.put("colonies_found", plateResult.getInt("colonies_found"));
-            }
             
-            // Step 3: Classify colonies (if requested)
-            if (args.optBoolean("classify", true)) {
-                JSONObject classifyResult = ColonyAnalysisTools.classifyColonies(args, sessionStore);
-                result.put("colonies_classified", classifyResult.optBoolean("success", false));
-                if (classifyResult.has("classifications")) {
-                    result.put("classifications", classifyResult.getJSONObject("classifications"));
-                }
+            // Step 2: Count colonies by color
+            JSONObject countArgs = new JSONObject();
+            if (args.has("image_handle")) countArgs.put("image_handle", args.getString("image_handle"));
+            if (args.has("color_groups")) countArgs.put("color_groups", args.getJSONArray("color_groups"));
+            
+            JSONObject countResult = plateTools.countColoniesByColor(countArgs);
+            if (!countResult.optBoolean("success", false)) {
+                return countResult; // Return error  
             }
+            result.put("colonies_counted", true);
+            result.put("total_colonies", countResult.optInt("total_colonies", 0));
+            
+            // Step 3: Classify colonies
+            JSONObject classifyArgs = new JSONObject();
+            if (args.has("image_handle")) classifyArgs.put("image_handle", args.getString("image_handle"));
+            
+            JSONObject classifyResult = plateTools.classifyColonies(classifyArgs);
+            result.put("colonies_classified", classifyResult.optBoolean("success", false));
             
             result.put("success", true);
             result.put("workflow", "complete_plate_analysis");
-            result.put("message", String.format("Analyzed plate: %d colonies", 
-                result.optInt("colonies_found", 0)));
+            result.put("message", String.format("Analyzed plate: %d colonies detected and classified", 
+                result.optInt("total_colonies", 0)));
                 
             return result;
             
@@ -243,22 +252,10 @@ public final class CanonicalTools {
         try {
             JSONObject result = new JSONObject();
             
-            // Colony relabeling
-            if (args.has("relabel_colony")) {
-                JSONObject relabelResult = ColonyAnalysisTools.relabelColony(args, sessionStore);
-                result.put("colony_relabeled", relabelResult.optBoolean("success", false));
-            }
-            
-            // Size binning
-            if (args.has("size_bins")) {
-                JSONObject binResult = ColonyAnalysisTools.binColonies(args, sessionStore);
+            // Colony binning adjustments
+            if (args.has("size_bins") || args.has("color_thresholds")) {
+                JSONObject binResult = plateTools.binColonies(args);
                 result.put("colonies_binned", binResult.optBoolean("success", false));
-            }
-            
-            // Classification propagation
-            if (args.has("propagate_class")) {
-                JSONObject propagateResult = ColonyAnalysisTools.propagateColonyClass(args, sessionStore);
-                result.put("class_propagated", propagateResult.optBoolean("success", false));
             }
             
             result.put("success", true);
@@ -284,7 +281,7 @@ public final class CanonicalTools {
                 args.put("formats", new org.json.JSONArray().put("csv").put("png"));
             }
             
-            return ColonyAnalysisTools.exportColonies(args, sessionStore);
+            return plateTools.exportColonies(args);
             
         } catch (Exception e) {
             return new JSONObject()

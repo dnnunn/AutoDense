@@ -60,4 +60,27 @@ public final class Profiles {
         BufferPool.returnFloatBuffer(out);
         return result;
     }
+
+    // === TREATMENT ALIGNMENT ===
+    
+    /** Align two lane profiles via 1D cross-correlation around a small shift window. Returns best delta (pixels). */
+    public static int alignByXcorr(float[] a, float[] b, int maxShiftPx) {
+        int bestShift = 0; 
+        double bestScore = Double.NEGATIVE_INFINITY;
+        for (int d = -maxShiftPx; d <= maxShiftPx; d++) {
+            double s = 0; 
+            int n = 0;
+            for (int i = 0; i < a.length; i++) {
+                int j = i + d; 
+                if (j < 0 || j >= b.length) continue;
+                s += a[i] * b[j]; 
+                n++;
+            }
+            if (n > 0 && s > bestScore) { 
+                bestScore = s; 
+                bestShift = d; 
+            }
+        }
+        return bestShift;
+    }
 }

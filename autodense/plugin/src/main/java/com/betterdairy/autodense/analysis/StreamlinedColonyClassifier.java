@@ -1,11 +1,13 @@
 package com.betterdairy.autodense.analysis;
 
+import com.betterdairy.autodense.session.SessionStore;
 import ij.ImagePlus;
 import ij.gui.Roi;
 import ij.process.ImageProcessor;
 
 import java.util.List;
 import java.util.function.ToDoubleFunction;
+import org.json.JSONObject;
 
 /**
  * Streamlined colony classifier based on user's clean design.
@@ -39,15 +41,23 @@ public final class StreamlinedColonyClassifier {
      */
     public static void classifyLab(ImagePlus imp, List<MutableColony> colonies, Roi plateRoi, 
                                   ColonyAnalysisParams.AnalysisConfig config) {
+        classifyLab(imp, colonies, plateRoi, config, null, null);
+    }
+    
+    /**
+     * Main classification method with session store support for persistent calibration
+     */
+    public static void classifyLab(ImagePlus imp, List<MutableColony> colonies, Roi plateRoi, 
+                                  ColonyAnalysisParams.AnalysisConfig config, SessionStore sessionStore, String imageHandle) {
         // Step 1: Preprocess image for challenging conditions
         ImagePlus processedImage = preprocessImage(imp, config.preprocessingParams);
         
         // Step 2: Extract Lab color features for all colonies
         extractLabFeatures(processedImage, colonies, plateRoi, config.preprocessingParams);
         
-        // Step 3: Optionally auto-calibrate thresholds from plate
+        // Step 3: Check for persistent calibration data or auto-calibrate
         if (config.colorParams.autoCalibrate) {
-            autoCalibrate(colonies, config.colorParams);
+            autoCalibrate(colonies, config.colorParams, sessionStore, imageHandle);
         }
 
         // Step 4: Classify each colony with validation
@@ -179,9 +189,31 @@ public final class StreamlinedColonyClassifier {
     }
 
     /**
-     * Auto-calibrate thresholds using k-means clustering and percentiles
+     * Auto-calibrate thresholds using k-means clustering and percentiles with session persistence
      */
-    private static void autoCalibrate(List<MutableColony> colonies, ColonyAnalysisParams.ColorParams p) {
+    private static void autoCalibrate(List<MutableColony> colonies, ColonyAnalysisParams.ColorParams p, 
+                                     SessionStore sessionStore, String imageHandle) {
+        // Check for existing calibration data in session
+        if (sessionStore != null && imageHandle != null) {
+            // Look for existing calibration data
+            for (String analysisHandle : sessionStore.getAnalysesForImage(imageHandle)) {
+                SessionStore.AnalysisRecord analysis = sessionStore.getAnalysis(analysisHandle);
+                if ("xgal_calibration".equals(analysis.type)) {
+                    JSONObject calibData = (JSONObject) analysis.data;
+                    
+                    // Restore learned thresholds
+                    p.bDeltaPos = calibData.getDouble("bDeltaPos");
+                    p.bDeltaMed = calibData.getDouble("bDeltaMed");
+                    p.bDeltaDark = calibData.getDouble("bDeltaDark");
+                    
+                    System.out.println("Restored X-gal calibration: pos=" + p.bDeltaPos + 
+                                     ", med=" + p.bDeltaMed + ", dark=" + p.bDeltaDark);
+                    return; // Use existing calibration
+                }
+            }
+        }
+        
+        // Perform auto-calibration as before
         // Quick k-means: cluster by (a,b) into 2 groups; pick group with lower mean b as positive
         double[][] pts = colonies.stream()
             .map(c -> new double[]{c.a, c.b})
@@ -212,6 +244,20 @@ public final class StreamlinedColonyClassifier {
             if (!(p.bDeltaDark < p.bDeltaMed && p.bDeltaMed < p.bDeltaPos)) {
                 p.bDeltaDark = Math.min(p.bDeltaDark, p.bDeltaMed - 2);
                 p.bDeltaPos  = Math.max(p.bDeltaPos,  p.bDeltaMed + 2);
+            }
+            
+            // Persist learned thresholds to session
+            if (sessionStore != null && imageHandle != null) {
+                JSONObject calibData = new JSONObject()
+                    .put("bDeltaPos", p.bDeltaPos)
+                    .put("bDeltaMed", p.bDeltaMed)
+                    .put("bDeltaDark", p.bDeltaDark)
+                    .put("colonyCount", colonies.size())
+                    .put("calibrationTimestamp", System.currentTimeMillis());
+                    
+                sessionStore.putAnalysis("xgal_calibration", calibData, imageHandle);
+                System.out.println("Stored X-gal calibration: pos=" + p.bDeltaPos + 
+                                 ", med=" + p.bDeltaMed + ", dark=" + p.bDeltaDark);
             }
         }
     }

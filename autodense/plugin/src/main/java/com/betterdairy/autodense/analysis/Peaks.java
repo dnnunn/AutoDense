@@ -116,4 +116,25 @@ public final class Peaks {
         }
         return m; 
     }
+
+    // === DIGEST TRACKING ===
+    
+    /** Find the band in bands list whose MW is closest to targetMw within windowPct. Returns null if none. */
+    public static com.betterdairy.autodense.model.Models.Band closestByMw(
+            java.util.List<com.betterdairy.autodense.model.Models.Band> bands,
+            com.betterdairy.autodense.model.Models.CalibrationModel cal, 
+            double targetMw, double windowPct) {
+        com.betterdairy.autodense.model.Models.Band best = null; 
+        double bestRel = 1e9;
+        for (var b : bands) {
+            double mw = com.betterdairy.autodense.analysis.Calibrator.assignMw(cal, b.y()); 
+            if (Double.isNaN(mw)) continue;
+            double rel = Math.abs((mw - targetMw) / Math.max(1e-9, targetMw)) * 100.0;
+            if (rel <= windowPct && rel < bestRel) { 
+                bestRel = rel; 
+                best = b; 
+            }
+        }
+        return best;
+    }
 }

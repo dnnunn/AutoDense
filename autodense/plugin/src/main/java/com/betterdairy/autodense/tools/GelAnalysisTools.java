@@ -3,6 +3,7 @@ package com.betterdairy.autodense.tools;
 import com.betterdairy.autodense.session.SessionStore;
 import com.betterdairy.autodense.session.SessionRecovery;
 import com.betterdairy.autodense.analysis.*;
+import com.betterdairy.autodense.analysis.AssistModels.AssistBand;
 import com.betterdairy.autodense.model.Models.*;
 import com.betterdairy.autodense.plugin.ToolSchemaValidator;
 import ij.IJ;
@@ -24,6 +25,9 @@ import java.nio.file.Path;
 import java.text.DecimalFormat;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
@@ -644,6 +648,17 @@ public class GelAnalysisTools {
             backgroundRadius = clamp(backgroundRadius, 10, 200); // 10-200 pixels
             args.put("background_radius", backgroundRadius);
             
+            // PCR-specific housekeeping normalization parameters
+            int housekeepingLaneIdx = args.optInt("housekeeping_lane_idx", -1); // -1 = no normalization
+            int housekeepingBandIdx = args.optInt("housekeeping_band_idx", -1); // -1 = use lane average
+            boolean enablePCRNormalization = housekeepingLaneIdx > 0;
+            
+            if (enablePCRNormalization) {
+                args.put("housekeeping_lane_idx", housekeepingLaneIdx);
+                args.put("housekeeping_band_idx", housekeepingBandIdx);
+                args.put("pcr_normalization_enabled", true);
+            }
+            
             // IMPORTANT: All quantification uses original ImagePlus pixel data
             ImagePlus originalImage = img.image; // Original image data for measurements
             
@@ -652,23 +667,55 @@ public class GelAnalysisTools {
             @SuppressWarnings("unchecked")
             List<List<Band>> allBands = (List<List<Band>>) analysis.data;
             
+            // Get lanes for enhanced quantification
+            List<Lane> lanes = LaneDetector.findLanes(originalImage, 0, false, 0.55, 0.0, true);
+            
+            // Check if this is MW determination workflow (enhanced analysis)
+            boolean enhancedAnalysis = args.optString("workflow_type", "").contains("molecular_weight") ||
+                                     args.optString("workflow_type", "").contains("mw_determination");
+            
             JSONArray results = new JSONArray();
             
-            for (int laneIdx = 0; laneIdx < allBands.size(); laneIdx++) {
+            for (int laneIdx = 0; laneIdx < allBands.size() && laneIdx < lanes.size(); laneIdx++) {
                 List<Band> bands = allBands.get(laneIdx);
+                Lane lane = lanes.get(laneIdx);
                 JSONObject laneResult = new JSONObject()
                     .put("lane", laneIdx + 1)
                     .put("band_count", bands.size());
                 
                 JSONArray bandIntensities = new JSONArray();
                 for (Band band : bands) {
-                    bandIntensities.put(new JSONObject()
+                    JSONObject bandData = new JSONObject()
                         .put("y_position", band.y())
                         .put("intensity", band.area())  // Using area as intensity measure
-                        .put("area", band.area()));
+                        .put("area", band.area());
+                    
+                    // Enhanced analysis for MW determination
+                    if (enhancedAnalysis) {
+                        // Use Quant.integrateBand for detailed analysis including sharpness and smear
+                        int bandHeight = Math.max(5, (int)(originalImage.getHeight() * 0.02)); // ~2% of image height
+                        int bandTop = Math.max(0, band.y() - bandHeight/2);
+                        int bandBot = Math.min(originalImage.getHeight()-1, band.y() + bandHeight/2);
+                        
+                        AssistBand assistBand = Quant.integrateBand(originalImage, lane, bandTop, bandBot);
+                        
+                        bandData.put("snr", assistBand.snr)
+                               .put("confidence", Quant.snrToConfidence(assistBand.snr))
+                               .put("sharpness", assistBand.sharpness)
+                               .put("smear_percent", assistBand.smearPercent)
+                               .put("area_corrected", assistBand.areaCorr)
+                               .put("area_background", assistBand.areaBg);
+                    }
+                    
+                    bandIntensities.put(bandData);
                 }
                 laneResult.put("bands", bandIntensities);
                 results.put(laneResult);
+            }
+            
+            // Apply PCR housekeeping normalization if enabled
+            if (enablePCRNormalization) {
+                results = applyPCRHousekeepingNormalization(results, housekeepingLaneIdx, housekeepingBandIdx, enhancedAnalysis);
             }
             
             String quantHandle = store.putAnalysis("quantification", results, img.handle);
@@ -683,12 +730,151 @@ public class GelAnalysisTools {
                 .put("measurement_source", "original_image_data")
                 .put("parameters_used", new JSONObject()
                     .put("background_method", backgroundMethod)
-                    .put("background_radius", backgroundRadius));
+                    .put("background_radius", backgroundRadius)
+                    .put("pcr_normalization_enabled", enablePCRNormalization)
+                    .put("housekeeping_lane_idx", enablePCRNormalization ? housekeepingLaneIdx : null)
+                    .put("housekeeping_band_idx", enablePCRNormalization ? housekeepingBandIdx : null));
             
             return ok("quantify_bands", data);
                 
         } catch (Exception e) {
             return recovery.createRecoveryResponse("quantify_bands", e);
+        }
+    }
+    
+    /**
+     * Apply PCR housekeeping normalization to quantification results
+     * Calculates ΔΔI (delta-delta intensity) ratios for semi-quantitative PCR analysis
+     */
+    private JSONArray applyPCRHousekeepingNormalization(JSONArray rawResults, int housekeepingLaneIdx, 
+                                                       int housekeepingBandIdx, boolean enhancedAnalysis) {
+        try {
+            // Convert to 0-based index
+            int hkLaneIndex = housekeepingLaneIdx - 1;
+            int hkBandIndex = housekeepingBandIdx - 1;
+            
+            // Get housekeeping reference intensity
+            double housekeepingIntensity = getHousekeepingReferenceIntensity(rawResults, hkLaneIndex, hkBandIndex, enhancedAnalysis);
+            
+            if (housekeepingIntensity <= 0) {
+                System.err.println("Warning: Could not determine housekeeping reference intensity");
+                return rawResults; // Return original results if normalization fails
+            }
+            
+            // Apply normalization to all lanes
+            JSONArray normalizedResults = new JSONArray();
+            
+            for (int i = 0; i < rawResults.length(); i++) {
+                JSONObject laneResult = rawResults.getJSONObject(i);
+                JSONObject normalizedLaneResult = new JSONObject(laneResult, JSONObject.getNames(laneResult));
+                
+                JSONArray bands = laneResult.getJSONArray("bands");
+                JSONArray normalizedBands = new JSONArray();
+                
+                for (int j = 0; j < bands.length(); j++) {
+                    JSONObject band = bands.getJSONObject(j);
+                    JSONObject normalizedBand = new JSONObject(band, JSONObject.getNames(band));
+                    
+                    // Get raw intensity (use area_corrected if available, otherwise area/intensity)
+                    double rawIntensity = enhancedAnalysis ? 
+                                         band.optDouble("area_corrected", band.getDouble("intensity")) :
+                                         band.getDouble("intensity");
+                    
+                    // Calculate ΔΔI (normalized intensity ratio)
+                    double deltaI = rawIntensity / housekeepingIntensity;
+                    double deltaDeltaI = Math.log(deltaI) / Math.log(2.0); // Log2 ratio
+                    
+                    // Calculate relative copy number (2^(ΔΔI))
+                    double relativeCopyNumber = Math.pow(2.0, deltaDeltaI);
+                    
+                    // Add normalized values while keeping originals
+                    normalizedBand.put("intensity_raw", rawIntensity);
+                    normalizedBand.put("intensity_normalized", deltaI);
+                    normalizedBand.put("delta_delta_i", deltaDeltaI);
+                    normalizedBand.put("relative_copy_number", relativeCopyNumber);
+                    normalizedBand.put("housekeeping_reference", housekeepingIntensity);
+                    
+                    // Add quality flags for PCR analysis
+                    String qualityFlag = "";
+                    if (deltaI < 0.1) {
+                        qualityFlag = "VERY_LOW";
+                    } else if (deltaI < 0.5) {
+                        qualityFlag = "LOW";
+                    } else if (deltaI > 5.0) {
+                        qualityFlag = "HIGH";
+                    } else if (deltaI > 10.0) {
+                        qualityFlag = "VERY_HIGH";
+                    } else {
+                        qualityFlag = "NORMAL";
+                    }
+                    normalizedBand.put("pcr_quality_flag", qualityFlag);
+                    
+                    normalizedBands.put(normalizedBand);
+                }
+                
+                normalizedLaneResult.put("bands", normalizedBands);
+                normalizedLaneResult.put("normalized_to_lane", housekeepingLaneIdx);
+                normalizedLaneResult.put("normalized_to_band", housekeepingBandIdx > 0 ? housekeepingBandIdx : "average");
+                normalizedResults.put(normalizedLaneResult);
+            }
+            
+            return normalizedResults;
+            
+        } catch (Exception e) {
+            System.err.println("Error applying PCR normalization: " + e.getMessage());
+            return rawResults; // Return original results if normalization fails
+        }
+    }
+    
+    /**
+     * Get housekeeping reference intensity from the specified lane/band
+     */
+    private double getHousekeepingReferenceIntensity(JSONArray results, int hkLaneIndex, int hkBandIndex, boolean enhancedAnalysis) {
+        try {
+            if (hkLaneIndex < 0 || hkLaneIndex >= results.length()) {
+                return -1; // Invalid lane index
+            }
+            
+            JSONObject housekeepingLane = results.getJSONObject(hkLaneIndex);
+            JSONArray bands = housekeepingLane.getJSONArray("bands");
+            
+            if (bands.length() == 0) {
+                return -1; // No bands in housekeeping lane
+            }
+            
+            if (hkBandIndex >= 0) {
+                // Use specific band as housekeeping reference
+                if (hkBandIndex >= bands.length()) {
+                    return -1; // Invalid band index
+                }
+                
+                JSONObject housekeepingBand = bands.getJSONObject(hkBandIndex);
+                return enhancedAnalysis ? 
+                       housekeepingBand.optDouble("area_corrected", housekeepingBand.getDouble("intensity")) :
+                       housekeepingBand.getDouble("intensity");
+            } else {
+                // Use average of all bands in housekeeping lane
+                double totalIntensity = 0.0;
+                int validBands = 0;
+                
+                for (int i = 0; i < bands.length(); i++) {
+                    JSONObject band = bands.getJSONObject(i);
+                    double intensity = enhancedAnalysis ? 
+                                     band.optDouble("area_corrected", band.getDouble("intensity")) :
+                                     band.getDouble("intensity");
+                    
+                    if (intensity > 0) {
+                        totalIntensity += intensity;
+                        validBands++;
+                    }
+                }
+                
+                return validBands > 0 ? totalIntensity / validBands : -1;
+            }
+            
+        } catch (Exception e) {
+            System.err.println("Error getting housekeeping reference: " + e.getMessage());
+            return -1;
         }
     }
     
@@ -903,6 +1089,381 @@ public class GelAnalysisTools {
                 
         } catch (Exception e) {
             return recovery.createRecoveryResponse("calibrate_molecular_weight", e);
+        }
+    }
+    
+    /**
+     * Tool: calibrate_standard_curve
+     * Calibrate protein standard curve for quantitative analysis with LOQ/LLOQ determination
+     */
+    public JSONObject calibrateStandardCurve(JSONObject args) {
+        ToolSchemaValidator.requireImageHandle(args);
+        try {
+            // Enforce handle discipline first
+            JSONObject disciplineError = enforceHandleDiscipline(args);
+            if (disciplineError != null) return disciplineError;
+            
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            if (img == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+            }
+            
+            // Get standard curve parameters
+            JSONArray concentrations = args.optJSONArray("concentrations");
+            JSONArray responses = args.optJSONArray("responses");
+            
+            if (concentrations == null || responses == null || 
+                concentrations.length() != responses.length() || concentrations.length() < 3) {
+                return fail("invalid_standard_data", 
+                           "Need at least 3 matched concentration-response pairs", 
+                           "concentrations,responses");
+            }
+            
+            // Convert to lists
+            List<Double> concList = new ArrayList<>();
+            List<Double> respList = new ArrayList<>();
+            
+            for (int i = 0; i < concentrations.length(); i++) {
+                concList.add(concentrations.getDouble(i));
+                respList.add(responses.getDouble(i));
+            }
+            
+            // Fit standard curve using enhanced calibrator
+            Calibrator.StandardCurveFitter.Model curve = Calibrator.StandardCurveFitter.fit(concList, respList);
+            
+            // Get CV predictions
+            List<Calibrator.StandardCurveFitter.CVPrediction> cvPredictions = curve.getCVPredictions();
+            
+            // Store calibration data
+            JSONObject calibData = new JSONObject();
+            calibData.put("slope", curve.getSlope());
+            calibData.put("intercept", curve.getIntercept());
+            calibData.put("r2", curve.getR2());
+            calibData.put("loq", curve.getLOQ());
+            calibData.put("lloq", curve.getLLOQ());
+            calibData.put("loq_cv_percent", curve.calculateCVPercent(curve.getLOQ()));
+            calibData.put("lloq_cv_percent", curve.calculateCVPercent(curve.getLLOQ()));
+            
+            // Add CV predictions
+            JSONArray cvArray = new JSONArray();
+            for (Calibrator.StandardCurveFitter.CVPrediction pred : cvPredictions) {
+                JSONObject predObj = new JSONObject();
+                predObj.put("concentration", pred.concentration);
+                predObj.put("cv_percent", pred.cvPercent);
+                predObj.put("label", pred.label);
+                cvArray.put(predObj);
+            }
+            calibData.put("cv_predictions", cvArray);
+            
+            // Store calibration analysis
+            String analysisHandle = store.putAnalysis("standard_curve_calibration", calibData, img.handle);
+            
+            // Ensure this image remains current for subsequent operations
+            store.setLastActiveImageHandle(img.handle);
+            
+            // Build success response
+            JSONObject data = new JSONObject()
+                .put("calibration_handle", analysisHandle)
+                .put("r2", curve.getR2())
+                .put("loq", curve.getLOQ())
+                .put("lloq", curve.getLLOQ())
+                .put("cv_predictions_count", cvPredictions.size())
+                .put("image_handle", img.handle);
+                
+            return ok("calibrate_standard_curve", data);
+                
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("calibrate_standard_curve", e);
+        }
+    }
+    
+    /**
+     * Tool: compare_lanes
+     * MW-aware statistical comparison between lanes with multiple testing correction
+     */
+    public JSONObject compareLanes(JSONObject args) {
+        ToolSchemaValidator.requireImageHandle(args);
+        try {
+            // Enforce handle discipline first
+            JSONObject disciplineError = enforceHandleDiscipline(args);
+            if (disciplineError != null) return disciplineError;
+            
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            if (img == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+            }
+            
+            // Get lane groups
+            JSONArray controlLanesArray = args.optJSONArray("control_lanes");
+            JSONArray treatmentLanesArray = args.optJSONArray("treatment_lanes");
+            
+            if (controlLanesArray == null || treatmentLanesArray == null ||
+                controlLanesArray.length() < 2 || treatmentLanesArray.length() < 2) {
+                return fail("invalid_lane_groups", 
+                           "Need at least 2 control and 2 treatment lanes for comparison", 
+                           "control_lanes,treatment_lanes");
+            }
+            
+            // Convert to lists
+            List<Integer> controlLanes = new ArrayList<>();
+            List<Integer> treatmentLanes = new ArrayList<>();
+            
+            for (int i = 0; i < controlLanesArray.length(); i++) {
+                controlLanes.add(controlLanesArray.getInt(i));
+            }
+            for (int i = 0; i < treatmentLanesArray.length(); i++) {
+                treatmentLanes.add(treatmentLanesArray.getInt(i));
+            }
+            
+            // Get configuration parameters
+            LaneComparator.ComparisonConfig config = new LaneComparator.ComparisonConfig();
+            config.mwTolerance = args.optDouble("mw_tolerance", 0.1);
+            config.minIntensity = args.optDouble("min_intensity", 100.0);
+            config.minSNR = args.optDouble("min_snr", 3.0);
+            config.multipleTestingMethod = args.optString("multiple_testing_method", "holm-bonferroni");
+            config.significanceLevel = args.optDouble("significance_level", 0.05);
+            config.requireBothGroups = args.optBoolean("require_both_groups", true);
+            config.volcanoFCThreshold = args.optDouble("volcano_fc_threshold", 1.0);
+            config.volcanoPThreshold = args.optDouble("volcano_p_threshold", 0.05);
+            
+            // Extract peak data from quantification results
+            Map<Integer, List<LaneComparator.Peak>> peaksByLane = extractPeaksFromQuantification(imageHandle, controlLanes, treatmentLanes);
+            
+            if (peaksByLane.isEmpty()) {
+                return fail("no_quantification_data", 
+                           "No quantification data found - run quantify_bands first", 
+                           "image_handle");
+            }
+            
+            // Perform statistical comparison
+            LaneComparator.LaneComparisonAnalysis analysis = 
+                LaneComparator.compareLanes(peaksByLane, controlLanes, treatmentLanes, config);
+            
+            // Store analysis results
+            JSONObject analysisData = LaneComparator.exportToJSON(analysis);
+            String analysisHandle = store.putAnalysis("lane_comparison", analysisData, img.handle);
+            
+            // Ensure this image remains current for subsequent operations
+            store.setLastActiveImageHandle(img.handle);
+            
+            // Build success response
+            JSONObject data = new JSONObject()
+                .put("comparison_handle", analysisHandle)
+                .put("total_peaks", analysis.totalPeaks)
+                .put("significant_peaks", analysis.significantPeaks)
+                .put("fdr_level", analysis.fdrLevel)
+                .put("multiple_testing_method", analysis.config.multipleTestingMethod)
+                .put("image_handle", img.handle);
+                
+            return ok("compare_lanes", data);
+                
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("compare_lanes", e);
+        }
+    }
+    
+    /**
+     * Tool: export_volcano_plot
+     * Export volcano plot as PNG image
+     */
+    public JSONObject exportVolcanoPlot(JSONObject args) {
+        ToolSchemaValidator.requireImageHandle(args);
+        try {
+            // Enforce handle discipline first
+            JSONObject disciplineError = enforceHandleDiscipline(args);
+            if (disciplineError != null) return disciplineError;
+            
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            if (img == null) {
+                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+            }
+            
+            String comparisonHandle = args.optString("comparison_handle", "");
+            if (comparisonHandle.isEmpty() || !store.hasAnalysis(comparisonHandle)) {
+                return fail("comparison_not_found", "Lane comparison not found - run compare_lanes first", "comparison_handle");
+            }
+            
+            // Get comparison analysis
+            SessionStore.AnalysisRecord analysisRecord = store.getAnalysis(comparisonHandle);
+            if (!"lane_comparison".equals(analysisRecord.type)) {
+                return fail("invalid_comparison_type", "Analysis is not a lane comparison", "comparison_handle");
+            }
+            
+            JSONObject analysisData = (JSONObject) analysisRecord.data;
+            LaneComparator.LaneComparisonAnalysis analysis = parseComparisonAnalysis(analysisData);
+            
+            if (analysis == null) {
+                return fail("invalid_analysis_data", "Could not parse comparison analysis data", "comparison_handle");
+            }
+            
+            // Get plot parameters
+            int plotWidth = args.optInt("plot_width", 600);
+            int plotHeight = args.optInt("plot_height", 500);
+            String outputPath = args.optString("output_path", "");
+            
+            if (outputPath.isEmpty()) {
+                // Generate default path
+                String filename = img.image.getTitle().replaceAll("\\.[^.]+$", "");
+                outputPath = System.getProperty("user.home") + "/Desktop/" + filename + "_volcano_plot.png";
+            }
+            
+            // Create volcano plot overlay
+            Overlay volcanoOverlay = OverlayRenderer.createVolcanoPlotOverlay(analysis, plotWidth, plotHeight);
+            
+            // Create blank image for volcano plot
+            ImagePlus volcanoImage = IJ.createImage("Volcano Plot", "RGB white", plotWidth, plotHeight, 1);
+            volcanoImage.setOverlay(volcanoOverlay);
+            
+            // Flatten and save
+            ImagePlus flattenedImage = volcanoImage.flatten();
+            FileSaver fs = new FileSaver(flattenedImage);
+            boolean saved = fs.saveAsPng(outputPath);
+            
+            if (!saved) {
+                return fail("export_failed", "Failed to save volcano plot PNG", "output_path");
+            }
+            
+            // Clean up
+            volcanoImage.close();
+            flattenedImage.close();
+            
+            // Build success response
+            JSONObject data = new JSONObject()
+                .put("png_path", outputPath)
+                .put("plot_width", plotWidth)
+                .put("plot_height", plotHeight)
+                .put("total_peaks", analysis.totalPeaks)
+                .put("significant_peaks", analysis.significantPeaks)
+                .put("image_handle", img.handle);
+                
+            return ok("export_volcano_plot", data);
+                
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("export_volcano_plot", e);
+        }
+    }
+    
+    /**
+     * Extract peak data from quantification results for lane comparison
+     */
+    private Map<Integer, List<LaneComparator.Peak>> extractPeaksFromQuantification(String imageHandle, 
+                                                                                  List<Integer> controlLanes,
+                                                                                  List<Integer> treatmentLanes) {
+        Map<Integer, List<LaneComparator.Peak>> peaksByLane = new HashMap<>();
+        
+        // Get all lane numbers
+        Set<Integer> allLanes = new HashSet<>();
+        allLanes.addAll(controlLanes);
+        allLanes.addAll(treatmentLanes);
+        
+        // Get quantification analysis
+        List<String> analyses = store.getAnalysesForImage(imageHandle);
+        for (String analysisHandle : analyses) {
+            SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
+            if ("quantification".equals(analysis.type)) {
+                JSONArray results = (JSONArray) analysis.data;
+                
+                for (int i = 0; i < results.length(); i++) {
+                    JSONObject laneResult = results.getJSONObject(i);
+                    int laneIndex = laneResult.getInt("lane_index");
+                    
+                    if (allLanes.contains(laneIndex) && laneResult.has("bands")) {
+                        JSONArray bands = laneResult.getJSONArray("bands");
+                        List<LaneComparator.Peak> lanePeaks = new ArrayList<>();
+                        
+                        for (int j = 0; j < bands.length(); j++) {
+                            JSONObject bandData = bands.getJSONObject(j);
+                            
+                            // Create Band object
+                            Band band = new Band(
+                                bandData.getInt("band_index"),
+                                bandData.getInt("y_position"),
+                                bandData.getDouble("area_corrected"),
+                                bandData.optDouble("background", 0.0),
+                                bandData.optDouble("mw_kda", 0.0)
+                            );
+                            
+                            // Create Peak object
+                            LaneComparator.Peak peak = new LaneComparator.Peak(
+                                band,
+                                bandData.getDouble("area_corrected"), // intensity
+                                bandData.optDouble("mw_kda", 0.0),     // mw
+                                bandData.optDouble("rf", 0.0),         // rf
+                                bandData.optDouble("snr", 0.0)         // snr
+                            );
+                            
+                            lanePeaks.add(peak);
+                        }
+                        
+                        peaksByLane.put(laneIndex, lanePeaks);
+                    }
+                }
+                break;
+            }
+        }
+        
+        return peaksByLane;
+    }
+    
+    /**
+     * Parse comparison analysis from JSON data
+     */
+    private LaneComparator.LaneComparisonAnalysis parseComparisonAnalysis(JSONObject analysisData) {
+        try {
+            // Extract basic data
+            JSONArray controlLanesArray = analysisData.getJSONArray("control_lanes");
+            JSONArray treatmentLanesArray = analysisData.getJSONArray("treatment_lanes");
+            
+            List<Integer> controlLanes = new ArrayList<>();
+            List<Integer> treatmentLanes = new ArrayList<>();
+            
+            for (int i = 0; i < controlLanesArray.length(); i++) {
+                controlLanes.add(controlLanesArray.getInt(i));
+            }
+            for (int i = 0; i < treatmentLanesArray.length(); i++) {
+                treatmentLanes.add(treatmentLanesArray.getInt(i));
+            }
+            
+            // Parse results
+            JSONArray resultsArray = analysisData.getJSONArray("results");
+            List<LaneComparator.ComparisonResult> results = new ArrayList<>();
+            List<LaneComparator.PeakGroup> peakGroups = new ArrayList<>();
+            
+            for (int i = 0; i < resultsArray.length(); i++) {
+                JSONObject resultJson = resultsArray.getJSONObject(i);
+                
+                // Create minimal peak group (just for volcano plot)
+                LaneComparator.PeakGroup group = new LaneComparator.PeakGroup(
+                    resultJson.getDouble("target_mw"), 0.1);
+                
+                LaneComparator.ComparisonResult result = new LaneComparator.ComparisonResult(
+                    group,
+                    resultJson.getDouble("p_value"),
+                    resultJson.getDouble("adjusted_p_value"),
+                    resultJson.getDouble("log2_fold_change"),
+                    resultJson.getDouble("mean_control"),
+                    resultJson.getDouble("mean_treatment"),
+                    resultJson.getBoolean("is_significant"),
+                    resultJson.getString("test_method")
+                );
+                
+                results.add(result);
+                peakGroups.add(group);
+            }
+            
+            // Create config
+            LaneComparator.ComparisonConfig config = new LaneComparator.ComparisonConfig();
+            config.multipleTestingMethod = analysisData.getString("multiple_testing_method");
+            config.significanceLevel = analysisData.getDouble("significance_level");
+            
+            return new LaneComparator.LaneComparisonAnalysis(
+                controlLanes, treatmentLanes, peakGroups, results, config);
+                
+        } catch (Exception e) {
+            return null;
         }
     }
     
@@ -1123,13 +1684,11 @@ public class GelAnalysisTools {
             }
             
             SessionStore.ImageRecord img = store.getImage(protection.imageHandle);
-            boolean includeMolecularWeights = args.optBoolean("include_molecular_weights", false);
             boolean includeIntensities = args.optBoolean("include_intensities", false);
             
             // Create comprehensive overlay with all available analysis data
             Overlay referenceOverlay = new Overlay();
             int height = img.image.getHeight();
-            int width = img.image.getWidth();
             
             // Add lanes if available
             List<String> analyses = store.getAnalysesForImage(protection.imageHandle);
@@ -1569,8 +2128,8 @@ public class GelAnalysisTools {
         
         StringBuilder csv = new StringBuilder();
         
-        // Standardized CSV header
-        csv.append("file,lane,band_idx,x_start,x_end,y_top,y_bottom,apex_y,area_raw,area_bg,area_corr,snr,mw_kda,rf,flags\n");
+        // Standardized CSV header with PCR normalization columns
+        csv.append("file,lane,band_idx,x_start,x_end,y_top,y_bottom,apex_y,area_raw,area_bg,area_corr,snr,sharpness,smear_percent,mw_kda,rf,intensity_raw,intensity_normalized,delta_delta_i,relative_copy_number,housekeeping_reference,pcr_quality_flag,flags\n");
         
         // Get filename from image
         String filename = imgRecord.image.getTitle();
@@ -1657,12 +2216,73 @@ public class GelAnalysisTools {
                 double areaBg = band.baseline() * (lane.xEnd() - lane.xStart() + 1) * 10; // Estimate band height as 10px
                 double areaCorr = Math.max(0, areaRaw - areaBg);
                 double snr = 0.0; // SNR would need to be calculated from raw data
+                double sharpness = 0.0; // Default if not available
+                double smearPercent = 0.0; // Default if not available
                 double rf = apexY / (double) imgRecord.image.getHeight(); // Simple RF calculation
                 double mwKda = band.mwKDa(); // Get molecular weight if available
-                String flags = ""; // No specific flags in current data
                 
-                // Build CSV row with fixed decimal formatting
-                csv.append(String.format("%s,%d,%d,%d,%d,%d,%d,%s,%s,%s,%s,%s,%s,%s,%s\n",
+                // Initialize flags list for LOQ/LLOQ checking
+                List<String> flagsList = new ArrayList<>();
+                
+                // Check for LOQ/LLOQ violations using standard curve calibration
+                checkLOQFlags(flagsList, mwKda, analyses);
+                
+                String flags = String.join(";", flagsList);
+                
+                // Initialize PCR normalization variables
+                double intensityRaw = areaCorr; // Default to corrected area
+                double intensityNormalized = 0.0;
+                double deltaDeltaI = 0.0;
+                double relativeCopyNumber = 0.0;
+                double housekeepingReference = 0.0;
+                String pcrQualityFlag = "";
+                
+                // Try to get enhanced analysis data from band detection results
+                // Look for enhanced analysis data that includes sharpness, smear_percent, and PCR data
+                for (String analysisHandle : analyses) {
+                    SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
+                    if ("band_detection".equals(analysis.type)) {
+                        JSONObject analysisData = (JSONObject) analysis.data;
+                        if (analysisData.has("lanes") && laneIdx < analysisData.getJSONArray("lanes").length()) {
+                            JSONObject laneResult = analysisData.getJSONArray("lanes").getJSONObject(laneIdx);
+                            if (laneResult.has("bands") && bandIdx < laneResult.getJSONArray("bands").length()) {
+                                JSONObject bandData = laneResult.getJSONArray("bands").getJSONObject(bandIdx);
+                                if (bandData.has("sharpness")) {
+                                    sharpness = bandData.getDouble("sharpness");
+                                }
+                                if (bandData.has("smear_percent")) {
+                                    smearPercent = bandData.getDouble("smear_percent");
+                                }
+                                if (bandData.has("snr")) {
+                                    snr = bandData.getDouble("snr");
+                                }
+                                // Extract PCR normalization data if available
+                                if (bandData.has("intensity_raw")) {
+                                    intensityRaw = bandData.getDouble("intensity_raw");
+                                }
+                                if (bandData.has("intensity_normalized")) {
+                                    intensityNormalized = bandData.getDouble("intensity_normalized");
+                                }
+                                if (bandData.has("delta_delta_i")) {
+                                    deltaDeltaI = bandData.getDouble("delta_delta_i");
+                                }
+                                if (bandData.has("relative_copy_number")) {
+                                    relativeCopyNumber = bandData.getDouble("relative_copy_number");
+                                }
+                                if (bandData.has("housekeeping_reference")) {
+                                    housekeepingReference = bandData.getDouble("housekeeping_reference");
+                                }
+                                if (bandData.has("pcr_quality_flag")) {
+                                    pcrQualityFlag = bandData.getString("pcr_quality_flag");
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+                
+                // Build CSV row with fixed decimal formatting including PCR normalization columns
+                csv.append(String.format("%s,%d,%d,%d,%d,%d,%d,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
                     filename,
                     lane.index(),
                     band.index(),
@@ -1675,14 +2295,154 @@ public class GelAnalysisTools {
                     df3.format(areaBg),
                     df3.format(areaCorr),
                     df3.format(snr),
+                    df3.format(sharpness),
+                    df3.format(smearPercent),
                     df3.format(mwKda),
                     df4.format(rf),
+                    df3.format(intensityRaw),
+                    df3.format(intensityNormalized),
+                    df3.format(deltaDeltaI),
+                    df3.format(relativeCopyNumber),
+                    df3.format(housekeepingReference),
+                    pcrQualityFlag,
                     flags
                 ));
             }
         }
         
+        // Add LOQ/LLOQ information rows if standard curve data is available
+        addLOQLLOQRows(csv, analyses, filename);
+        
         Files.writeString(outputPath, csv.toString());
+    }
+    
+    /**
+     * Add LOQ/LLOQ information rows to CSV export
+     */
+    private void addLOQLLOQRows(StringBuilder csv, List<String> analyses, String filename) {
+        // Look for standard curve calibration data
+        for (String analysisHandle : analyses) {
+            SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
+            if ("standard_curve_calibration".equals(analysis.type)) {
+                try {
+                    JSONObject calibData = (JSONObject) analysis.data;
+                    if (calibData.has("loq") && calibData.has("lloq")) {
+                        double loq = calibData.getDouble("loq");
+                        double lloq = calibData.getDouble("lloq");
+                        double loqCV = calibData.optDouble("loq_cv_percent", 20.0);
+                        double lloqCV = calibData.optDouble("lloq_cv_percent", 30.0);
+                        
+                        DecimalFormat df3 = new DecimalFormat("#.###");
+                        DecimalFormat df4 = new DecimalFormat("#.####");
+                        
+                        // Add LLOQ row (Lower Limit of Quantification)
+                        csv.append(String.format("%s,LLOQ,0,0,0,0,0,0,0,0,0,0,0,0,%s,0,%s\n",
+                            filename,
+                            df3.format(lloq),
+                            "LLOQ_CV_" + df3.format(lloqCV) + "%"
+                        ));
+                        
+                        // Add LOQ row (Limit of Quantification)
+                        csv.append(String.format("%s,LOQ,0,0,0,0,0,0,0,0,0,0,0,0,%s,0,%s\n",
+                            filename,
+                            df3.format(loq),
+                            "LOQ_CV_" + df3.format(loqCV) + "%"
+                        ));
+                        
+                        // Add CV prediction summary row
+                        if (calibData.has("cv_predictions")) {
+                            JSONArray cvPreds = calibData.getJSONArray("cv_predictions");
+                            StringBuilder cvSummary = new StringBuilder("CV_PREDICTIONS:");
+                            for (int i = 0; i < cvPreds.length() && i < 5; i++) { // Limit to 5 predictions
+                                JSONObject pred = cvPreds.getJSONObject(i);
+                                double conc = pred.getDouble("concentration");
+                                double cv = pred.getDouble("cv_percent");
+                                String label = pred.optString("label", "");
+                                cvSummary.append(String.format(" %s%.2f(μg/mL)=%.1f%%CV", 
+                                                             label.isEmpty() ? "" : label + "_", 
+                                                             conc, cv));
+                            }
+                            
+                            csv.append(String.format("%s,CV_INFO,0,0,0,0,0,0,0,0,0,0,0,0,0,0,%s\n",
+                                filename, cvSummary.toString()));
+                        }
+                        
+                        break; // Only process first standard curve found
+                    }
+                } catch (Exception e) {
+                    // Skip malformed calibration data
+                }
+            }
+        }
+    }
+    
+    /**
+     * Check concentration against LOQ/LLOQ limits and add appropriate flags
+     */
+    private void checkLOQFlags(List<String> flagsList, double concentration, List<String> analyses) {
+        // Look for standard curve calibration data
+        for (String analysisHandle : analyses) {
+            SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
+            if ("standard_curve_calibration".equals(analysis.type)) {
+                try {
+                    JSONObject calibData = (JSONObject) analysis.data;
+                    if (calibData.has("loq") && calibData.has("lloq")) {
+                        double loq = calibData.getDouble("loq");
+                        double lloq = calibData.getDouble("lloq");
+                        
+                        // Flag bands below LLOQ (Lower Limit of Quantification)
+                        if (!Double.isNaN(lloq) && concentration < lloq && concentration > 0) {
+                            flagsList.add("BELOW_LLOQ");
+                        }
+                        // Flag bands below LOQ (Limit of Quantification) but above LLOQ
+                        else if (!Double.isNaN(loq) && concentration < loq && concentration > 0) {
+                            flagsList.add("BELOW_LOQ");
+                        }
+                        
+                        // Add CV information for concentrations near limits
+                        if (concentration > 0) {
+                            // Create temporary model to calculate CV
+                            List<Double> tempConcs = new ArrayList<>();
+                            List<Double> tempResps = new ArrayList<>();
+                            
+                            // Extract original standard data if available
+                            if (calibData.has("slope") && calibData.has("intercept")) {
+                                double slope = calibData.getDouble("slope");
+                                double intercept = calibData.getDouble("intercept");
+                                
+                                // Create minimal standard curve for CV calculation
+                                // Use points around the concentration of interest
+                                double baseConc = Math.max(concentration * 0.5, lloq * 0.5);
+                                for (int i = 1; i <= 5; i++) {
+                                    double conc = baseConc * i;
+                                    double resp = slope * conc + intercept;
+                                    tempConcs.add(conc);
+                                    tempResps.add(resp);
+                                }
+                                
+                                try {
+                                    Calibrator.StandardCurveFitter.Model tempModel = 
+                                        Calibrator.StandardCurveFitter.fit(tempConcs, tempResps);
+                                    double cvPercent = tempModel.calculateCVPercent(concentration);
+                                    
+                                    if (cvPercent > 30.0) {
+                                        flagsList.add("HIGH_CV");
+                                    } else if (cvPercent > 20.0) {
+                                        flagsList.add("MODERATE_CV");
+                                    }
+                                } catch (Exception e) {
+                                    // Skip CV calculation if it fails
+                                }
+                            }
+                        }
+                        
+                        break; // Only process first standard curve found
+                    }
+                } catch (Exception e) {
+                    // Skip malformed calibration data
+                }
+            }
+        }
     }
     
     
@@ -2130,6 +2890,773 @@ public class GelAnalysisTools {
         }
         
         Files.writeString(csvPath, csv.toString());
+    }
+    
+    /**
+     * Tool: map_fractions
+     * Map purification fractions to gel lanes for yield/purity tracking
+     */
+    public JSONObject mapFractions(JSONObject args) {
+        try {
+            // args: lane_map {Name:[lanes...]}, volumes_ml {Name:[ml...] or single}, loaded_ul_default, target_mw_kda
+            ToolSchemaValidator.require(args, "lane_map");
+            ToolSchemaValidator.require(args, "volumes_ml");
+            double loadedUl = args.has("loaded_ul_default") ? args.getNumber("loaded_ul_default").doubleValue() : 10.0;
+            double targetMw = args.has("target_mw_kda") ? args.getNumber("target_mw_kda").doubleValue() : Double.NaN;
+
+            java.util.Map<String, java.util.List<Integer>> lanesByName = new java.util.HashMap<>();
+            org.json.JSONObject lm = args.getJSONObject("lane_map");
+            for (var key : lm.keySet()) {
+                var arr = lm.getJSONArray(key);
+                java.util.List<Integer> L = new java.util.ArrayList<>();
+                for (int i=0;i<arr.length();i++) L.add(arr.getInt(i));
+                lanesByName.put(key, L);
+            }
+
+            java.util.Map<String, java.util.List<Double>> vols = new java.util.HashMap<>();
+            org.json.JSONObject vm = args.getJSONObject("volumes_ml");
+            for (var key : vm.keySet()) {
+                var v = vm.get(key);
+                java.util.List<Double> L = new java.util.ArrayList<>();
+                if (v instanceof org.json.JSONArray ja) {
+                    for (int i=0;i<ja.length();i++) L.add(ja.getNumber(i).doubleValue());
+                } else {
+                    L.add(((Number)v).doubleValue());
+                }
+                vols.put(key, L);
+            }
+
+            store.setFractionMap(new com.betterdairy.autodense.session.SessionStore.FractionMap(lanesByName, vols, loadedUl, targetMw));
+
+            return ok("map_fractions", new org.json.JSONObject()
+                .put("fractions", lm)
+                .put("volumes_ml", vm)
+                .put("loaded_ul_default", loadedUl)
+                .put("target_mw_kda", targetMw));
+                
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("map_fractions", e);
+        }
+    }
+    
+    /**
+     * Tool: compute_yield_purity
+     * Compute yield and purity from fraction mapping and calibration
+     */
+    public JSONObject computeYieldPurity(JSONObject args) {
+        try {
+            // Validate image handle
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord rec = store.getImage(imageHandle);
+            if (rec == null) {
+                throw new IllegalArgumentException("Image not found: " + imageHandle);
+            }
+            
+            // Get fraction map
+            SessionStore.FractionMap fm = store.getFractionMap();
+            if (fm == null) {
+                throw new IllegalStateException("No fraction map set. Call map_fractions first.");
+            }
+
+            // Get lanes and bands from analysis data
+            List<String> analyses = store.getAnalysesForImage(imageHandle);
+            List<Lane> lanes = null;
+            List<List<Band>> allBands = null;
+            
+            for (String analysisHandle : analyses) {
+                SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
+                if ("lanes".equals(analysis.type)) {
+                    @SuppressWarnings("unchecked")
+                    List<Lane> tempLanes = (List<Lane>) analysis.data;
+                    lanes = tempLanes;
+                } else if ("bands".equals(analysis.type)) {
+                    @SuppressWarnings("unchecked")
+                    List<List<Band>> tempBands = (List<List<Band>>) analysis.data;
+                    allBands = tempBands;
+                }
+            }
+            
+            if (lanes == null || allBands == null) {
+                throw new IllegalStateException("Lane and band detection required. Run detect_lanes and detect_bands first.");
+            }
+
+            // Helper to pick target bands by MW window (±8%)
+            double windowPct = args.has("window_pct") ? args.getNumber("window_pct").doubleValue() : 8.0;
+
+            org.json.JSONArray steps = new org.json.JSONArray();
+            double firstInUg = Double.NaN;
+
+            for (var entry : fm.lanesByName.entrySet()) {
+                String name = entry.getKey();
+                var laneNums = entry.getValue();
+                var vols = fm.volumesMlByName.getOrDefault(name, java.util.List.of());
+
+                double stepUgLoaded = 0.0;   // from band areas (target bands per lane, sum)
+                double stepAreaTarget = 0.0; // area of target bands (for purity)
+                double stepAreaTotal  = 0.0; // total lane area (for purity proxy)
+
+                for (int laneNo1 : laneNums) {
+                    int laneIdx = laneNo1 - 1; // Convert to 0-based
+                    if (laneIdx < 0 || laneIdx >= allBands.size()) continue;
+                    
+                    List<Band> bands = allBands.get(laneIdx);
+
+                    // Sum total lane corrected area
+                    for (Band b : bands) {
+                        stepAreaTotal += Math.max(0.0, b.area());
+                    }
+
+                    // Select target bands near targetMw (if provided); else use the strongest band
+                    java.util.List<Band> targets = new java.util.ArrayList<>();
+                    if (!Double.isNaN(fm.targetMwKda)) {
+                        // For now, use simple Y-position based selection (would need calibration for true MW)
+                        // This is a placeholder - in real implementation you'd use Calibrator
+                        for (Band b : bands) {
+                            targets.add(b); // Simplified: add all bands as potential targets
+                        }
+                    } else if (!bands.isEmpty()) {
+                        // fallback: top-1 band by area
+                        Band top = bands.stream().max(java.util.Comparator.comparingDouble(Band::area)).orElse(null);
+                        if (top != null) targets.add(top);
+                    }
+
+                    // Per-lane area from target bands (simplified without calibration)
+                    for (Band tb : targets) {
+                        double area = Math.max(0.0, tb.area());
+                        stepUgLoaded += area; // Using area as proxy for amount
+                        stepAreaTarget += area;
+                    }
+                }
+
+                // Scale to whole fraction: total = loaded * (fraction_vol_uL / loaded_ul)
+                double stepUgTotal = 0.0;
+                if (!vols.isEmpty()) {
+                    for (int i=0; i<laneNums.size(); i++) {
+                        double volMl = vols.get(Math.min(i, vols.size()-1));
+                        double scale = (volMl * 1000.0) / Math.max(1e-9, fm.loadedUlPerLaneDefault);
+                        // crude: assume each lane's contribution ~ (stepUgLoaded / laneNums.size())
+                        stepUgTotal += (stepUgLoaded / Math.max(1, laneNums.size())) * scale;
+                    }
+                } else {
+                    // no volumes -> report loaded amount only
+                    stepUgTotal = stepUgLoaded;
+                }
+
+                double purity = (stepAreaTotal > 0.0) ? (stepAreaTarget / stepAreaTotal) : 0.0;
+
+                if (Double.isNaN(firstInUg)) firstInUg = stepUgTotal;
+
+                steps.put(new org.json.JSONObject()
+                    .put("name", name)
+                    .put("lanes", new org.json.JSONArray(laneNums))
+                    .put("target_area_loaded_sum", stepUgLoaded)
+                    .put("target_area_total_est", stepUgTotal)
+                    .put("purity_est", purity)
+                    .put("volumes_ml", fm.volumesMlByName.getOrDefault(name, java.util.List.of())));
+            }
+
+            // Simple recoveries using first step as input
+            for (int i=0; i<steps.length(); i++) {
+                var obj = steps.getJSONObject(i);
+                double areaTot = obj.getDouble("target_area_total_est");
+                double stepRec = (i==0 || firstInUg<=0) ? 1.0 : areaTot / firstInUg;
+                obj.put("step_recovery", stepRec);
+                obj.put("cum_recovery", stepRec); // same as stepRec in this flat version
+            }
+
+            return ok("compute_yield_purity", new org.json.JSONObject().put("steps", steps));
+            
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("compute_yield_purity", e);
+        }
+    }
+    
+    /**
+     * Tool: profile_isoforms
+     * Profile protein isoforms within a molecular weight window
+     */
+    public JSONObject profileIsoforms(JSONObject args) {
+        try {
+            // args: target_mw_kda (double), window_pct (double, default 20), lanes ("all" or array)
+            ToolSchemaValidator.require(args, "target_mw_kda");
+            double targetMw = args.getNumber("target_mw_kda").doubleValue();
+            double windowPct = args.has("window_pct") ? args.getNumber("window_pct").doubleValue() : 20.0;
+            
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord rec = store.getImage(imageHandle);
+            if (rec == null) {
+                throw new IllegalArgumentException("Image not found: " + imageHandle);
+            }
+            
+            // Get lanes and bands from analysis data
+            List<String> analyses = store.getAnalysesForImage(imageHandle);
+            List<Lane> lanes = null;
+            List<List<Band>> allBands = null;
+            
+            for (String analysisHandle : analyses) {
+                SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
+                if ("lanes".equals(analysis.type)) {
+                    @SuppressWarnings("unchecked")
+                    List<Lane> tempLanes = (List<Lane>) analysis.data;
+                    lanes = tempLanes;
+                } else if ("bands".equals(analysis.type)) {
+                    @SuppressWarnings("unchecked")
+                    List<List<Band>> tempBands = (List<List<Band>>) analysis.data;
+                    allBands = tempBands;
+                }
+            }
+            
+            if (lanes == null || allBands == null) {
+                throw new IllegalStateException("Lane and band detection required. Run detect_lanes and detect_bands first.");
+            }
+            
+            // Resolve which lanes to analyze
+            List<Integer> targetLanes = new ArrayList<>();
+            if (args.has("lanes") && !args.isNull("lanes")) {
+                if (args.get("lanes") instanceof String && "all".equals(args.getString("lanes"))) {
+                    for (int i = 0; i < lanes.size(); i++) {
+                        targetLanes.add(i);
+                    }
+                } else {
+                    JSONArray laneArray = args.getJSONArray("lanes");
+                    for (int i = 0; i < laneArray.length(); i++) {
+                        int laneIndex1 = laneArray.getInt(i);
+                        if (laneIndex1 >= 1 && laneIndex1 <= lanes.size()) {
+                            targetLanes.add(laneIndex1 - 1); // Convert to 0-based
+                        }
+                    }
+                }
+            } else {
+                // Default to all lanes
+                for (int i = 0; i < lanes.size(); i++) {
+                    targetLanes.add(i);
+                }
+            }
+            
+            JSONArray lanesOut = new JSONArray();
+            
+            // Optional calibrator for MW; if missing we fall back to position-based analysis
+            // Note: In simplified version, we'll use position-based analysis
+            
+            for (int laneIdx : targetLanes) {
+                if (laneIdx >= allBands.size()) continue;
+                
+                List<Band> bandsInLane = allBands.get(laneIdx);
+                List<Band> inWindow = new ArrayList<>();
+                
+                // For now, without calibration, select bands within middle region of gel
+                // This is a simplified approach - in real implementation you'd use MW calibration
+                double sumArea = 0.0;
+                for (Band b : bandsInLane) {
+                    // Simple position-based filtering (bands in middle 60% of gel height)
+                    double relativeY = (double) b.y() / rec.image.getHeight();
+                    if (relativeY >= 0.2 && relativeY <= 0.8) {
+                        inWindow.add(b);
+                        sumArea += Math.max(0.0, b.area());
+                    }
+                }
+                
+                // Create synthetic profile for sharpness calculation (simplified)
+                float[] profile = createSimpleProfile(rec.image, lanes.get(laneIdx));
+                
+                JSONArray isoforms = new JSONArray();
+                for (int i = 0; i < inWindow.size(); i++) {
+                    Band b = inWindow.get(i);
+                    int apexIdx = Math.max(0, Math.min(profile.length - 1, b.y()));
+                    double sharp = Quant.sharpnessScore(profile, apexIdx);
+                    double bandMw = Double.NaN; // Would use calibration if available
+                    double areaPct = (sumArea > 0.0) ? (b.area() / sumArea) : 0.0;
+                    
+                    isoforms.put(new JSONObject()
+                        .put("band_idx", i)
+                        .put("mw_kda", bandMw)
+                        .put("apex_y", b.y())
+                        .put("width_px", 8.0) // Default width
+                        .put("sharpness", sharp)
+                        .put("area_corr", b.area())
+                        .put("area_pct", areaPct));
+                }
+                
+                double smear = Quant.smearFractionWithinWindow(inWindow);
+                
+                lanesOut.put(new JSONObject()
+                    .put("lane", laneIdx + 1) // Convert back to 1-based
+                    .put("n_isoforms", inWindow.size())
+                    .put("smear_fraction", smear)
+                    .put("isoforms", isoforms));
+            }
+            
+            return ok("profile_isoforms", new JSONObject()
+                .put("target_mw_kda", targetMw)
+                .put("window_pct", windowPct)
+                .put("lanes", lanesOut));
+                
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("profile_isoforms", e);
+        }
+    }
+    
+    /**
+     * Create a simple vertical profile for a lane (helper for isoform analysis)
+     */
+    private float[] createSimpleProfile(ImagePlus image, Lane lane) {
+        int height = image.getHeight();
+        float[] profile = new float[height];
+        ImageProcessor ip = image.getProcessor();
+        
+        int x0 = lane.xStart();
+        int x1 = lane.xEnd();
+        
+        for (int y = 0; y < height; y++) {
+            float sum = 0;
+            for (int x = x0; x <= x1; x++) {
+                sum += ip.getf(x, y);
+            }
+            profile[y] = sum / Math.max(1, x1 - x0 + 1);
+        }
+        
+        return profile;
+    }
+
+    /**
+     * Tool: hcp_snapshot
+     * Quantify non-target signal per lane and list the top contaminant bands
+     */
+    public JSONObject hcpSnapshot(JSONObject args) {
+        try {
+            // args: target_mw_kda, window_pct (default 8), top_n (default 5)
+            ToolSchemaValidator.require(args, "target_mw_kda");
+            double targetMw = args.getNumber("target_mw_kda").doubleValue();
+            double windowPct = args.has("window_pct") ? args.getNumber("window_pct").doubleValue() : 8.0;
+            int topN = args.has("top_n") ? args.getInt("top_n") : 5;
+
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord rec = store.getImage(imageHandle);
+            if (rec == null) {
+                throw new IllegalArgumentException("Image not found: " + imageHandle);
+            }
+
+            // Get calibration model - required for HCP analysis
+            List<String> analyses = store.getAnalysesForImage(imageHandle);
+            CalibrationModel cal = null;
+            List<Lane> lanes = null;
+            List<List<Band>> allBands = null;
+            
+            for (String analysisHandle : analyses) {
+                SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
+                if ("calibration".equals(analysis.type)) {
+                    cal = (CalibrationModel) analysis.data;
+                } else if ("lanes".equals(analysis.type)) {
+                    @SuppressWarnings("unchecked")
+                    List<Lane> tempLanes = (List<Lane>) analysis.data;
+                    lanes = tempLanes;
+                } else if ("bands".equals(analysis.type)) {
+                    @SuppressWarnings("unchecked")
+                    List<List<Band>> tempBands = (List<List<Band>>) analysis.data;
+                    allBands = tempBands;
+                }
+            }
+
+            if (cal == null) {
+                throw new IllegalStateException("MW calibration required for HCP analysis. Run calibrate_molecular_weight first.");
+            }
+            if (lanes == null || allBands == null) {
+                throw new IllegalStateException("Lane and band detection required. Run detect_lanes and detect_bands first.");
+            }
+
+            // Resolve which lanes to analyze
+            List<Integer> targetLanes = new ArrayList<>();
+            if (args.has("lanes") && !args.isNull("lanes")) {
+                if (args.get("lanes") instanceof String && "all".equals(args.getString("lanes"))) {
+                    for (int i = 0; i < lanes.size(); i++) {
+                        targetLanes.add(i);
+                    }
+                } else {
+                    JSONArray laneArray = args.getJSONArray("lanes");
+                    for (int i = 0; i < laneArray.length(); i++) {
+                        int laneIndex1 = laneArray.getInt(i);
+                        if (laneIndex1 >= 1 && laneIndex1 <= lanes.size()) {
+                            targetLanes.add(laneIndex1 - 1); // Convert to 0-based
+                        }
+                    }
+                }
+            } else {
+                // Default to all lanes
+                for (int i = 0; i < lanes.size(); i++) {
+                    targetLanes.add(i);
+                }
+            }
+
+            JSONArray out = new JSONArray();
+            for (int laneIdx : targetLanes) {
+                if (laneIdx >= allBands.size()) continue;
+                
+                List<Band> bandsInLane = allBands.get(laneIdx);
+                double total = 0.0; 
+                for (var b : bandsInLane) total += Math.max(0.0, b.area());
+                
+                double hcpArea = Quant.sumAreaExceptWindow(bandsInLane, cal, targetMw, windowPct);
+                double hcpPct = (total > 0) ? hcpArea / total * 100.0 : 0.0;
+
+                List<Band> top = Quant.topNonTargetBands(bandsInLane, cal, targetMw, windowPct, topN);
+                JSONArray contaminants = new JSONArray();
+                for (Band b : top) {
+                    double mw = Calibrator.assignMw(cal, b.y());
+                    double rel = (total > 0) ? b.area() / total * 100.0 : 0.0;
+                    contaminants.put(new JSONObject()
+                        .put("band_idx", b.index())
+                        .put("mw_kda", mw)
+                        .put("rel_area_pct", rel)
+                        .put("area_corr", b.area()));
+                }
+
+                out.put(new JSONObject()
+                    .put("lane", laneIdx + 1) // Convert back to 1-based
+                    .put("hcp_percent", hcpPct)
+                    .put("top_contaminants", contaminants));
+            }
+
+            return ok("hcp_snapshot", new JSONObject()
+                .put("target_mw_kda", targetMw)
+                .put("window_pct", windowPct)
+                .put("analysis", String.format("HCP analysis for %.1f kDa target (±%.1f%% window)", targetMw, windowPct))
+                .put("lanes", out));
+
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("hcp_snapshot", e);
+        }
+    }
+
+    /**
+     * Tool: compare_treatments
+     * Compare control vs treated lanes; report MW shifts, sharpening, and area changes
+     */
+    public JSONObject compareTreatments(JSONObject args) {
+        try {
+            // args: control_lanes[], treated_lanes[], mw_window[lo,hi]
+            ToolSchemaValidator.require(args, "control_lanes");
+            ToolSchemaValidator.require(args, "treated_lanes");
+            ToolSchemaValidator.require(args, "mw_window");
+            
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord rec = store.getImage(imageHandle);
+            if (rec == null) {
+                throw new IllegalArgumentException("Image not found: " + imageHandle);
+            }
+
+            // Get calibration model - required for treatment comparison
+            List<String> analyses = store.getAnalysesForImage(imageHandle);
+            CalibrationModel cal = null;
+            List<Lane> lanes = null;
+            List<List<Band>> allBands = null;
+            
+            for (String analysisHandle : analyses) {
+                SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
+                if ("calibration".equals(analysis.type)) {
+                    cal = (CalibrationModel) analysis.data;
+                } else if ("lanes".equals(analysis.type)) {
+                    @SuppressWarnings("unchecked")
+                    List<Lane> tempLanes = (List<Lane>) analysis.data;
+                    lanes = tempLanes;
+                } else if ("bands".equals(analysis.type)) {
+                    @SuppressWarnings("unchecked")
+                    List<List<Band>> tempBands = (List<List<Band>>) analysis.data;
+                    allBands = tempBands;
+                }
+            }
+
+            if (cal == null) {
+                throw new IllegalStateException("MW calibration required for treatment comparison. Run calibrate_molecular_weight first.");
+            }
+            if (lanes == null || allBands == null) {
+                throw new IllegalStateException("Lane and band detection required. Run detect_lanes and detect_bands first.");
+            }
+
+            // Parse control and treated lanes
+            JSONArray controlLanesJson = args.getJSONArray("control_lanes");
+            JSONArray treatedLanesJson = args.getJSONArray("treated_lanes");
+            JSONArray mwWindowJson = args.getJSONArray("mw_window");
+            
+            List<Integer> controlLanes = new ArrayList<>();
+            List<Integer> treatedLanes = new ArrayList<>();
+            
+            for (int i = 0; i < controlLanesJson.length(); i++) {
+                int laneIndex1 = controlLanesJson.getInt(i);
+                if (laneIndex1 >= 1 && laneIndex1 <= lanes.size()) {
+                    controlLanes.add(laneIndex1 - 1); // Convert to 0-based
+                }
+            }
+            
+            for (int i = 0; i < treatedLanesJson.length(); i++) {
+                int laneIndex1 = treatedLanesJson.getInt(i);
+                if (laneIndex1 >= 1 && laneIndex1 <= lanes.size()) {
+                    treatedLanes.add(laneIndex1 - 1); // Convert to 0-based
+                }
+            }
+            
+            double mwLo = mwWindowJson.getNumber(0).doubleValue();
+            double mwHi = mwWindowJson.getNumber(1).doubleValue();
+
+            JSONArray pairs = new JSONArray();
+
+            for (int k = 0; k < Math.min(controlLanes.size(), treatedLanes.size()); k++) {
+                int cLaneIdx = controlLanes.get(k);
+                int tLaneIdx = treatedLanes.get(k);
+                
+                if (cLaneIdx >= allBands.size() || tLaneIdx >= allBands.size()) continue;
+                
+                Lane cLane = lanes.get(cLaneIdx);
+                Lane tLane = lanes.get(tLaneIdx);
+                
+                List<Band> cBands = allBands.get(cLaneIdx);
+                List<Band> tBands = allBands.get(tLaneIdx);
+
+                // Create profiles for alignment
+                float[] pc = createSimpleProfile(rec.image, cLane);
+                float[] pt = createSimpleProfile(rec.image, tLane);
+                int delta = Profiles.alignByXcorr(pc, pt, 4);
+
+                // Collect bands within MW window
+                List<Band> cb = new ArrayList<>();
+                List<Band> tb = new ArrayList<>();
+                
+                for (Band b : cBands) { 
+                    double mw = Calibrator.assignMw(cal, b.y()); 
+                    if (mw >= mwLo && mw <= mwHi) cb.add(b); 
+                }
+                for (Band b : tBands) { 
+                    double mw = Calibrator.assignMw(cal, b.y() + delta); 
+                    if (mw >= mwLo && mw <= mwHi) tb.add(b); 
+                }
+
+                // Naive matching: for each control band, find closest treated by MW
+                for (Band bC : cb) {
+                    double mwC = Calibrator.assignMw(cal, bC.y());
+                    Band best = null; 
+                    double bestDm = 1e9;
+                    
+                    for (Band bT : tb) {
+                        double mwT = Calibrator.assignMw(cal, bT.y() + delta);
+                        double dm = Math.abs(mwC - mwT);
+                        if (dm < bestDm) { 
+                            bestDm = dm; 
+                            best = bT; 
+                        }
+                    }
+                    if (best == null) continue;
+
+                    double mwT = Calibrator.assignMw(cal, best.y() + delta);
+                    double dMw = mwT - mwC;
+
+                    // Sharpness change using Quant.sharpnessScore
+                    int iC = Math.max(0, Math.min(pc.length - 1, (int)Math.round(bC.y())));
+                    int iT = Math.max(0, Math.min(pt.length - 1, (int)Math.round(best.y() + delta)));
+                    double sC = Quant.sharpnessScore(pc, iC);
+                    double sT = Quant.sharpnessScore(pt, iT);
+
+                    pairs.put(new JSONObject()
+                        .put("control_lane", cLaneIdx + 1) // Convert back to 1-based
+                        .put("treated_lane", tLaneIdx + 1) // Convert back to 1-based
+                        .put("mw_control", mwC)
+                        .put("mw_treated", mwT)
+                        .put("delta_mw", dMw)
+                        .put("sharpness_control", sC)
+                        .put("sharpness_treated", sT)
+                        .put("delta_sharpness", sT - sC)
+                        .put("area_control", bC.area())
+                        .put("area_treated", best.area())
+                        .put("area_ratio", best.area() / Math.max(1e-9, bC.area())));
+                }
+            }
+
+            return ok("compare_treatments", new JSONObject()
+                .put("mw_window", new JSONArray().put(mwLo).put(mwHi))
+                .put("analysis", String.format("Treatment comparison for %.1f-%.1f kDa window", mwLo, mwHi))
+                .put("pairs", pairs));
+
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("compare_treatments", e);
+        }
+    }
+
+    /**
+     * Tool: digest_kinetics
+     * Track parent band decay and fragment emergence over a time series
+     */
+    public JSONObject digestKinetics(JSONObject args) {
+        try {
+            // args: lanes [2..N], times_min [...], parent_mw_kda, window_pct(=15)
+            ToolSchemaValidator.require(args, "lanes");
+            ToolSchemaValidator.require(args, "times_min");
+            ToolSchemaValidator.require(args, "parent_mw_kda");
+            
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord rec = store.getImage(imageHandle);
+            if (rec == null) {
+                throw new IllegalArgumentException("Image not found: " + imageHandle);
+            }
+
+            // Get required analysis data
+            List<String> analyses = store.getAnalysesForImage(imageHandle);
+            CalibrationModel cal = null;
+            List<Lane> lanes = null;
+            List<List<Band>> allBands = null;
+            
+            for (String analysisHandle : analyses) {
+                SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
+                if ("calibration".equals(analysis.type)) {
+                    cal = (CalibrationModel) analysis.data;
+                } else if ("lanes".equals(analysis.type)) {
+                    @SuppressWarnings("unchecked")
+                    List<Lane> tempLanes = (List<Lane>) analysis.data;
+                    lanes = tempLanes;
+                } else if ("bands".equals(analysis.type)) {
+                    @SuppressWarnings("unchecked")
+                    List<List<Band>> tempBands = (List<List<Band>>) analysis.data;
+                    allBands = tempBands;
+                }
+            }
+
+            if (cal == null) {
+                throw new IllegalStateException("MW calibration required for digest kinetics. Run calibrate_molecular_weight first.");
+            }
+            if (lanes == null || allBands == null) {
+                throw new IllegalStateException("Lane and band detection required. Run detect_lanes and detect_bands first.");
+            }
+
+            // Parse parameters
+            JSONArray lanesJson = args.getJSONArray("lanes");
+            JSONArray timesJson = args.getJSONArray("times_min");
+            double parentMw = args.getNumber("parent_mw_kda").doubleValue();
+            double windowPct = args.has("window_pct") ? args.getNumber("window_pct").doubleValue() : 15.0;
+
+            if (timesJson.length() != lanesJson.length()) {
+                throw new IllegalArgumentException("times_min length must equal number of lanes");
+            }
+
+            // Convert lanes to 0-based indices
+            List<Integer> targetLanes = new ArrayList<>();
+            for (int i = 0; i < lanesJson.length(); i++) {
+                int laneIndex1 = lanesJson.getInt(i);
+                if (laneIndex1 >= 1 && laneIndex1 <= lanes.size()) {
+                    targetLanes.add(laneIndex1 - 1); // Convert to 0-based
+                }
+            }
+
+            // Parent decay analysis: fit ln(I) = ln(I0) - k*t
+            List<Double> t = new ArrayList<>();
+            List<Double> y = new ArrayList<>();
+            JSONArray series = new JSONArray();
+
+            for (int i = 0; i < targetLanes.size(); i++) {
+                int laneIdx = targetLanes.get(i);
+                if (laneIdx >= allBands.size()) continue;
+                
+                double ti = timesJson.getNumber(i).doubleValue();
+                List<Band> bandsInLane = allBands.get(laneIdx);
+                Band parent = Peaks.closestByMw(bandsInLane, cal, parentMw, windowPct);
+                double area = (parent == null) ? 0.0 : Math.max(1e-9, parent.area());
+                
+                t.add(ti); 
+                y.add(Math.log(area));
+                series.put(new JSONObject()
+                    .put("t_min", ti)
+                    .put("lane", laneIdx + 1) // Convert back to 1-based
+                    .put("parent_area", area)
+                    .put("parent_present", parent != null));
+            }
+
+            // OLS fit y = a + b*t; k = -b; t_half = ln(2)/k
+            double sx = 0, sy = 0, sxx = 0, sxy = 0;
+            int n = t.size();
+            for (int i = 0; i < n; i++) { 
+                sx += t.get(i); 
+                sy += y.get(i); 
+            }
+            double tx = sx / n, ty = sy / n;
+            for (int i = 0; i < n; i++) { 
+                double dx = t.get(i) - tx, dy = y.get(i) - ty; 
+                sxx += dx * dx; 
+                sxy += dx * dy; 
+            }
+            double b = (sxx > 0) ? sxy / sxx : 0.0; 
+            double k = -b;
+            double tHalf = (k > 0) ? (Math.log(2.0) / k) : Double.POSITIVE_INFINITY;
+            double r2 = 0.0;
+            if (sxx > 0) {
+                double syy = 0;
+                for (int i = 0; i < n; i++) {
+                    double dy = y.get(i) - ty;
+                    syy += dy * dy;
+                }
+                r2 = (syy > 0) ? (sxy * sxy) / (sxx * syy) : 0.0;
+            }
+
+            // Fragment emergence analysis
+            JSONArray fragments = new JSONArray();
+            
+            // Collect candidate fragments across all time points
+            Map<String, List<Double>> fragmentAreasByMw = new HashMap<>();
+            Map<String, Double> fragmentMws = new HashMap<>();
+            
+            for (int i = 0; i < targetLanes.size(); i++) {
+                int laneIdx = targetLanes.get(i);
+                if (laneIdx >= allBands.size()) continue;
+                
+                List<Band> bandsInLane = allBands.get(laneIdx);
+                for (Band band : bandsInLane) {
+                    double mw = Calibrator.assignMw(cal, band.y());
+                    if (Double.isNaN(mw) || mw >= parentMw * 0.98) continue; // Skip parent and higher MW
+                    
+                    // Use MW as key (rounded to 0.1 kDa for grouping similar fragments)
+                    String mwKey = String.format("%.1f", mw);
+                    fragmentAreasByMw.computeIfAbsent(mwKey, key -> new ArrayList<>()).add(Math.max(0.0, band.area()));
+                    fragmentMws.putIfAbsent(mwKey, mw);
+                }
+            }
+            
+            // Analyze fragments that appear in all time points and show increasing trend
+            for (Map.Entry<String, List<Double>> entry : fragmentAreasByMw.entrySet()) {
+                List<Double> areas = entry.getValue();
+                if (areas.size() != n) continue; // Require presence in all time points
+                
+                // Calculate slope: cov(t, area) / var(t)
+                double sx2 = 0, sy2 = 0, sxx2 = 0, sxy2 = 0;
+                for (int i = 0; i < n; i++) { 
+                    sx2 += t.get(i); 
+                    sy2 += areas.get(i); 
+                }
+                double tx2 = sx2 / n, ty2 = sy2 / n;
+                for (int i = 0; i < n; i++) { 
+                    double dx = t.get(i) - tx2, dy = areas.get(i) - ty2; 
+                    sxx2 += dx * dx; 
+                    sxy2 += dx * dy; 
+                }
+                double slope = (sxx2 > 0) ? sxy2 / sxx2 : 0.0;
+                
+                if (slope > 0.1) { // Only include fragments with meaningful increase
+                    fragments.put(new JSONObject()
+                        .put("mw_kda", fragmentMws.get(entry.getKey()))
+                        .put("slope_area_per_min", slope)
+                        .put("initial_area", areas.get(0))
+                        .put("final_area", areas.get(areas.size() - 1)));
+                }
+            }
+
+            return ok("digest_kinetics", new JSONObject()
+                .put("parent_mw_kda", parentMw)
+                .put("window_pct", windowPct)
+                .put("k_per_min", k)
+                .put("t_half_min", tHalf)
+                .put("r_squared", r2)
+                .put("analysis", String.format("Digest kinetics for %.1f kDa parent protein (k=%.4f/min, t½=%.1f min)", 
+                    parentMw, k, tHalf))
+                .put("time_series", series)
+                .put("fragments", fragments));
+
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("digest_kinetics", e);
+        }
     }
     
 }

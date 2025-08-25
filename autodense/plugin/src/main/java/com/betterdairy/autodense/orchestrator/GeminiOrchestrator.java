@@ -31,6 +31,7 @@ public class GeminiOrchestrator {
     private final SessionLogger sessionLogger;
     private final GelAnalysisTools gelAnalysisTools;
     private final PlateAnalysisTools plateAnalysisTools;
+    private final ColonyAnalysisTools colonyAnalysisTools;
     private final CanonicalTools canonicalTools;
     private final GeminiApiClient geminiClient;
     private final CapabilityRegistry capabilityRegistry;
@@ -46,7 +47,8 @@ public class GeminiOrchestrator {
         this.sessionLogger = new SessionLogger(sessionStore.getSessionId());
         this.gelAnalysisTools = new GelAnalysisTools(sessionStore);
         this.plateAnalysisTools = new PlateAnalysisTools(sessionStore);
-        this.canonicalTools = new CanonicalTools(gelAnalysisTools, null, plateAnalysisTools, sessionStore);
+        this.colonyAnalysisTools = new ColonyAnalysisTools();
+        this.canonicalTools = new CanonicalTools(gelAnalysisTools, plateAnalysisTools, sessionStore);
         this.geminiClient = new GeminiApiClient(apiKey);
         this.capabilityRegistry = new CapabilityRegistry(new Context());
         
@@ -268,90 +270,50 @@ public class GeminiOrchestrator {
                     sessionLogger.warn("deprecated_tool", "configure_band_assist deprecated, use adjust_gel");
                     yield gelAnalysisTools.configureBandAssist(parameters);
                 }
+                case "map_fractions" -> gelAnalysisTools.mapFractions(parameters);
+                case "compute_yield_purity" -> gelAnalysisTools.computeYieldPurity(parameters);
+                case "profile_isoforms" -> gelAnalysisTools.profileIsoforms(parameters);
+                case "hcp_snapshot" -> gelAnalysisTools.hcpSnapshot(parameters);
+                case "compare_treatments" -> gelAnalysisTools.compareTreatments(parameters);
+                case "digest_kinetics" -> gelAnalysisTools.digestKinetics(parameters);
                 case "normalize_intensities" -> { 
                     sessionLogger.warn("deprecated_tool", "normalize_intensities deprecated, use adjust_gel");
                     yield gelAnalysisTools.normalizeIntensities(parameters);
                 }
                 
-                // Colony analysis aliases
-                case "detect_plate" -> { 
-                    sessionLogger.warn("deprecated_tool", "detect_plate deprecated, use analyze_plate");
-                    yield ColonyAnalysisTools.detectPlate(parameters, sessionStore);
-                }
-                case "count_colonies" -> { 
-                    sessionLogger.warn("deprecated_tool", "count_colonies deprecated, use analyze_plate");
-                    yield ColonyAnalysisTools.countColonies(parameters, sessionStore);
-                }
-                case "classify_colonies" -> { 
-                    sessionLogger.warn("deprecated_tool", "classify_colonies deprecated, use analyze_plate");
-                    yield ColonyAnalysisTools.classifyColonies(parameters, sessionStore);
-                }
-                case "bin_colonies" -> { 
-                    sessionLogger.warn("deprecated_tool", "bin_colonies deprecated, use adjust_plate");
-                    yield ColonyAnalysisTools.binColonies(parameters, sessionStore);
-                }
-                case "normalize_colonies" -> { 
-                    sessionLogger.warn("deprecated_tool", "normalize_colonies deprecated, use adjust_plate");
-                    yield ColonyAnalysisTools.normalizeColonies(parameters, sessionStore);
-                }
-                case "export_colonies" -> { 
-                    sessionLogger.warn("deprecated_tool", "export_colonies deprecated, use export_plate");
-                    yield ColonyAnalysisTools.exportColonies(parameters, sessionStore);
-                }
-                case "enable_colony_assist" -> { 
-                    sessionLogger.warn("deprecated_tool", "enable_colony_assist deprecated, use adjust_plate");
-                    yield ColonyAnalysisTools.enableColonyAssist(parameters, sessionStore);
-                }
-                case "disable_colony_assist" -> { 
-                    sessionLogger.warn("deprecated_tool", "disable_colony_assist deprecated, use adjust_plate");
-                    yield ColonyAnalysisTools.disableColonyAssist(parameters, sessionStore);
-                }
-                case "colony_assist_click" -> { 
-                    sessionLogger.warn("deprecated_tool", "colony_assist_click deprecated, use adjust_plate");
-                    yield ColonyAnalysisTools.colonyAssistClick(parameters, sessionStore);
-                }
-                case "propagate_colony_class" -> { 
-                    sessionLogger.warn("deprecated_tool", "propagate_colony_class deprecated, use adjust_plate");
-                    yield ColonyAnalysisTools.propagateColonyClass(parameters, sessionStore);
-                }
-                case "relabel_colony" -> { 
-                    sessionLogger.warn("deprecated_tool", "relabel_colony deprecated, use adjust_plate");
-                    yield ColonyAnalysisTools.relabelColony(parameters, sessionStore);
-                }
+                // =============================================================================
+                // MISSING GEL ANALYSIS TOOLS (Now properly wired)
+                // =============================================================================
+                case "calibrate_standard_curve" -> gelAnalysisTools.calibrateStandardCurve(parameters);
+                case "compare_lanes" -> gelAnalysisTools.compareLanes(parameters);
+                case "export_volcano_plot" -> gelAnalysisTools.exportVolcanoPlot(parameters);
                 
-                // Legacy plate analysis tools - mostly redundant  
-                case "detect_colonies" -> { 
-                    sessionLogger.warn("deprecated_tool", "detect_colonies deprecated, use analyze_plate");
-                    yield plateAnalysisTools.detectColonies(parameters);
-                }
-                case "count_colonies_by_color" -> { 
-                    sessionLogger.warn("deprecated_tool", "count_colonies_by_color deprecated, use analyze_plate");
-                    yield plateAnalysisTools.countColoniesByColor(parameters);
-                }
-                case "measure_colony_sizes" -> { 
-                    sessionLogger.warn("deprecated_tool", "measure_colony_sizes deprecated, use analyze_plate");
-                    yield plateAnalysisTools.measureColonySizes(parameters);
-                }
-                case "check_contamination" -> { 
-                    sessionLogger.warn("deprecated_tool", "check_contamination deprecated, use analyze_plate");
-                    yield plateAnalysisTools.checkContamination(parameters);
-                }
-                case "create_labeled_reference" -> { 
-                    sessionLogger.warn("deprecated_tool", "create_labeled_reference deprecated, use export_plate");
-                    yield plateAnalysisTools.createLabeledReference(parameters);
-                }
-                case "export_for_notebook" -> { 
-                    sessionLogger.warn("deprecated_tool", "export_for_notebook deprecated, use export_plate");
-                    yield plateAnalysisTools.exportForNotebook(parameters);
-                }
-                case "export_for_presentation" -> { 
-                    sessionLogger.warn("deprecated_tool", "export_for_presentation deprecated, use export_plate");
-                    yield plateAnalysisTools.exportForPresentation(parameters);
-                }
-                case "export_colony_analysis" -> { 
-                    sessionLogger.warn("deprecated_tool", "export_colony_analysis deprecated, use export_plate");
-                    yield plateAnalysisTools.exportColonyAnalysis(parameters);
-                }
+                // =============================================================================
+                // PLATE/COLONY ANALYSIS TOOLS (Now properly wired)
+                // =============================================================================
+                // PlateAnalysisTools methods (instance methods)
+                case "detect_plate" -> plateAnalysisTools.detectPlate(parameters);
+                case "count_colonies_by_color" -> plateAnalysisTools.countColoniesByColor(parameters);
+                case "measure_colony_sizes" -> plateAnalysisTools.measureColonySizes(parameters);
+                case "classify_colonies" -> plateAnalysisTools.classifyColonies(parameters);
+                case "bin_colonies" -> plateAnalysisTools.binColonies(parameters);
+                case "export_colonies" -> plateAnalysisTools.exportColonies(parameters);
+                case "detect_colonies" -> plateAnalysisTools.detectColonies(parameters);
+                case "check_contamination" -> plateAnalysisTools.checkContamination(parameters);
+                case "create_labeled_reference" -> plateAnalysisTools.createLabeledReference(parameters);
+                case "export_for_notebook" -> plateAnalysisTools.exportForNotebook(parameters);
+                case "export_for_presentation" -> plateAnalysisTools.exportForPresentation(parameters);
+                case "export_colony_analysis" -> plateAnalysisTools.exportColonyAnalysis(parameters);
+                
+                // ColonyAnalysisTools static methods (require SessionStore parameter)
+                case "count_colonies" -> ColonyAnalysisTools.countColonies(parameters, sessionStore);
+                case "normalize_colonies" -> ColonyAnalysisTools.normalizeColonies(parameters, sessionStore);
+                case "enable_colony_assist" -> ColonyAnalysisTools.enableColonyAssist(parameters, sessionStore);
+                case "disable_colony_assist" -> ColonyAnalysisTools.disableColonyAssist(parameters, sessionStore);
+                case "colony_assist_click" -> ColonyAnalysisTools.colonyAssistClick(parameters, sessionStore);
+                case "propagate_colony_class" -> ColonyAnalysisTools.propagateColonyClass(parameters, sessionStore);
+                case "relabel_colony" -> ColonyAnalysisTools.relabelColony(parameters, sessionStore);
+                case "export_detailed_features" -> ColonyAnalysisTools.exportDetailedFeatures(parameters, sessionStore);
                 
                 default -> new JSONObject()
                     .put("error", true)
@@ -367,6 +329,36 @@ public class GeminiOrchestrator {
             }
             
             success = !result.optBoolean("error", false);
+            
+            // AUTO-GENERATE VISUAL FEEDBACK: After detection tools, automatically render PNG
+            if (success && shouldAutoGenerateVisualFeedback(toolName)) {
+                try {
+                    JSONObject pngArgs = new JSONObject();
+                    if (parameters.has("image_handle")) {
+                        pngArgs.put("image_handle", parameters.getString("image_handle"));
+                    }
+                    
+                    JSONObject pngResult = gelAnalysisTools.renderOverlayPng(pngArgs);
+                    if (pngResult.optBoolean("success", false)) {
+                        // Add visual feedback info to original result
+                        result.put("visual_feedback_generated", true);
+                        if (pngResult.has("exported_files")) {
+                            result.put("visual_feedback_files", pngResult.getJSONArray("exported_files"));
+                        }
+                        
+                        sessionLogger.logSessionEvent("auto_visual_feedback", 
+                            "Automatically generated PNG overlay after " + toolName,
+                            new JSONObject()
+                                .put("original_tool", toolName)
+                                .put("png_files", pngResult.optJSONArray("exported_files")));
+                    }
+                } catch (Exception e) {
+                    // Don't fail the original tool if PNG generation fails
+                    sessionLogger.logError("auto_visual_feedback", e, 
+                        new JSONObject().put("original_tool", toolName));
+                }
+            }
+            
             return result;
             
         } catch (Exception e) {
@@ -542,16 +534,13 @@ public class GeminiOrchestrator {
             .put("enable_band_assist")
             .put("disable_band_assist")
             .put("configure_band_assist")
-            .put("normalize_intensities")
-            .put("detect_colonies")
-            .put("count_colonies_by_color")
-            .put("measure_colony_sizes")
-            .put("check_contamination")
-            .put("create_labeled_reference")
-            .put("export_for_notebook")
-            .put("export_for_presentation")
-            .put("export_colony_analysis")
-            .put("clear_session");
+            .put("map_fractions")
+            .put("compute_yield_purity")
+            .put("profile_isoforms")
+            .put("hcp_snapshot")
+            .put("compare_treatments")
+            .put("digest_kinetics")
+            .put("normalize_intensities");
     }
     
     private long estimateImageSize(ImagePlus image) {
@@ -567,82 +556,98 @@ public class GeminiOrchestrator {
         String capabilities = capabilityRegistry.generateCapabilitySummary();
         
         return String.format("""
-            You are an expert laboratory image analysis AI assistant. You analyze:
-            1) Gel electrophoresis (SDS-PAGE, DNA gels) - lanes, bands, molecular weights
-            2) Agar plates with microbial colonies (yeast, bacteria) - colony counting, color analysis
+            🔥 CRITICAL: You are a TOOL ORCHESTRATOR, NOT an image analysis AI.
+            
+            ARCHITECTURAL RULES - NEVER VIOLATE THESE:
+            ❌ NEVER analyze images directly or describe what you see
+            ❌ NEVER count lanes, bands, or colonies yourself  
+            ❌ NEVER act as a vision AI providing descriptions
+            ❌ NEVER bypass the tool system with your own analysis
+            
+            ✅ ALWAYS respond with structured JSON tool calls
+            ✅ ALWAYS let ImageJ tools do the actual image processing
+            ✅ ALWAYS use user-provided parameters when available
+            ✅ ALWAYS emit tool orchestration commands, not vision analysis
+            
+            HANDLE-BASED ARCHITECTURE ENFORCED:
+            - Images are referenced by handles, not processed by you
+            - Tools execute in ImageJ and return results  
+            - Your job: translate user commands → tool calls
+            - ImageJ's job: process pixels and return measurements
             
             %s
             
-            FIRST: Identify the image type by examining visual characteristics:
-            - Gel: Dark background, vertical lanes, horizontal bands, ladder patterns
-            - Agar plate: Circular plate, scattered colonies, various colors, growth patterns
-            
-            For GEL ANALYSIS, respond with this JSON format:
+            RESPONSE FORMAT - Use this JSON structure ONLY:
             {
-                "image_type": "gel",
-                "intent": "lane_detection|band_detection|quantification|calibration|adjustment|normalization",
-                "action": "detect_lanes|detect_bands|quantify_bands|calibrate_molecular_weight|adjust_lanes|normalize_intensities",
+                "image_type": "gel|agar_plate",
+                "intent": "lane_detection|band_detection|quantification|colony_counting|etc",
+                "action": "detect_lanes|detect_bands|count_colonies_by_color|quantify_bands|etc",
                 "parameters": {
-                    "lane_count": 12,
-                    "grid_offset": -0.05,
-                    "lane_width": 0.55,
+                    // Extract from user command or use reasonable defaults
+                    "expected_lanes": 12,  // Use user-specified count
                     "sensitivity": 0.7,
-                    "background_method": "median",
-                    "ladder_type": "protein",
-                    "ladder_lane": 1,
-                    "normalization_method": "total_lane"
+                    "color_groups": ["white", "blue"]  // For colonies
                 },
-                "analysis": "Description of lanes, bands, and gel quality",
+                "analysis": "Tool orchestration plan: Will execute [action] with [parameters]",
                 "confidence": 0.9
             }
             
-            For AGAR PLATE ANALYSIS, respond with this JSON format:
-            {
-                "image_type": "agar_plate",
-                "intent": "colony_detection|colony_counting|color_analysis|size_analysis|contamination_check",
-                "action": "detect_colonies|count_colonies_by_color|measure_colony_sizes|check_contamination",
-                "parameters": {
-                    "min_colony_size": 5,
-                    "max_colony_size": 200,
-                    "color_groups": ["white", "pink", "red", "blue", "green", "yellow"],
-                    "sensitivity": 0.8,
-                    "edge_detection": "adaptive"
-                },
-                "analysis": "Description of colony count, colors, sizes, and distribution",
-                "confidence": 0.9
-            }
+            EXACT TOOL NAMES - Use these specific actions only:
+            GEL TOOLS: detect_lanes, detect_bands, quantify_bands, adjust_lanes, calibrate_molecular_weight, compare_lanes, export_results
+            COLONY TOOLS: count_colonies_by_color, classify_colonies, detect_colonies, measure_colony_sizes, export_colonies
             
-            Always examine the image carefully and determine the correct analysis type.
-            For gels: count lanes and bands. For plates: count colonies by color and size.
+            EXAMPLE TRANSLATIONS:
+            User: "detect 12 lanes" → {"action": "detect_lanes", "parameters": {"expected_lanes": 12}}
+            User: "find protein bands" → {"action": "detect_bands", "parameters": {"sensitivity": 0.7}}
+            User: "count blue and white colonies" → {"action": "count_colonies_by_color", "parameters": {"color_groups": ["blue", "white"]}}
+            User: "quantify protein bands" → {"action": "quantify_bands", "parameters": {"background_method": "median"}}
+            User: "compare lanes statistically" → {"action": "compare_lanes", "parameters": {"reference_lane": 1}}
+            
+            COMPLETE WORKFLOW TRIGGERS:
+            User: "analyze this gel" → {"action": "analyze_gel", "parameters": {"expected_lanes": 12}}
+            User: "adjust image and find lanes and bands" → {"action": "analyze_gel", "parameters": {"expected_lanes": 12}}
+            User: "detect lanes and protein bands" → {"action": "analyze_gel", "parameters": {"expected_lanes": 12}}
+            User: "analyze plate" → {"action": "analyze_plate", "parameters": {"color_groups": ["white", "blue"]}}
+            
+            PREFER COMPLETE WORKFLOWS: When user mentions multiple steps, use canonical workflows (analyze_gel, analyze_plate) instead of individual tools.
+            
+            ❌ NEVER USE: gel_analysis, proceed, workflow, pipeline, openImage
+            ✅ ALWAYS USE: Exact tool names from the list above
+            
+            NEVER SAY: "I see 10 lanes" or "The image shows colonies"
+            ALWAYS SAY: "Tool orchestration plan: Will execute detect_lanes with expected_lanes=12"
+            
+            🔥 REMEMBER: You are a PLANNER, not an ANALYZER. ImageJ does the analysis.
         """, capabilities);
     }
     
     private String createAnalysisPrompt(String userCommand) {
         return String.format("""
-            You are analyzing a laboratory image that has been provided with this request.
-            The image is already loaded in the system and you have full access to analyze it.
+            🚨 ORCHESTRATOR MODE: You do NOT analyze images. You orchestrate tools.
             
             User Command: "%s"
             
-            ANALYSIS WORKFLOW:
-            1) IDENTIFY IMAGE TYPE: Look at the image and determine if it's a gel or agar plate
-            2) EXAMINE DETAILS: 
-               - For gels: Count lanes, identify bands, assess gel quality
-               - For agar plates: Count colonies, identify colors, assess sizes and distribution
-            3) EXTRACT PARAMETERS: Parse user command for specific requirements
-            4) RETURN JSON: Use the appropriate format for the detected image type
+            ORCHESTRATION WORKFLOW:
+            1) PARSE USER COMMAND: Extract what action they want
+            2) EXTRACT PARAMETERS: Get specific requirements from command  
+            3) DETERMINE IMAGE TYPE: gel or agar_plate based on command context
+            4) EMIT TOOL CALL: Return JSON that will execute in ImageJ
             
-            IMPORTANT: 
-            - You ARE analyzing the actual laboratory image (not a simulation)
-            - The image is provided with every request for your vision analysis
-            - Return a JSON response that will trigger the appropriate ImageJ analysis
-            - Include "image_type" field so the system knows which analysis pipeline to use
+            PARAMETER EXTRACTION:
+            - Look for numbers: "12 lanes" → "expected_lanes": 12
+            - Look for colors: "blue and white" → "color_groups": ["blue", "white"] 
+            - Look for actions: "detect", "count", "quantify", "compare"
             
-            COMMON COMMANDS:
-            Gel: "Detect 12 lanes", "Find protein bands", "Quantify lane 3"
-            Agar: "Count all colonies", "Count pink colonies only", "Measure colony sizes"
+            🚨 FORBIDDEN RESPONSES:
+            ❌ "I can see X lanes in the image"
+            ❌ "The gel appears to have Y bands"
+            ❌ "There are Z colonies visible"
             
-            Analyze the provided image and respond with the appropriate JSON format.
+            ✅ CORRECT RESPONSES:
+            ✅ "Tool orchestration plan: Will execute detect_lanes with expected_lanes=12"
+            ✅ "Tool orchestration plan: Will execute count_colonies_by_color with color_groups=['blue','white']"
+            
+            Respond ONLY with tool orchestration JSON. NO image descriptions.
         """, userCommand);
     }
     
@@ -676,6 +681,12 @@ public class GeminiOrchestrator {
         if (responseText.endsWith("```")) {
             responseText = responseText.substring(0, responseText.length() - 3);
         }
+        responseText = responseText.trim();
+        
+        // Strip JSON comments (//...) that Gemini sometimes includes
+        responseText = responseText.replaceAll("//[^\\r\\n]*", "");
+        // Clean up any remaining comma-whitespace-newline patterns
+        responseText = responseText.replaceAll(",\\s*\\n", ",\n");
         responseText = responseText.trim();
         
         try {
@@ -772,6 +783,19 @@ public class GeminiOrchestrator {
         return switch (toolName) {
             case "adjust_gel", "export_gel", "adjust_plate", "export_plate" -> true;
             case "render_overlay_png", "adjust_lanes" -> true; // Legacy deprecated tools
+            default -> false;
+        };
+    }
+    
+    private boolean shouldAutoGenerateVisualFeedback(String toolName) {
+        // Tools that create visual annotations that users should see
+        return switch (toolName) {
+            case "detect_lanes", "detect_bands", "adjust_lanes" -> true;
+            case "detect_plate", "count_colonies_by_color", "classify_colonies" -> true;
+            case "calibrate_standard_curve", "compare_lanes" -> true;
+            // Don't auto-generate for tools that already include PNG generation
+            case "analyze_gel", "export_gel", "analyze_plate", "export_plate" -> false;
+            case "render_overlay_png", "export_results" -> false; // Already PNG tools
             default -> false;
         };
     }

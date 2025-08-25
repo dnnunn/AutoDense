@@ -23,6 +23,8 @@ public final class AssistModels {
         public double areaCorr;       // Background-corrected area
         public double snr;            // Signal-to-noise ratio
         public double confidence = 0.0;
+        public double sharpness = 0.0;      // Band sharpness (edge definition)
+        public double smearPercent = 0.0;   // Lane smear percentage in MW window
         public Double mwKDa;          // Molecular weight if calibrated
         public final Set<String> flags = new HashSet<>();
         
@@ -46,8 +48,8 @@ public final class AssistModels {
         
         @Override
         public String toString() {
-            return String.format("AssistBand{x=%d-%d, y=%d-%d, apex=%.1f, area=%.0f, snr=%.1f, conf=%.2f}", 
-                xStart, xEnd, yStart, yEnd, yApexPx, areaCorr, snr, confidence);
+            return String.format("AssistBand{x=%d-%d, y=%d-%d, apex=%.1f, area=%.0f, snr=%.1f, conf=%.2f, sharp=%.2f, smear=%.1f%%}", 
+                xStart, xEnd, yStart, yEnd, yApexPx, areaCorr, snr, confidence, sharpness, smearPercent);
         }
     }
     

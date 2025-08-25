@@ -29,7 +29,8 @@ public class GeminiApiClient {
     public GeminiApiClient(String apiKey) {
         this.apiKey = apiKey;
         this.httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
+            .connectTimeout(Duration.ofSeconds(30))
+            .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
         this.capabilityRegistry = new CapabilityRegistry(new Context());
     }
@@ -37,7 +38,8 @@ public class GeminiApiClient {
     public GeminiApiClient(String apiKey, Context context) {
         this.apiKey = apiKey;
         this.httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
+            .connectTimeout(Duration.ofSeconds(30))
+            .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
         this.capabilityRegistry = new CapabilityRegistry(context);
     }
@@ -49,6 +51,13 @@ public class GeminiApiClient {
      * @return Raw JSON response from Gemini API
      */
     public JSONObject sendRequest(String prompt, ImagePlus gelImage) throws Exception {
+        System.out.println("DEBUG: GeminiApiClient.sendRequest() called");
+        System.out.println("DEBUG: Prompt length: " + prompt.length() + " characters");
+        System.out.println("DEBUG: Has image: " + (gelImage != null));
+        if (gelImage != null) {
+            System.out.println("DEBUG: Image dimensions: " + gelImage.getWidth() + "x" + gelImage.getHeight());
+        }
+        
         JSONObject requestBody = new JSONObject();
         JSONArray contents = new JSONArray();
         JSONObject content = new JSONObject();
@@ -80,7 +89,7 @@ public class GeminiApiClient {
         generationConfig.put("maxOutputTokens", 1024);
         requestBody.put("generationConfig", generationConfig);
         
-        // Make API request
+        // Make API request with retry logic
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(API_BASE_URL + "?key=" + apiKey))
             .header("Content-Type", "application/json")
@@ -88,8 +97,45 @@ public class GeminiApiClient {
             .timeout(Duration.ofSeconds(40))
             .build();
         
-        HttpResponse<String> response = httpClient.send(request, 
-            HttpResponse.BodyHandlers.ofString());
+        HttpResponse<String> response = null;
+        int maxRetries = 3;
+        Exception lastException = null;
+        
+        // Debug: Log request details (without sensitive data)
+        System.out.println("DEBUG: Making request to: " + API_BASE_URL);
+        System.out.println("DEBUG: Request method: POST");
+        System.out.println("DEBUG: Request timeout: 40 seconds");
+        System.out.println("DEBUG: Content-Type: application/json");
+        System.out.println("DEBUG: Request body size: " + requestBody.toString().length() + " characters");
+        
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                System.out.println("DEBUG: Attempt " + attempt + "/" + maxRetries + " - Sending HTTP request...");
+                response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                System.out.println("DEBUG: HTTP request successful! Status: " + response.statusCode());
+                break; // Success, exit retry loop
+            } catch (java.net.ConnectException e) {
+                lastException = e;
+                System.err.println("DEBUG: ConnectException details: " + e.getClass().getName() + ": " + e.getMessage());
+                System.err.println("DEBUG: Full exception stack trace:");
+                e.printStackTrace();
+                if (attempt < maxRetries) {
+                    System.err.println("Connection failed, retrying in " + (attempt * 2) + " seconds... (attempt " + attempt + "/" + maxRetries + ")");
+                    try {
+                        Thread.sleep(attempt * 2000); // Exponential backoff
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Request interrupted", ie);
+                    }
+                } else {
+                    throw new RuntimeException("Failed to connect to Gemini API after " + maxRetries + " attempts. Check your internet connection and API key.", lastException);
+                }
+            } catch (Exception e) {
+                System.err.println("DEBUG: Unexpected exception: " + e.getClass().getName() + ": " + e.getMessage());
+                e.printStackTrace();
+                throw new RuntimeException("Unexpected error during API request: " + e.getMessage(), e);
+            }
+        }
         
         if (response.statusCode() != 200) {
             throw new RuntimeException("Gemini API error: " + response.statusCode() + " - " + response.body());

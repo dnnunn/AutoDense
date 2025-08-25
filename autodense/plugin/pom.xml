@@ -77,6 +77,17 @@
       <artifactId>imageio-metadata</artifactId>
       <version>3.12.0</version>
     </dependency>
+    <!-- Apache POI for Excel export -->
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi</artifactId>
+      <version>5.2.4</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi-ooxml</artifactId>
+      <version>5.2.4</version>
+    </dependency>
     <!-- Additional format support -->
     <dependency>
       <groupId>com.twelvemonkeys.imageio</groupId>

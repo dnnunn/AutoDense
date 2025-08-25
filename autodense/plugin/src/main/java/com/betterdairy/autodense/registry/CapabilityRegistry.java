@@ -8,12 +8,8 @@ import org.scijava.plugin.PluginService;
 import org.scijava.command.Command;
 import org.scijava.command.CommandService;
 import org.scijava.module.ModuleService;
-import org.scijava.module.ModuleInfo;
-
 import java.lang.reflect.Method;
-import java.lang.reflect.Parameter;
 import java.util.List;
-import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Arrays;
