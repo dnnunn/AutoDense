@@ -116,22 +116,47 @@ public final class SdsOps {
     }
 
     public static Map<String,Object> integrate(ImagePlus imp, Path bandsCsv, Path outCsv) throws Exception {
-        // Dumb but consistent integration: area under local baseline around band Y
-        List<Map<String,String>> rows = Csv.read(bandsCsv);
-        List<Map<String,Object>> out = new ArrayList<>();
+        return integrate(imp, bandsCsv, outCsv, null, null, null);
+    }
+    
+    public static Map<String,Object> integrate(ImagePlus imp, Path bandsCsv, Path outCsv, Integer win, Double quantile, Integer winY) throws Exception {
+        var rows = Csv.read(bandsCsv); // id,lane,y_px,...
+        // Group bands by lane to reuse per-lane background
+        Map<Integer, List<Map<String,String>>> byLane = new HashMap<>();
         for (var r : rows) {
-            int id = Integer.parseInt(r.get("id"));
-            int y = (int) Double.parseDouble(r.get("y_px"));
-            imp.setRoi(0, Math.max(0,y-6), imp.getWidth(), 12);
-            ImagePlus strip = new ImagePlus("strip", imp.getProcessor().crop());
-            IJ.run(strip, "8-bit", "");
-            ImageStatistics st = strip.getStatistics(Measurements.MEAN | Measurements.AREA);
-            out.add(Map.of(
-                "id", id,
-                "auc", st.mean * st.area
-            ));
+            int lane = Integer.parseInt(r.get("lane"));
+            byLane.computeIfAbsent(lane, k->new ArrayList<>()).add(r);
         }
-        Csv.write(outCsv, out, List.of("id","auc"));
+
+        List<Map<String,Object>> out = new ArrayList<>();
+        for (var e : byLane.entrySet()) {
+            int laneIdx = e.getKey();
+            Roi lane = findLaneRoi(imp, laneIdx); // your lane ROI from overlay
+            imp.setRoi(lane);
+            ImagePlus laneImp = new ImagePlus("lane", imp.getProcessor().crop());
+            IJ.run(laneImp, "8-bit", "");
+            new BackgroundSubtracter().rollingBallBackground(laneImp.getProcessor(), 20, false, false, false, false, false);
+
+            // Build lane profile and baseline with configurable parameters
+            double[] prof = laneProfile(laneImp.getProcessor());           // length = lane height
+            int windowSize = (win != null) ? win : 21;  // sliding window size for quantile baseline
+            double q = (quantile != null) ? quantile : 0.10;  // quantile for baseline (default 10th percentile)
+            double[] base = quantileBaseline(prof, windowSize, q);
+            base = smoothSG(base);
+            double[] resid = subtract(prof, base);
+
+            // Integrate around each band position (±winY)
+            int windowY = (winY != null) ? winY : 6;  // integration window around band peak
+            for (var r : e.getValue()) {
+                int id = Integer.parseInt(r.get("id"));
+                int y  = (int)Math.round(Double.parseDouble(r.get("y_px")) - lane.getBounds().y);
+                int y0 = Math.max(0, y - windowY), y1 = Math.min(resid.length-1, y + windowY);
+                double auc=0;
+                for (int yy=y0; yy<=y1; yy++) auc += resid[yy];
+                out.add(Map.of("id", id, "lane", laneIdx, "auc_bgsub", auc));
+            }
+        }
+        Csv.write(outCsv, out, List.of("id","lane","auc_bgsub"));
         return Map.of("bands_csv", outCsv.toString());
     }
 
@@ -159,4 +184,62 @@ public final class SdsOps {
         return idx;
     }
     private static double max(double[] a){ double m=Double.NEGATIVE_INFINITY; for(double v:a) m=Math.max(m,v); return m; }
+    
+    // --- Lane-wise background model helpers ---
+    static double[] laneProfile(ImageProcessor ip) {
+        int w = ip.getWidth(), h = ip.getHeight();
+        double[] rowSum = new double[h];
+        for (int y=0; y<h; y++) {
+            double s=0;
+            for (int x=0; x<w; x++) s += (255 - (ip.get(x,y)&0xff));
+            rowSum[y] = s;
+        }
+        return rowSum;
+    }
+
+    static double[] quantileBaseline(double[] a, int win, double q) {
+        // sliding window q-quantile (q in [0,1], e.g., 0.1)
+        int n=a.length; double[] b=new double[n];
+        int r = Math.max(1, win/2);
+        double[] buf = new double[2*r+1];
+        for (int i=0;i<n;i++){
+            int k=0;
+            for (int j=i-r;j<=i+r;j++){
+                buf[k++] = (j>=0 && j<n) ? a[j] : a[Math.max(0, Math.min(n-1,j))];
+            }
+            java.util.Arrays.sort(buf,0,k);
+            int idx = (int)Math.round(Math.max(0, Math.min(k-1, q*(k-1))));
+            b[i] = buf[idx];
+        }
+        return b;
+    }
+
+    static double[] smoothSG(double[] a) {
+        // 5-point Savitzky–Golay (quadratic) smoother: [-3,12,17,12,-3]/35
+        int n=a.length; double[] s=new double[n];
+        for (int i=0;i<n;i++){
+            double v=0; double w=0;
+            for (int k=-2;k<=2;k++){
+                int j=Math.max(0,Math.min(n-1,i+k));
+                int c = switch(k){case -2,-1,1,2 -> 12; case 0 -> 17; default -> 0;};
+                if (k==-2 || k==2) c = -3;
+                v += c * a[j];
+                w += Math.abs(c);
+            }
+            s[i] = v / (w==0?1:w);
+        }
+        return s;
+    }
+
+    static double[] subtract(double[] a, double[] b){
+        double[] r=new double[a.length];
+        for (int i=0;i<a.length;i++) r[i]=Math.max(0,a[i]-b[i]);
+        return r;
+    }
+
+    private static Roi findLaneRoi(ImagePlus imp, int laneIdx){
+        Overlay ov = imp.getOverlay(); if (ov==null) throw new IllegalStateException("No overlay");
+        for (Roi r : ov.toArray()) if (("lane_"+laneIdx).equals(r.getName())) return r;
+        throw new IllegalArgumentException("Lane ROI lane_"+laneIdx+" not found");
+    }
 }
