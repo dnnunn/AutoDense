@@ -22,6 +22,11 @@ import java.awt.Font;
 import java.awt.Rectangle;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.text.DecimalFormat;
 import java.util.List;
 import java.util.ArrayList;
@@ -587,11 +592,27 @@ public class GelAnalysisTools {
                 dup.setProcessor(proc);
             }
             
-            // Save to temp file
+            // Save overlay atomically to avoid half-rendered files
             String filename = "gel_overlay_" + System.currentTimeMillis() + ".png";
             Path outputPath = tempDir.resolve(filename);
-            FileSaver fs = new FileSaver(dup);
-            fs.saveAsPng(outputPath.toString());
+            Path tempPath = outputPath.resolveSibling(outputPath.getFileName() + ".tmp");
+            
+            try {
+                // Convert ImagePlus to BufferedImage
+                BufferedImage bufferedImage = dup.getBufferedImage();
+                
+                // Write to temporary file first
+                ImageIO.write(bufferedImage, "PNG", tempPath.toFile());
+                
+                // Atomic move to final location
+                Files.move(tempPath, outputPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                
+            } catch (IOException e) {
+                // Fallback to FileSaver if atomic write fails
+                try { Files.deleteIfExists(tempPath); } catch (IOException ignored) {}
+                FileSaver fs = new FileSaver(dup);
+                fs.saveAsPng(outputPath.toString());
+            }
             
             // Build standardized success response
             JSONObject data = new JSONObject()
@@ -3656,6 +3677,59 @@ public class GelAnalysisTools {
 
         } catch (Exception e) {
             return recovery.createRecoveryResponse("digest_kinetics", e);
+        }
+    }
+    
+    /**
+     * Tool: ui.refresh_canvas
+     * Refresh the web canvas overlay after ImageJ operations
+     * Creates cache-busted overlay URL for immediate visual feedback
+     */
+    public JSONObject refreshCanvas(JSONObject args) {
+        try {
+            String imageHandle = args.optString("image_handle");
+            if (imageHandle.isEmpty()) {
+                // Use most recent image if no handle specified
+                if (store.getImageCount() > 0) {
+                    // Get the most recent image handle (simple implementation)
+                    imageHandle = "img_current";
+                }
+            }
+            
+            if (!imageHandle.isEmpty()) {
+                SessionStore.ImageRecord img = store.getImage(imageHandle);
+                if (img != null && img.currentOverlay != null) {
+                    // Generate new overlay PNG with cache-busting timestamp
+                    JSONObject overlayArgs = new JSONObject()
+                        .put("image_handle", imageHandle)
+                        .put("max_width", 1200)
+                        .put("quality", 90);
+                        
+                    JSONObject overlayResult = renderOverlayPng(overlayArgs);
+                    if (overlayResult.optBoolean("success", false)) {
+                        String pngPath = overlayResult.optJSONObject("data").optString("png_path");
+                        
+                        // Convert absolute path to web-accessible URL
+                        String overlayUrl = "/overlays/current.png";
+                        
+                        return ok("refresh_canvas", new JSONObject()
+                            .put("overlay_png", overlayUrl)
+                            .put("cache_bust", System.currentTimeMillis())
+                            .put("image_handle", imageHandle)
+                            .put("overlay_updated", true));
+                    }
+                }
+            }
+            
+            // Return success even if no overlay to refresh
+            return ok("refresh_canvas", new JSONObject()
+                .put("overlay_png", "/overlays/current.png")
+                .put("cache_bust", System.currentTimeMillis())
+                .put("overlay_updated", false)
+                .put("message", "No overlay to refresh"));
+                
+        } catch (Exception e) {
+            return recovery.createRecoveryResponse("refresh_canvas", e);
         }
     }
     

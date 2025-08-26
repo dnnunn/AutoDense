@@ -218,6 +218,11 @@ public class GeminiOrchestrator {
                 case "clear_session" -> canonicalTools.clear_session(parameters);
                 
                 // =============================================================================
+                // UI OPERATIONS (Web Interface Integration)
+                // =============================================================================
+                case "ui.refresh_canvas" -> gelAnalysisTools.refreshCanvas(parameters);
+                
+                // =============================================================================
                 // BACKWARD COMPATIBILITY ALIASES (Deprecated - Log warnings)
                 // =============================================================================
                 case "open_image" -> { 
