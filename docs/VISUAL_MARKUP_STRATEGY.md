@@ -1,5 +1,11 @@
 # Visual Markup Strategy for Gel Analysis
 
+> **Doc Meta**
+> - **Purpose:** Visual overlay and markup strategy for gel analysis results
+> - **Scope:** Rendering techniques, overlay management, and visual feedback systems
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Overview
 
 The AutoDense system implements a **dual-data approach** for gel analysis:

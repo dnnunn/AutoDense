@@ -1,5 +1,11 @@
 # Colony Normalization System ✅
 
+> **Doc Meta**
+> - **Purpose:** Data normalization methods for colony analysis measurements
+> - **Scope:** Statistical methods, outlier detection, and data standardization
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Overview
 
 Successfully implemented comprehensive colony normalization for cross-plate comparison following the exact specifications provided. The system ensures portable measurements across different imaging conditions, plate batches, and experimental setups.

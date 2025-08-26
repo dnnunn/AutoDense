@@ -1,5 +1,11 @@
 # AutoDense Dependency Management Strategy
 
+> **Doc Meta**
+> - **Purpose:** Dependency management strategy and library selection criteria
+> - **Scope:** Maven dependencies, version management, and compatibility requirements
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Overview
 
 AutoDense uses a hybrid approach for managing dependencies to avoid version conflicts with Fiji while ensuring proper functionality of ServiceLoader-based libraries like TwelveMonkeys ImageIO.

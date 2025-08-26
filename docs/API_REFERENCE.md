@@ -1,5 +1,11 @@
 # AutoDense API Reference
 
+> **Doc Meta**
+> - **Purpose:** Complete API reference for AutoDense tools, data structures, and NL capabilities
+> - **Scope:** Tool interfaces, schemas, parameters, and response formats for Gemini AI
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Complete Tool Function Reference for Gemini AI
 
 This document provides the comprehensive API reference for all tool functions available to Gemini AI in AutoDense v12.01 Enhanced. Each tool operates on handles rather than raw image data, maintaining clean separation between AI planning and ImageJ execution.

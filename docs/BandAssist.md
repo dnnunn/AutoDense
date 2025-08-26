@@ -1,6 +1,14 @@
-# How it works (deterministic, user‑assisted)
+# BandAssist System - User-Guided Band Detection
 
-1. **Assist mode toggle** (a toolbar button): when active, a single click becomes a “seed band here” signal.
+> **Doc Meta**
+> - **Purpose:** Technical specification for user-assisted band detection in gel analysis
+> - **Scope:** Algorithm design, implementation details, and user interaction patterns
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
+## How it works (deterministic, user‑assisted)
+
+1. **Assist mode toggle** (a toolbar button): when active, a single click becomes a "seed band here" signal.
 2. **Capture the click**: map screen coords → image coords → find the **lane** that contains $x$.
 3. **Refine in the clicked lane**:
    - Build the **lane intensity profile** $L(y)=\sum_{x\in lane} I(x,y)$.

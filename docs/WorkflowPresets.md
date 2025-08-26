@@ -1,5 +1,11 @@
 # AutoDense Workflow Presets Documentation
 
+> **Doc Meta**
+> - **Purpose:** Comprehensive guide for workflow presets and gel analysis configurations
+> - **Scope:** All presets, parameters, best practices, and laboratory workflow integration
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 This document describes all available workflow presets in AutoDense, their parameters, expected outputs, and usage examples.
 
 ## Overview

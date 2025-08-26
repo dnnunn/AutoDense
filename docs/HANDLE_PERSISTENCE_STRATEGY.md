@@ -1,5 +1,11 @@
 # Handle Persistence Strategy
 
+> **Doc Meta**
+> - **Purpose:** Technical strategy for persistent state management using handles
+> - **Scope:** Handle lifecycle, storage patterns, and state persistence architecture
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Problem Statement
 
 **Challenge**: Gemini can lose track of image handles between tool calls, breaking the workflow when it forgets to include `image_handle` parameters in subsequent tool calls.

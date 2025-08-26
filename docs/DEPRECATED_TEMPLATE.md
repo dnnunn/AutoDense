@@ -1,8 +1,8 @@
 ---
 status: deprecated
 deprecated_on: 2025-08-26
-replaced_by: /docs/<new-canonical-path>.md
-owner: @<github-handle>
+replaced_by: /docs/README.md
+owner: @davidnunn
 last-verified: 2025-08-26
 ---
 
@@ -11,7 +11,7 @@ last-verified: 2025-08-26
 **Status:** Deprecated  
 **Date:** 2025-08-26  
 **Reason:** Consolidated duplicate/overlapping content into a single canonical source of truth.  
-**New home:** [/docs/<new-canonical-path>.md](../<new-canonical-path>.md)
+**New home:** [/docs/README.md](README.md)
 
 ## What changed
 - This page is kept only as a pointer.

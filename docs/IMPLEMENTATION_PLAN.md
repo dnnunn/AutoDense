@@ -1,5 +1,11 @@
 # AutoDense Implementation Plan: Fiji Integration
 
+> **Doc Meta**
+> - **Purpose:** Strategic plan for integrating Fiji's proven gel analysis algorithms
+> - **Scope:** 6-week implementation roadmap and technical integration strategy
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Executive Summary
 
 Based on analysis of the Fiji installation, we have identified critical gel analysis functionality that can significantly enhance AutoDense's capabilities. This plan outlines the integration of proven algorithms from Fiji's `_BandPeakQuantification.ijm` and related tools into our AI-powered gel analysis platform.

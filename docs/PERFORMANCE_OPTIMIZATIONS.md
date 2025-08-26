@@ -1,5 +1,11 @@
 # Performance Optimization System
 
+> **Doc Meta**
+> - **Purpose:** System performance improvements and optimization strategies
+> - **Scope:** Memory usage, processing speed, and algorithmic optimizations
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Overview
 
 This document describes the comprehensive performance optimization system implemented in AutoDense, focusing on memory management, array indexing optimizations, and caching strategies.

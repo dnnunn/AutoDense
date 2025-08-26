@@ -94,6 +94,39 @@ For a more detailed description of the Architecture see:
 * Session logs sanitize sensitive info.
 * Network calls send base64 images to Gemini.
 
+---
+
+## 📝 Documentation Standards (MANDATORY)
+
+### **All New/Modified Documents Must Include:**
+
+**Required Doc Meta Block (at top of every .md file):**
+```markdown
+> **Doc Meta**
+> - **Purpose:** Brief description of what this document is for
+> - **Scope:** What it covers (and what it doesn't)
+> - **Owner:** @github-handle 
+> - **Last-verified:** 2025-08-26
+```
+
+### **Documentation Rules:**
+1. **NEVER create/edit a .md file** without the Doc Meta block
+2. **ALWAYS update Last-verified** when making substantial changes
+3. **Use present date** (YYYY-MM-DD format) for new documents
+4. **Include Purpose & Scope** - be specific about boundaries
+5. **Assign clear ownership** - use actual GitHub handle
+
+### **Quality Gates:**
+- Pre-commit hooks **will reject** .md files missing Doc Meta
+- Tombstone policy **enforces** 180-day verification freshness  
+- CI pipeline **validates** all documentation standards
+
+### **Templates Available:**
+- `docs/DEPRECATED_TEMPLATE.md` - For tombstoning old docs
+- Standard Doc Meta block - Copy from any recent document
+
+**This rule applies to ALL documentation: technical specs, guides, planning docs, and reference material.**
+
 ## Delta Changelog (Last Updated: Aug 26, 2025)
 
 ### ✅ Recent Fixes / Additions

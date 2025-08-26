@@ -1,5 +1,11 @@
 # Colony Identification Assist System ✅
 
+> **Doc Meta**
+> - **Purpose:** User-guided colony detection with ML-based classification propagation
+> - **Scope:** Click interaction, machine learning algorithms, and classification workflows
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Overview
 
 Successfully implemented Colony Identification Assist based on the Band Identification Assist architecture, providing user-guided colony detection and machine learning-based classification propagation. The system enables precise manual corrections to automated detection with intelligent class propagation.

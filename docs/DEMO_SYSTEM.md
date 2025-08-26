@@ -1,5 +1,11 @@
 # AutoDense Demo System
 
+> **Doc Meta**
+> - **Purpose:** Demo system for testing and showcasing AutoDense capabilities
+> - **Scope:** Demo workflows, test datasets, and presentation modes
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Overview
 
 The AutoDense demo system provides interactive tutorials and examples that enhance user experience through guided learning, feature discovery, and validation testing.

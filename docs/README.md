@@ -40,9 +40,9 @@
 - **[Demo System](DEMO_SYSTEM.md)** - Testing framework
 
 ### Project Management
+- **[Project Status](PROJECT_STATUS.md)** - Current development status and achievements
 - **[Changelog](CHANGELOG.md)** - Version history
 - **[Release Notes](RELEASE_NOTES.md)** - User-facing changes
-- **[Status Log](STATUSLOG.md)** - Development progress
 - **[Architectural Debt](ARCHITECTURAL_DEBT.md)** - Known issues
 
 ## 🔧 Development Resources
@@ -71,7 +71,7 @@
 - **[Instructions](Instructions.md)** - Legacy workflows
 - **[More Fiji Imports](More Fiji imports.md)** - Image preprocessing
 - **[New Plan](New plan.md)** - Architecture evolution
-- **[Success Log](SuccessLog.md)** - Achievement tracking
+- **[Legacy Status Docs](STATUSLOG.md)** - *Deprecated, see Project Status*
 
 ---
 
@@ -83,4 +83,9 @@ All documents should include:
 - **Owner:** GitHub handle of maintainer
 - **Last-verified:** Date (YYYY-MM-DD)
 
-For deprecated documents, use the [deprecation template](DEPRECATED_TEMPLATE.md).
+## 📋 Documentation Templates
+
+- **[New Document Template](NEW_DOC_TEMPLATE.md)** - Required Doc Meta block for all new docs
+- **[Deprecation Template](DEPRECATED_TEMPLATE.md)** - For tombstoning old documents
+
+**IMPORTANT:** All new/modified markdown documents MUST include the Doc Meta block. This is enforced by pre-commit hooks and CI.

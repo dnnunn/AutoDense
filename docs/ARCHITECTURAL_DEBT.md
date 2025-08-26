@@ -1,5 +1,11 @@
 # Architectural Debt - Known Issues for Future Cleanup
 
+> **Doc Meta**
+> - **Purpose:** Tracking known architectural violations and technical debt
+> - **Scope:** Handle violations, design issues, and resolution strategies
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Overview
 This document tracks known architectural violations that may cause issues during pressure testing. These are documented but not immediately fixed to avoid disrupting the working system.
 

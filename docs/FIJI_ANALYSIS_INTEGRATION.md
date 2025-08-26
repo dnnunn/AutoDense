@@ -1,5 +1,11 @@
 # Fiji Gel Analysis Integration Guide
 
+> **Doc Meta**
+> - **Purpose:** Technical guide for integrating University of Tokyo's Fiji gel analysis algorithms
+> - **Scope:** Algorithm analysis, implementation strategy, and testing approach
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Overview
 This document catalogs existing gel analysis functionality found in the Fiji installation and provides an integration roadmap for AutoDense. These proven methods can be directly incorporated into our natural language processing pipeline and enhance our LLM's understanding of gel analysis workflows.
 

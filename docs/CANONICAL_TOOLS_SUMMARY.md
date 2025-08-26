@@ -1,5 +1,11 @@
 # Canonical Tool Surface - Streamlined Gemini Interface
 
+> **Doc Meta**
+> - **Purpose:** Streamlined tool interface design for Gemini AI integration
+> - **Scope:** Tool consolidation, canonical actions, and deprecation strategy
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## **BEFORE: Confusing Tool Sprawl (35+ methods)**
 
 ### Problems Identified:

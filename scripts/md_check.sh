@@ -40,4 +40,12 @@ else
   echo "WARN: python3 not found; skipping tombstone policy check"
 fi
 
+# 5) Doc Meta block validation (standard lib Python)
+if command -v python3 >/dev/null 2>&1; then
+  echo "Running Doc Meta validation..."
+  python3 scripts/docs_meta_check.py .
+else
+  echo "WARN: python3 not found; skipping Doc Meta validation"
+fi
+
 echo "Docs checks passed ✅"

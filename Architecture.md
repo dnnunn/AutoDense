@@ -1,5 +1,11 @@
 # ARCHITECTURE.md (Detailed Reference)
 
+> **Doc Meta**
+> - **Purpose:** Detailed technical reference for AutoDense's handle-based architecture
+> - **Scope:** System components, data flow, design principles, and implementation details
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Overview
 
 AutoDense is a **Mac-native Fiji/ImageJ2 application** with AI-assisted orchestration. The architecture

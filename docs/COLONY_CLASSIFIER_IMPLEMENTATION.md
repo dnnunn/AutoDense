@@ -1,5 +1,11 @@
 # Enhanced ColonyClassifier Implementation ✅
 
+> **Doc Meta**
+> - **Purpose:** Technical implementation details for colony classification algorithms
+> - **Scope:** Lab color analysis, X-gal detection, and background sampling methods
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Overview
 
 Successfully implemented the enhanced `ColonyClassifier.classifyLab()` method with background ring sampling and exact X-gal classification rules as specified.

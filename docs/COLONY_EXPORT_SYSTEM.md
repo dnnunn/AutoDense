@@ -1,5 +1,11 @@
 # Colony Analysis Export System
 
+> **Doc Meta**
+> - **Purpose:** Data export formats and CSV generation for colony analysis results
+> - **Scope:** Export schemas, file formats, and data structure specifications
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Overview
 
 The AutoDense colony analysis tools follow the same **dual-data principle** as gel analysis:

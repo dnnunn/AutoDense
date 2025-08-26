@@ -1,5 +1,11 @@
 # Migration Guide: Old to New Architecture
 
+> **Doc Meta**
+> - **Purpose:** Migration guide from legacy to handle-based architecture
+> - **Scope:** Breaking changes, migration steps, and compatibility notes
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 This document provides a complete migration guide from the old pattern-matching NLP system to the new handle-based Gemini architecture.
 
 ## Overview of Changes

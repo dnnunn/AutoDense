@@ -1,5 +1,11 @@
 # AutoDense
 
+> **Doc Meta**
+> - **Purpose:** Main project README with setup, architecture, and usage instructions
+> - **Scope:** Quick start guide, architecture overview, and development setup
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 AI-powered gel densitometry application built as a Mac-native Fiji/ImageJ2 app with Google Gemini
 integration for natural language control.
 
