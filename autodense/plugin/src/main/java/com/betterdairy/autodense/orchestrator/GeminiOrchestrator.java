@@ -41,6 +41,18 @@ public class GeminiOrchestrator {
     private boolean registryLoaded = false;
     
     public GeminiOrchestrator(String apiKey) {
+        // Validate API key before initializing components
+        if (!isValidApiKey(apiKey)) {
+            throw new IllegalArgumentException(
+                "❌ Invalid Gemini API key provided. Please:\n" +
+                "1. Get a valid API key from https://makersuite.google.com/app/apikey\n" +
+                "2. Set it via: export GEMINI_API_KEY=your_actual_key\n" +
+                "3. Or create api-config.properties with: GEMINI_API_KEY=your_actual_key\n" +
+                "4. Restart the application\n" +
+                "Current key: '" + (apiKey != null ? apiKey.substring(0, Math.min(apiKey.length(), 10)) + "..." : "null") + "'"
+            );
+        }
+        
         // Initialize core components
         this.sessionStore = new SessionStore();
         this.sessionLogger = new SessionLogger(sessionStore.getSessionId());
@@ -1665,5 +1677,23 @@ public class GeminiOrchestrator {
         }
         
         return null;
+    }
+    
+    /**
+     * Validates if the provided API key is valid (not null, empty, or placeholder)
+     */
+    private static boolean isValidApiKey(String apiKey) {
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            return false;
+        }
+        
+        // Check for common placeholder values
+        String key = apiKey.trim().toLowerCase();
+        return !key.equals("placeholder") && 
+               !key.equals("your_api_key_here") && 
+               !key.equals("your_key") && 
+               !key.equals("test") && 
+               !key.equals("demo") && 
+               key.length() > 10; // Real keys are typically much longer
     }
 }

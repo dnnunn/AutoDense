@@ -176,10 +176,59 @@ mvn -q -f autodense/plugin/pom.xml exec:java \
 
 ## API Configuration
 
-Set Gemini API key via:
+### 🔑 Gemini API Key Setup (CRITICAL)
 
-- Environment variable: `export GEMINI_API_KEY=your_key`
-- System property: `-DGEMINI_API_KEY=your_key`
+**AutoDense REQUIRES a valid Gemini API key to function.** The application will fail with clear error messages if an invalid key is provided.
+
+#### Step 1: Get Your API Key
+1. Visit: https://makersuite.google.com/app/apikey
+2. Sign in with your Google account
+3. Create a new API key
+4. Copy the key (starts with "AIza...")
+
+#### Step 2: Set the API Key
+**Option A - Environment Variable (Recommended):**
+```bash
+export GEMINI_API_KEY=your_actual_key_here
+mvn -f autodense/plugin/pom.xml exec:java -Dexec.mainClass=com.betterdairy.autodense.plugin.EnhancedImageJLauncher
+```
+
+**Option B - System Property:**
+```bash
+mvn -f autodense/plugin/pom.xml exec:java \
+  -Dexec.mainClass=com.betterdairy.autodense.plugin.EnhancedImageJLauncher \
+  -DGEMINI_API_KEY=your_actual_key_here
+```
+
+**Option C - Configuration File:**
+Create `api-config.properties` in the root directory:
+```properties
+GEMINI_API_KEY=your_actual_key_here
+```
+
+#### Common API Key Issues
+
+❌ **NEVER use these placeholder values:**
+- `placeholder`
+- `your_api_key_here` 
+- `your_key`
+- `test`
+- `demo`
+
+✅ **Valid keys look like:** `AIzaSyD...` (39 characters total)
+
+#### Error Prevention
+The application now validates API keys at startup and will:
+- Show clear warnings in the ImageJ log for invalid keys
+- Prevent GeminiOrchestrator initialization with placeholder keys  
+- Display helpful setup instructions when keys are missing/invalid
+
+#### Troubleshooting
+If you see "API key not valid" errors:
+1. Check your key is correctly set: `echo $GEMINI_API_KEY`
+2. Verify it starts with "AIza" and is ~39 characters
+3. Test it works at: https://makersuite.google.com/app/apikey
+4. Restart AutoDense after setting the key
 
 ## Testing Protocol
 

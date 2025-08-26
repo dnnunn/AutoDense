@@ -4,6 +4,7 @@ com/betterdairy/autodense/analysis/Profiles.class
 com/betterdairy/autodense/model/Models$ColonyClassification.class
 com/betterdairy/autodense/analysis/ColonyDetector.class
 com/betterdairy/autodense/imageio/ColorChannelProcessor$ColonyStatistics.class
+com/betterdairy/autodense/plugin/AutoDenseWebServer.class
 com/betterdairy/autodense/plugin/GeminiApiClient.class
 com/betterdairy/autodense/analysis/TimeSeriesColonyTracker$TimePoint.class
 com/betterdairy/autodense/plugin/GelUI$1.class
@@ -12,14 +13,19 @@ com/betterdairy/autodense/analysis/Calibrator$StandardCurveFitter$CVPrediction.c
 com/betterdairy/autodense/analysis/TimeSeriesColonyTracker$TrackMatch.class
 com/betterdairy/autodense/analysis/PlateAnalysisDefaults$XGalDefaults.class
 com/betterdairy/autodense/analysis/ColonyClassifier$LabColor.class
+autodense/agarose/AgaroseOps$Fit.class
+autodense/util/OverlayExporter.class
+autodense/agarose/AgaroseOps.class
 com/betterdairy/autodense/analysis/ColonyAssistModels$AssistConfig.class
 com/betterdairy/autodense/analysis/PlateAnalysisDefaults$PhansalkarDefaults.class
+com/betterdairy/autodense/tools/AssayOps.class
 com/betterdairy/autodense/analysis/XGalBluenessAnalyzer$BluenessResult.class
 com/betterdairy/autodense/analysis/ColonyClassifier$XGalColorThresholds.class
 com/betterdairy/autodense/demos/LaneComparisonDemo.class
 com/betterdairy/autodense/session/SessionStore.class
 com/betterdairy/autodense/validation/ToolResult.class
 com/betterdairy/autodense/plugin/GeminiApiClient$GelAnalysisResponse.class
+autodense/sds/SdsCalib$Fit.class
 com/betterdairy/autodense/imageio/FormatNormalizer$ConversionMethod.class
 com/betterdairy/autodense/analysis/PlateAlignment.class
 com/betterdairy/autodense/analysis/ColonyAnalysisParams$PresetButton.class
@@ -32,6 +38,7 @@ com/betterdairy/autodense/analysis/ColonyAnalysisParams$SizeParams.class
 com/betterdairy/autodense/analysis/StreamlinedColonyClassifier$Params.class
 com/betterdairy/autodense/analysis/ColonyBinner.class
 com/betterdairy/autodense/model/Models$Band.class
+autodense/sds/SdsOps.class
 com/betterdairy/autodense/plugin/GelUI$10.class
 com/betterdairy/autodense/model/Models$LabPhotometry.class
 com/betterdairy/autodense/session/SessionRecovery$HandleException.class
@@ -68,9 +75,11 @@ com/betterdairy/autodense/demos/gelanalysis/ProteaseDigestKineticsDemo.class
 com/betterdairy/autodense/imageio/FormatNormalizer$NormalizationResult.class
 com/betterdairy/autodense/analysis/BandDetector$BandCandidate.class
 com/betterdairy/autodense/validation/ParameterValidator$PreprocessParams.class
+autodense/util/Csv.class
 com/betterdairy/autodense/analysis/ColonyAssistModels$AssistColony.class
 com/betterdairy/autodense/workflow/ExportDialogManager$ExportDialog.class
 com/betterdairy/autodense/analysis/TimeSeriesColonyTracker$ColonyMorphology.class
+autodense/sds/SdsCalib$ColorBand.class
 com/betterdairy/autodense/analysis/PlateAnalysisDefaults$ColonySizeDefaults.class
 com/betterdairy/autodense/plugin/GelUI$5.class
 com/betterdairy/autodense/model/Models$CalibrationModel.class
@@ -128,6 +137,7 @@ com/betterdairy/autodense/analysis/PlateAnalysisDefaults$ToolDefaults$2.class
 com/betterdairy/autodense/analysis/PlateAnalysisDefaults$CalibrationHelper.class
 com/betterdairy/autodense/plugin/GelUI$4.class
 com/betterdairy/autodense/analysis/ImagePreprocessor$SaturationResult.class
+autodense/agarose/LadderSets.class
 com/betterdairy/autodense/demos/performance/SyntheticGelTest.class
 com/betterdairy/autodense/workflow/GelFormatDetector.class
 com/betterdairy/autodense/tools/ColonyAnalysisTools.class
@@ -157,6 +167,7 @@ com/betterdairy/autodense/session/SessionStore$FractionMap.class
 com/betterdairy/autodense/workflow/ExportDialogManager$ExportRequest.class
 com/betterdairy/autodense/analysis/RobustPlateDetector.class
 com/betterdairy/autodense/plugin/GelUI$9.class
+autodense/sds/SdsCalib.class
 com/betterdairy/autodense/analysis/LaneComparator.class
 com/betterdairy/autodense/analysis/TimeSeriesColonyTracker$TrackingOptions.class
 com/betterdairy/autodense/analysis/Deltas$Stat.class
@@ -174,6 +185,7 @@ com/betterdairy/autodense/tools/HandleGuard$HandleValidationResult.class
 com/betterdairy/autodense/analysis/LaneComparator$PeakGroup.class
 com/betterdairy/autodense/analysis/TimeSeriesColonyTracker$Colony.class
 com/betterdairy/autodense/analysis/PlateDetector.class
+com/betterdairy/autodense/tools/AssayOps$PlateLayout.class
 com/betterdairy/autodense/analysis/ColonyVisualizer.class
 com/betterdairy/autodense/plugin/GelUI$3.class
 com/betterdairy/autodense/workflow/NuPAGEFormat.class
@@ -230,7 +242,9 @@ com/betterdairy/autodense/plugin/ToolSchemaValidator.class
 com/betterdairy/autodense/tools/PlateAnalysisTools$1.class
 com/betterdairy/autodense/session/SessionRecovery.class
 com/betterdairy/autodense/session/SessionLogger$LogLevel.class
+autodense/color/HsvOps.class
 com/betterdairy/autodense/imageio/FormatNormalizer$BitDepth.class
+com/betterdairy/autodense/tools/AssayOps$StainType.class
 com/betterdairy/autodense/session/SessionStore$AnalysisRecord.class
 com/betterdairy/autodense/workflow/ExportDialogManager$ExportType.class
 com/betterdairy/autodense/demos/gelanalysis/PurificationTrackerDemo.class

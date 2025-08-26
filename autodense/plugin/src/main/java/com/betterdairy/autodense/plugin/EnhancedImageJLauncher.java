@@ -332,6 +332,22 @@ public class EnhancedImageJLauncher {
     }
     
     private static void initializeAutoDense(org.scijava.Context context) {
+        // Check API key before initializing
+        String apiKey = System.getProperty("GEMINI_API_KEY", System.getenv("GEMINI_API_KEY"));
+        if (!isValidApiKey(apiKey)) {
+            IJ.log("⚠️ ⚠️ ⚠️  GEMINI API KEY ISSUE  ⚠️ ⚠️ ⚠️");
+            IJ.log("❌ Invalid or missing Gemini API key detected!");
+            IJ.log("📋 TO FIX THIS:");
+            IJ.log("   1. Get API key: https://makersuite.google.com/app/apikey");
+            IJ.log("   2. Set environment: export GEMINI_API_KEY=your_actual_key");
+            IJ.log("   3. Or system property: -DGEMINI_API_KEY=your_actual_key");
+            IJ.log("   4. Restart AutoDense");
+            IJ.log("⚠️  AI features will fail without valid key!");
+            IJ.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        } else {
+            IJ.log("✅ Valid Gemini API key detected");
+        }
+        
         // Initialize AutoDense plugin with enhanced context
         GelUI ui = new GelUI(context);
         ui.show();
@@ -339,5 +355,23 @@ public class EnhancedImageJLauncher {
         IJ.log("✓ AutoDense interface initialized");
         IJ.log("✓ Natural language processing ready");
         IJ.log("Access AutoDense via Plugins menu or UI window");
+    }
+    
+    /**
+     * Validates if the provided API key is valid (not null, empty, or placeholder)
+     */
+    private static boolean isValidApiKey(String apiKey) {
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            return false;
+        }
+        
+        // Check for common placeholder values
+        String key = apiKey.trim().toLowerCase();
+        return !key.equals("placeholder") && 
+               !key.equals("your_api_key_here") && 
+               !key.equals("your_key") && 
+               !key.equals("test") && 
+               !key.equals("demo") && 
+               key.length() > 10; // Real keys are typically much longer
     }
 }
