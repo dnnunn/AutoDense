@@ -1,6 +1,6 @@
 {
   "SDS_PAGE_DENSITOMETRY": {
-    "params": { "smooth_px": 9, "min_prominence": 200.0, "min_distance_px": 8, "win": 21, "quantile": 0.10, "winY": 6 }
+    "params": { "smooth_px": 9, "min_prominence": 200.0, "min_distance_px": 8, "baseline_win": 21, "baseline_q": 0.10, "band_halfwin": 6 }
   },
   "SDS_PAGE_DENSITOMETRY_MW": {
     "params": {
@@ -10,9 +10,9 @@
       "ladder": "SeeBlue_Plus2",
       "lane_index": null,
       "front_y": null,
-      "win": 21,
-      "quantile": 0.10,
-      "winY": 6
+      "baseline_win": 21,
+      "baseline_q": 0.10,
+      "band_halfwin": 6
     }
   },
   "AGAROSE_ETBR": {

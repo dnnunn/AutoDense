@@ -16,9 +16,9 @@
     },
     {
       "id":"imagej.sds.integrate",
-      "desc":"Background-corrected band integration with lane-wise quantile baseline modeling.",
+      "desc":"Lane-wise baseline (quantile) and AUC integration.",
       "mutates_image": false,
-      "inputs_schema":{"win":"number?","quantile":"number?","winY":"number?"},
+      "inputs_schema":{"baseline_win":"number?","baseline_q":"number?","band_halfwin":"number?"},
       "returns":{"bands_csv":"string"}
     },
     {
@@ -38,6 +38,13 @@
       "mutates_image": true,
       "inputs_schema": {},
       "returns": { "mw_csv": "string", "mw_overlay_png": "string" }
+    },
+    {
+      "id": "imagej.sds.autodetect_ladder_by_color",
+      "desc": "Pick ladder lane by prestained color signature.",
+      "mutates_image": false,
+      "inputs_schema": { "ladder": "string" },
+      "returns": { "lane_index": "number" }
     },
     {
       "id":"imagej.agarose.detect_lanes",

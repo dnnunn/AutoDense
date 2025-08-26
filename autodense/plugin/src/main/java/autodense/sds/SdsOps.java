@@ -119,7 +119,7 @@ public final class SdsOps {
         return integrate(imp, bandsCsv, outCsv, null, null, null);
     }
     
-    public static Map<String,Object> integrate(ImagePlus imp, Path bandsCsv, Path outCsv, Integer win, Double quantile, Integer winY) throws Exception {
+    public static Map<String,Object> integrate(ImagePlus imp, Path bandsCsv, Path outCsv, Integer baselineWin, Double baselineQ, Integer bandHalfwin) throws Exception {
         var rows = Csv.read(bandsCsv); // id,lane,y_px,...
         // Group bands by lane to reuse per-lane background
         Map<Integer, List<Map<String,String>>> byLane = new HashMap<>();
@@ -139,18 +139,18 @@ public final class SdsOps {
 
             // Build lane profile and baseline with configurable parameters
             double[] prof = laneProfile(laneImp.getProcessor());           // length = lane height
-            int windowSize = (win != null) ? win : 21;  // sliding window size for quantile baseline
-            double q = (quantile != null) ? quantile : 0.10;  // quantile for baseline (default 10th percentile)
+            int windowSize = (baselineWin != null) ? baselineWin : 21;  // sliding window size for quantile baseline
+            double q = (baselineQ != null) ? baselineQ : 0.10;  // quantile for baseline (default 10th percentile)
             double[] base = quantileBaseline(prof, windowSize, q);
             base = smoothSG(base);
             double[] resid = subtract(prof, base);
 
-            // Integrate around each band position (±winY)
-            int windowY = (winY != null) ? winY : 6;  // integration window around band peak
+            // Integrate around each band position (±halfwin)
+            int halfWindow = (bandHalfwin != null) ? bandHalfwin : 6;  // integration half-window around band peak
             for (var r : e.getValue()) {
                 int id = Integer.parseInt(r.get("id"));
                 int y  = (int)Math.round(Double.parseDouble(r.get("y_px")) - lane.getBounds().y);
-                int y0 = Math.max(0, y - windowY), y1 = Math.min(resid.length-1, y + windowY);
+                int y0 = Math.max(0, y - halfWindow), y1 = Math.min(resid.length-1, y + halfWindow);
                 double auc=0;
                 for (int yy=y0; yy<=y1; yy++) auc += resid[yy];
                 out.add(Map.of("id", id, "lane", laneIdx, "auc_bgsub", auc));

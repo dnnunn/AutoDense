@@ -171,6 +171,12 @@ public final class SdsCalib {
         }
     }
 
+    // Standalone tool for Gemini to call directly
+    public static Map<String,Object> autodetectLadderByColor(ImagePlus imp, String ladderName) throws Exception {
+        int laneIndex = autoDetectLadderLaneByColor(imp, ladderName);
+        return Map.of("lane_index", laneIndex);
+    }
+    
     public static int autoDetectLadderLaneByColor(ImagePlus imp, String ladderName) {
         try {
             var cp = imp.getProcessor().convertToColorProcessor();
