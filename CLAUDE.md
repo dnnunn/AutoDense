@@ -1,22 +1,28 @@
 # CLAUDE.md (Concise Session Primer)
 
-**Purpose:** Give ClaudeCode a clear, accurate picture of AutoDense’s current state at the start of every session.
+**Purpose:** Give ClaudeCode a clear, accurate picture of AutoDense's current state at the start of
+every session.
 
 ---
 
 ## Project Summary
 
-AutoDense is a Mac-native Fiji/ImageJ2 application for laboratory image analysis. It is controlled via  **Google Gemini** , which acts strictly as a planner/orchestrator. ImageJ executes all pixel operations. The system is  **handle-based** : images, overlays, and analysis results are referenced by IDs (`img_123`, `ov_456`), never raw pixels.
+AutoDense is a Mac-native Fiji/ImageJ2 application for laboratory image analysis. It is controlled via
+**Google Gemini**, which acts strictly as a planner/orchestrator. ImageJ executes all pixel operations.
+The system is **handle-based**: images, overlays, and analysis results are referenced by IDs
+(`img_123`, `ov_456`), never raw pixels.
 
 ---
 
 ## Core Capabilities (Implemented)
 
-* **Gel densitometry:** Lane/band detection, protein quantification, MW calibration, BandAssist (user-guided band propagation).
+* **Gel densitometry:** Lane/band detection, protein quantification, MW calibration,
+  BandAssist (user-guided band propagation).
 * **Colony analysis:** Counting, classification, growth tracking, X-gal blueness scoring.
 * **PCR analysis:** Semi-quantitative ΔΔI with housekeeping normalization.
 * **Statistics:** MW-aware comparisons, Holm–Bonferroni corrections, volcano plots.
-* **Interface:** Embedded chat with Gemini orchestration, voice input, document upload, structured session logging.
+* **Interface:** Embedded chat with Gemini orchestration, voice input, document upload,
+  structured session logging.
 
 ---
 
@@ -87,8 +93,6 @@ For a more detailed description of the Architecture see:
 * API keys never committed.
 * Session logs sanitize sensitive info.
 * Network calls send base64 images to Gemini.
-
-
 
 ## Delta Changelog (Last Updated: Aug 26, 2025)
 

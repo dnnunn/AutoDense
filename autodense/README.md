@@ -1,18 +1,21 @@
 # AutoDense
 
-AI-powered gel densitometry application built as a Mac-native Fiji/ImageJ2 app with Google Gemini integration for natural language control.
+AI-powered gel densitometry application built as a Mac-native Fiji/ImageJ2 app with Google Gemini
+integration for natural language control.
 
 ## Quick Start
 
 **Prerequisites:** Java 17+, Maven 3.8+, Gemini API key
 
 **Build:**
+
 ```bash
 cd autodense/
 mvn -q -DskipTests=true -f pom.xml clean install
 ```
 
 **Run with AI control:**
+
 ```bash
 mvn -q -f plugin/pom.xml exec:java \
   -Dexec.mainClass=com.betterdairy.autodense.plugin.EnhancedImageJLauncher \
@@ -23,6 +26,7 @@ mvn -q -f plugin/pom.xml exec:java \
 ## Architecture
 
 AutoDense uses a **handle-based architecture** where:
+
 - **Gemini** acts as the planner, emitting tool calls in natural language
 - **ImageJ/Fiji** executes all image analysis operations
 - **SessionStore** maintains state via handles (no pixels passed to LLM)
