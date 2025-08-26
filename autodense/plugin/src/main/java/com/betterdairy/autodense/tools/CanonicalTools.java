@@ -28,12 +28,12 @@ import org.json.JSONObject;
 public final class CanonicalTools {
     
     private final GelAnalysisTools gelTools;
-    private final PlateAnalysisTools plateTools;
+    private final AssayOps assayOps;
     private final SessionStore sessionStore;
     
-    public CanonicalTools(GelAnalysisTools gelTools, PlateAnalysisTools plateTools, SessionStore sessionStore) {
+    public CanonicalTools(GelAnalysisTools gelTools, AssayOps assayOps, SessionStore sessionStore) {
         this.gelTools = gelTools;
-        this.plateTools = plateTools;
+        this.assayOps = assayOps;
         this.sessionStore = sessionStore;
     }
     
@@ -204,7 +204,7 @@ public final class CanonicalTools {
             if (args.has("image_handle")) plateArgs.put("image_handle", args.getString("image_handle"));
             if (args.has("dish_diameter_mm")) plateArgs.put("dish_diameter_mm", args.getDouble("dish_diameter_mm"));
             
-            JSONObject plateResult = plateTools.detectPlate(plateArgs);
+            JSONObject plateResult = assayOps.detectColonies(plateArgs);
             if (!plateResult.optBoolean("success", false)) {
                 return plateResult; // Return error
             }
@@ -215,7 +215,7 @@ public final class CanonicalTools {
             if (args.has("image_handle")) countArgs.put("image_handle", args.getString("image_handle"));
             if (args.has("color_groups")) countArgs.put("color_groups", args.getJSONArray("color_groups"));
             
-            JSONObject countResult = plateTools.countColoniesByColor(countArgs);
+            JSONObject countResult = assayOps.detectColonies(countArgs.put("stain", "x-gal"));
             if (!countResult.optBoolean("success", false)) {
                 return countResult; // Return error  
             }
@@ -226,7 +226,7 @@ public final class CanonicalTools {
             JSONObject classifyArgs = new JSONObject();
             if (args.has("image_handle")) classifyArgs.put("image_handle", args.getString("image_handle"));
             
-            JSONObject classifyResult = plateTools.classifyColonies(classifyArgs);
+            JSONObject classifyResult = assayOps.measureColonies(classifyArgs);
             result.put("colonies_classified", classifyResult.optBoolean("success", false));
             
             result.put("success", true);
@@ -254,7 +254,7 @@ public final class CanonicalTools {
             
             // Colony binning adjustments
             if (args.has("size_bins") || args.has("color_thresholds")) {
-                JSONObject binResult = plateTools.binColonies(args);
+                JSONObject binResult = assayOps.measureColonies(args);
                 result.put("colonies_binned", binResult.optBoolean("success", false));
             }
             
@@ -281,7 +281,7 @@ public final class CanonicalTools {
                 args.put("formats", new org.json.JSONArray().put("csv").put("png"));
             }
             
-            return plateTools.exportColonies(args);
+            return assayOps.export(args);
             
         } catch (Exception e) {
             return new JSONObject()

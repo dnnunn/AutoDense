@@ -3,8 +3,7 @@ package com.betterdairy.autodense.orchestrator;
 import com.betterdairy.autodense.session.SessionStore;
 import com.betterdairy.autodense.session.SessionLogger;
 import com.betterdairy.autodense.tools.GelAnalysisTools;
-import com.betterdairy.autodense.tools.PlateAnalysisTools;
-import com.betterdairy.autodense.tools.ColonyAnalysisTools;
+import com.betterdairy.autodense.tools.AssayOps;
 import com.betterdairy.autodense.tools.CanonicalTools;
 import com.betterdairy.autodense.plugin.GeminiApiClient;
 import com.betterdairy.autodense.plugin.GeminiApiClient.GelAnalysisResponse;
@@ -30,8 +29,7 @@ public class GeminiOrchestrator {
     private final SessionStore sessionStore;
     private final SessionLogger sessionLogger;
     private final GelAnalysisTools gelAnalysisTools;
-    private final PlateAnalysisTools plateAnalysisTools;
-    private final ColonyAnalysisTools colonyAnalysisTools;
+    private final AssayOps assayOps;
     private final CanonicalTools canonicalTools;
     private final GeminiApiClient geminiClient;
     private final CapabilityRegistry capabilityRegistry;
@@ -40,15 +38,15 @@ public class GeminiOrchestrator {
     
     private volatile boolean isActive = true;
     private String currentImageHandle = null;
+    private boolean registryLoaded = false;
     
     public GeminiOrchestrator(String apiKey) {
         // Initialize core components
         this.sessionStore = new SessionStore();
         this.sessionLogger = new SessionLogger(sessionStore.getSessionId());
         this.gelAnalysisTools = new GelAnalysisTools(sessionStore);
-        this.plateAnalysisTools = new PlateAnalysisTools(sessionStore);
-        this.colonyAnalysisTools = new ColonyAnalysisTools();
-        this.canonicalTools = new CanonicalTools(gelAnalysisTools, plateAnalysisTools, sessionStore);
+        this.assayOps = new AssayOps(sessionStore);
+        this.canonicalTools = new CanonicalTools(gelAnalysisTools, assayOps, sessionStore);
         this.geminiClient = new GeminiApiClient(apiKey);
         this.capabilityRegistry = new CapabilityRegistry(new Context());
         
@@ -289,31 +287,33 @@ public class GeminiOrchestrator {
                 case "export_volcano_plot" -> gelAnalysisTools.exportVolcanoPlot(parameters);
                 
                 // =============================================================================
-                // PLATE/COLONY ANALYSIS TOOLS (Now properly wired)
+                // ASSAY OPERATIONS (Consolidated Colony/Plate Analysis)
                 // =============================================================================
-                // PlateAnalysisTools methods (instance methods)
-                case "detect_plate" -> plateAnalysisTools.detectPlate(parameters);
-                case "count_colonies_by_color" -> plateAnalysisTools.countColoniesByColor(parameters);
-                case "measure_colony_sizes" -> plateAnalysisTools.measureColonySizes(parameters);
-                case "classify_colonies" -> plateAnalysisTools.classifyColonies(parameters);
-                case "bin_colonies" -> plateAnalysisTools.binColonies(parameters);
-                case "export_colonies" -> plateAnalysisTools.exportColonies(parameters);
-                case "detect_colonies" -> plateAnalysisTools.detectColonies(parameters);
-                case "check_contamination" -> plateAnalysisTools.checkContamination(parameters);
-                case "create_labeled_reference" -> plateAnalysisTools.createLabeledReference(parameters);
-                case "export_for_notebook" -> plateAnalysisTools.exportForNotebook(parameters);
-                case "export_for_presentation" -> plateAnalysisTools.exportForPresentation(parameters);
-                case "export_colony_analysis" -> plateAnalysisTools.exportColonyAnalysis(parameters);
+                // Core assay operations with parameterized routing
+                case "detect_colonies" -> assayOps.detectColonies(parameters);
+                case "count_colonies_by_color" -> assayOps.detectColonies(parameters.put("stain", "x-gal"));
+                case "count_colonies" -> assayOps.detectColonies(parameters);
+                case "measure_colony_sizes" -> assayOps.measureColonies(parameters);
+                case "classify_colonies" -> assayOps.measureColonies(parameters);
+                case "export_colonies" -> assayOps.export(parameters);
+                case "export_colony_analysis" -> assayOps.export(parameters);
                 
-                // ColonyAnalysisTools static methods (require SessionStore parameter)
-                case "count_colonies" -> ColonyAnalysisTools.countColonies(parameters, sessionStore);
-                case "normalize_colonies" -> ColonyAnalysisTools.normalizeColonies(parameters, sessionStore);
-                case "enable_colony_assist" -> ColonyAnalysisTools.enableColonyAssist(parameters, sessionStore);
-                case "disable_colony_assist" -> ColonyAnalysisTools.disableColonyAssist(parameters, sessionStore);
-                case "colony_assist_click" -> ColonyAnalysisTools.colonyAssistClick(parameters, sessionStore);
-                case "propagate_colony_class" -> ColonyAnalysisTools.propagateColonyClass(parameters, sessionStore);
-                case "relabel_colony" -> ColonyAnalysisTools.relabelColony(parameters, sessionStore);
-                case "export_detailed_features" -> ColonyAnalysisTools.exportDetailedFeatures(parameters, sessionStore);
+                // Legacy plate/colony tool compatibility routing through AssayOps
+                case "detect_plate" -> assayOps.detectColonies(parameters);
+                case "bin_colonies" -> assayOps.measureColonies(parameters);
+                case "normalize_colonies" -> assayOps.measureColonies(parameters);
+                case "check_contamination" -> assayOps.measureColonies(parameters);
+                case "create_labeled_reference" -> assayOps.annotate(parameters);
+                case "export_for_notebook" -> assayOps.export(parameters);
+                case "export_for_presentation" -> assayOps.export(parameters);
+                case "export_detailed_features" -> assayOps.export(parameters);
+                
+                // Colony assist features routed through AssayOps annotation system
+                case "enable_colony_assist" -> assayOps.annotate(parameters.put("mode", "assist"));
+                case "disable_colony_assist" -> assayOps.annotate(parameters.put("mode", "normal"));
+                case "colony_assist_click" -> assayOps.annotate(parameters.put("action", "click"));
+                case "propagate_colony_class" -> assayOps.annotate(parameters.put("action", "propagate"));
+                case "relabel_colony" -> assayOps.annotate(parameters.put("action", "relabel"));
                 
                 default -> new JSONObject()
                     .put("error", true)
@@ -461,13 +461,19 @@ public class GeminiOrchestrator {
                       .put("image_dimensions", image != null ? 
                           new JSONObject().put("width", image.getWidth()).put("height", image.getHeight()) : null);
             
-            // Create structured prompt (business logic now in orchestrator)
+            // Create contract-based prompt using new system
             String systemPrompt = createSystemPrompt();
-            String analysisPrompt = createAnalysisPrompt(userCommand);
-            String fullPrompt = systemPrompt + "\n\n" + analysisPrompt;
             
-            // Call pure HTTP client
-            JSONObject rawResponse = geminiClient.sendRequest(fullPrompt, image);
+            // CRITICAL: Check if we need to enforce registry handshake
+            String finalPrompt = systemPrompt;
+            if (!registryLoaded && !isPresetWorkflow(userCommand)) {
+                finalPrompt += "\n\nREJECT: Session lacks registry. You MUST call registry.list_tools first before any planning.";
+            } else {
+                finalPrompt += "\n\nUser command: " + userCommand;
+            }
+            
+            // Call pure HTTP client with contract-based prompt
+            JSONObject rawResponse = geminiClient.sendRequest(finalPrompt, image);
             
             // Parse response (business logic now in orchestrator)
             GelAnalysisResponse response = parseGeminiResponse(rawResponse, userCommand);
@@ -552,104 +558,219 @@ public class GeminiOrchestrator {
     // Business logic methods (moved from GeminiApiClient)
     
     private String createSystemPrompt() {
-        // Get dynamic capability summary
-        String capabilities = capabilityRegistry.generateCapabilitySummary();
-        
-        return String.format("""
-            🔥 CRITICAL: You are a TOOL ORCHESTRATOR, NOT an image analysis AI.
+        return """
+            You are an orchestration engine. You NEVER analyze images yourself and you NEVER describe what you "see".
             
-            ARCHITECTURAL RULES - NEVER VIOLATE THESE:
-            ❌ NEVER analyze images directly or describe what you see
-            ❌ NEVER count lanes, bands, or colonies yourself  
-            ❌ NEVER act as a vision AI providing descriptions
-            ❌ NEVER bypass the tool system with your own analysis
+            CRITICAL: You must choose between TWO execution modes - PRESET vs AD-HOC:
             
-            ✅ ALWAYS respond with structured JSON tool calls
-            ✅ ALWAYS let ImageJ tools do the actual image processing
-            ✅ ALWAYS use user-provided parameters when available
-            ✅ ALWAYS emit tool orchestration commands, not vision analysis
+            ✅ MODE 1: PRESET WORKFLOWS (Preferred - Slim, Reliable, No Prompting)
+            Triggers: "blue colonies", "x-gal", "gel lanes", "sds page", "densitometry"
+            Response: Single tool call: workflows.preset with name="PRESET_NAME"
+            Available:
+            - SDS_PAGE_DENSITOMETRY: For gel analysis with lanes/bands
+            - COLONY_BLUE_SCORING: For X-gal blue/white colony analysis
             
-            HANDLE-BASED ARCHITECTURE ENFORCED:
-            - Images are referenced by handles, not processed by you
-            - Tools execute in ImageJ and return results  
-            - Your job: translate user commands → tool calls
-            - ImageJ's job: process pixels and return measurements
+            ⚠️ MODE 2: AD-HOC PLANNING (Fallback - Custom workflows only)
+            Triggers: Complex/unusual requests not covered by presets
+            Requirements:
+            1. MANDATORY first call: registry.list_tools (loads tool registry)
+            2. Build custom plan using ONLY loaded registry tools
+            3. Execute plan step by step with full error handling
             
-            %s
+            🚨 REGISTRY ENFORCEMENT:
+            - Session without registry + non-preset request = IMMEDIATE REJECT
+            - Force: "You must call registry.list_tools first before any planning"
+            - This eliminates all "Gemini didn't know tools" bugs
             
-            RESPONSE FORMAT - Use this JSON structure ONLY:
+            DECISION TREE:
+            User Request → Is Preset? → YES: workflows.preset 
+                       → NO: Registry Loaded? → YES: Ad-hoc plan
+                                              → NO: REJECT + force registry.list_tools
+
+            Rules:
+            - No vision. Do not infer from image pixels; call ImageJ tools to measure, segment, annotate, or export.
+            - Only emit JSON tool calls using the schema below.
+            - Each step must specify: tool_id, inputs, rationale (one short sentence), and on_fail (retry/backoff or alternate tool).
+            - You MUST call `registry.list_tools` at the start of every session and cache the result.
+            - You are an ImageJ/Fiji expert: prefer ImageJ tools for image operations; rely on preset workflows when applicable.
+
+            Output format: ALWAYS JSON with one of:
+            { "action": "list_tools" }
+            { "action": "run", "plan": [ { "tool_id": "...", "inputs": {...}, "rationale": "...", "on_fail": {...} }, ... ] }
+            { "action": "ask", "question": "..." }
+
+            Tool-call JSON Contract:
             {
-                "image_type": "gel|agar_plate",
-                "intent": "lane_detection|band_detection|quantification|colony_counting|etc",
-                "action": "detect_lanes|detect_bands|count_colonies_by_color|quantify_bands|etc",
-                "parameters": {
-                    // Extract from user command or use reasonable defaults
-                    "expected_lanes": 12,  // Use user-specified count
-                    "sensitivity": 0.7,
-                    "color_groups": ["white", "blue"]  // For colonies
+              "action": "run",
+              "plan": [
+                {
+                  "tool_id": "imagej.open_image",
+                  "inputs": { "path": "sandbox:/inputs/plate.jpg" },
+                  "rationale": "Load the plate image",
+                  "on_fail": { "retry": 1, "next_tool": "imagej.open_image_with_bioformats" }
                 },
-                "analysis": "Tool orchestration plan: Will execute [action] with [parameters]",
-                "confidence": 0.9
+                {
+                  "tool_id": "imagej.assay.detect_colonies",
+                  "inputs": { "stain": "x-gal", "min_size": 5.0, "max_size": 1000.0, "plate_layout": 96 },
+                  "rationale": "Detect and classify X-gal blue/white colonies",
+                  "on_fail": { "retry": 1, "next_tool": "imagej.assay.detect_colonies" }
+                },
+                {
+                  "tool_id": "imagej.overlay.annotate",
+                  "inputs": {
+                    "labels": "colony_id,blue_index,size_bin",
+                    "stroke_px": 2
+                  },
+                  "rationale": "Draw ROIs and labels to overlay only (non-destructive)",
+                  "on_fail": { "retry": 0 }
+                },
+                {
+                  "tool_id": "ui.refresh_canvas",
+                  "inputs": { "refresh_reason": "post_annotation" },
+                  "rationale": "Force a visual update after changes",
+                  "on_fail": { "retry": 0 }
+                },
+                {
+                  "tool_id": "export.results",
+                  "inputs": { "tables": ["colonies.csv"], "images": ["overlay.png"] },
+                  "rationale": "Save outputs for the user",
+                  "on_fail": { "retry": 0 }
+                }
+              ]
+            }
+
+            Policy: Auto‑execute by default. Only switch to { "action": "ask" } if the user's request cannot be satisfied without one missing parameter (e.g., no image path, or ambiguous assay type).
+
+            Capability Registry:
+            {
+              "tools": [
+                {
+                  "id": "registry.list_tools",
+                  "desc": "List available tools",
+                  "inputs_schema": {},
+                  "returns": { "tools": "[]" }
+                },
+                {
+                  "id": "imagej.open_image",
+                  "desc": "Open an image using ImageJ",
+                  "inputs_schema": { "path": "string" },
+                  "returns": { "image_id": "string" }
+                },
+                {
+                  "id": "imagej.overlay.annotate",
+                  "desc": "Draw ROIs/labels on ImageJ Overlay (non-destructive).",
+                  "inputs_schema": {
+                    "labels": "string (comma-separated)",
+                    "stroke_px": "number"
+                  },
+                  "returns": { "overlay_png": "path" }
+                },
+                {
+                  "id": "imagej.assay.detect_colonies",
+                  "desc": "Colony detection with stain/layout options; outputs colony set + metrics",
+                  "inputs_schema": {
+                    "stain": "enum: x-gal|neutral-red|none",
+                    "plate_layout": "enum: 96|384",
+                    "min_size": "number",
+                    "max_size": "number"
+                  },
+                  "returns": { "colonies_detected": "number", "analysis_handle": "string" }
+                },
+                {
+                  "id": "imagej.assay.measure_colonies",
+                  "desc": "Measure colony properties; outputs intensity, circularity, eccentricity",
+                  "inputs_schema": {
+                    "image_handle": "string",
+                    "analysis_handle": "string"
+                  },
+                  "returns": { "measurements": "array", "colonies_measured": "number" }
+                },
+                {
+                  "id": "imagej.assay.annotate",
+                  "desc": "Add colony labels with id, blue_index, size_bin; uses Overlay+ROI",
+                  "inputs_schema": {
+                    "image_handle": "string",
+                    "labels": "array"
+                  },
+                  "returns": { "annotations_added": "number" }
+                },
+                {
+                  "id": "imagej.assay.export",
+                  "desc": "Export colony CSV + overlay PNG",
+                  "inputs_schema": {
+                    "image_handle": "string",
+                    "analysis_handle": "string",
+                    "include_csv": "boolean",
+                    "include_overlay": "boolean"
+                  },
+                  "returns": { "exported_files": "array" }
+                },
+                {
+                  "id": "imagej.assay.run_macro",
+                  "desc": "Run baseline ImageJ macro for quick-test comparison and validation",
+                  "inputs_schema": {
+                    "image_handle": "string",
+                    "macro": "enum: xgal_baseline"
+                  },
+                  "returns": { "colonies_detected": "number", "measurements": "array", "method": "string" }
+                },
+                {
+                  "id": "imagej.sds.quantify_lanes",
+                  "desc": "Detect lanes/bands and compute densitometry",
+                  "inputs_schema": {
+                    "lane_count": "number?",
+                    "band_smoothing_px": "number?"
+                  },
+                  "returns": { "table": "bands.csv", "overlay_png": "path" }
+                },
+                {
+                  "id": "workflows.preset",
+                  "desc": "Run a named preset workflow",
+                  "inputs_schema": { "name": "string", "params": "object" },
+                  "returns": { "artifacts": "object" }
+                },
+                {
+                  "id": "ui.refresh_canvas",
+                  "desc": "Force UI to repaint layers; returns latest overlay url",
+                  "inputs_schema": { "refresh_reason": "string" },
+                  "returns": { "overlay_png": "path" }
+                },
+                {
+                  "id": "export.results",
+                  "desc": "Persist CSVs and images for download",
+                  "inputs_schema": { "tables": "string[]", "images": "string[]" },
+                  "returns": { "paths": "string[]" }
+                }
+              ],
+              "workflows": [
+                {
+                  "name": "SDS_PAGE_DENSITOMETRY",
+                  "steps": ["imagej.open_image","imagej.sds.quantify_lanes","imagej.overlay.annotate","export.results"]
+                },
+                {
+                  "name": "COLONY_BLUE_SCORING",
+                  "steps": ["imagej.open_image","imagej.assay.detect_colonies","imagej.assay.annotate","imagej.assay.export"]
+                }
+              ]
             }
             
-            EXACT TOOL NAMES - Use these specific actions only:
-            GEL TOOLS: detect_lanes, detect_bands, quantify_bands, adjust_lanes, calibrate_molecular_weight, compare_lanes, export_results
-            COLONY TOOLS: count_colonies_by_color, classify_colonies, detect_colonies, measure_colony_sizes, export_colonies
+            CRITICAL ANNOTATION REQUIREMENT:
+            🚨 When annotating, NEVER draw into pixel data. ALWAYS operate on Overlay + ROI Manager.
             
-            EXAMPLE TRANSLATIONS:
-            User: "detect 12 lanes" → {"action": "detect_lanes", "parameters": {"expected_lanes": 12}}
-            User: "find protein bands" → {"action": "detect_bands", "parameters": {"sensitivity": 0.7}}
-            User: "count blue and white colonies" → {"action": "count_colonies_by_color", "parameters": {"color_groups": ["blue", "white"]}}
-            User: "quantify protein bands" → {"action": "quantify_bands", "parameters": {"background_method": "median"}}
-            User: "compare lanes statistically" → {"action": "compare_lanes", "parameters": {"reference_lane": 1}}
+            Example pattern for all annotation operations:
+            Roi roi = new OvalRoi(x, y, w, h);
+            roi.setStrokeColor(Color.getHSBColor(0.58f, 1f, 1f)); // blue
+            roi.setStrokeWidth(2);
+            roi.setName(String.format("c%03d  BI=%.2f  size=%s", id, blueIndex, sizeBin));
+            Overlay ov = imp.getOverlay();
+            if (ov == null) ov = new Overlay();
+            ov.add(roi);
+            imp.setOverlay(ov);
             
-            COMPLETE WORKFLOW TRIGGERS:
-            User: "analyze this gel" → {"action": "analyze_gel", "parameters": {"expected_lanes": 12}}
-            User: "adjust image and find lanes and bands" → {"action": "analyze_gel", "parameters": {"expected_lanes": 12}}
-            User: "detect lanes and protein bands" → {"action": "analyze_gel", "parameters": {"expected_lanes": 12}}
-            User: "analyze plate" → {"action": "analyze_plate", "parameters": {"color_groups": ["white", "blue"]}}
-            
-            PREFER COMPLETE WORKFLOWS: When user mentions multiple steps, use canonical workflows (analyze_gel, analyze_plate) instead of individual tools.
-            
-            ❌ NEVER USE: gel_analysis, proceed, workflow, pipeline, openImage
-            ✅ ALWAYS USE: Exact tool names from the list above
-            
-            NEVER SAY: "I see 10 lanes" or "The image shows colonies"
-            ALWAYS SAY: "Tool orchestration plan: Will execute detect_lanes with expected_lanes=12"
-            
-            🔥 REMEMBER: You are a PLANNER, not an ANALYZER. ImageJ does the analysis.
-        """, capabilities);
+            This preserves the original image data while providing visual feedback.
+        """;
     }
     
-    private String createAnalysisPrompt(String userCommand) {
-        return String.format("""
-            🚨 ORCHESTRATOR MODE: You do NOT analyze images. You orchestrate tools.
-            
-            User Command: "%s"
-            
-            ORCHESTRATION WORKFLOW:
-            1) PARSE USER COMMAND: Extract what action they want
-            2) EXTRACT PARAMETERS: Get specific requirements from command  
-            3) DETERMINE IMAGE TYPE: gel or agar_plate based on command context
-            4) EMIT TOOL CALL: Return JSON that will execute in ImageJ
-            
-            PARAMETER EXTRACTION:
-            - Look for numbers: "12 lanes" → "expected_lanes": 12
-            - Look for colors: "blue and white" → "color_groups": ["blue", "white"] 
-            - Look for actions: "detect", "count", "quantify", "compare"
-            
-            🚨 FORBIDDEN RESPONSES:
-            ❌ "I can see X lanes in the image"
-            ❌ "The gel appears to have Y bands"
-            ❌ "There are Z colonies visible"
-            
-            ✅ CORRECT RESPONSES:
-            ✅ "Tool orchestration plan: Will execute detect_lanes with expected_lanes=12"
-            ✅ "Tool orchestration plan: Will execute count_colonies_by_color with color_groups=['blue','white']"
-            
-            Respond ONLY with tool orchestration JSON. NO image descriptions.
-        """, userCommand);
-    }
     
     private GelAnalysisResponse parseGeminiResponse(JSONObject rawResponse, String originalCommand) throws Exception {
         JSONArray candidates = rawResponse.optJSONArray("candidates");
@@ -685,13 +806,44 @@ public class GeminiOrchestrator {
         
         // Strip JSON comments (//...) that Gemini sometimes includes
         responseText = responseText.replaceAll("//[^\\r\\n]*", "");
-        // Clean up any remaining comma-whitespace-newline patterns
         responseText = responseText.replaceAll(",\\s*\\n", ",\n");
         responseText = responseText.trim();
         
         try {
             JSONObject parsedResponse = new JSONObject(responseText);
             
+            // Handle new orchestration engine format
+            if (parsedResponse.has("action")) {
+                String action = parsedResponse.getString("action");
+                
+                if ("list_tools".equals(action)) {
+                    // Return registry response
+                    GelAnalysisResponse response = new GelAnalysisResponse();
+                    response.action = "registry.list_tools";
+                    response.analysis = "Loading capability registry";
+                    response.originalCommand = originalCommand;
+                    return response;
+                } else if ("run".equals(action) && parsedResponse.has("plan")) {
+                    // Execute plan with finite-state executor
+                    JSONArray plan = parsedResponse.getJSONArray("plan");
+                    JSONObject artifacts = executePlan(plan);
+                    
+                    GelAnalysisResponse response = new GelAnalysisResponse();
+                    response.action = "plan_executed";
+                    response.analysis = "Plan executed successfully: " + plan.length() + " steps";
+                    response.originalCommand = originalCommand;
+                    response.parameters.put("artifacts", artifacts.toString());
+                    return response;
+                } else if ("ask".equals(action)) {
+                    GelAnalysisResponse response = new GelAnalysisResponse();
+                    response.action = "clarification_needed";
+                    response.analysis = parsedResponse.optString("question", "Need clarification");
+                    response.originalCommand = originalCommand;
+                    return response;
+                }
+            }
+            
+            // Fallback to legacy format
             GelAnalysisResponse response = new GelAnalysisResponse();
             response.imageType = parsedResponse.optString("image_type", "gel");
             response.intent = parsedResponse.optString("intent", "unknown");
@@ -700,7 +852,6 @@ public class GeminiOrchestrator {
             response.confidence = parsedResponse.optDouble("confidence", 0.8);
             response.originalCommand = originalCommand;
             
-            // Convert parameters JSONObject to Map
             JSONObject params = parsedResponse.optJSONObject("parameters");
             if (params != null) {
                 for (String key : params.keySet()) {
@@ -712,6 +863,485 @@ public class GeminiOrchestrator {
         } catch (Exception e) {
             throw new RuntimeException("Failed to parse Gemini JSON response: " + responseText, e);
         }
+    }
+    
+    /**
+     * Robust finite-state executor for orchestration plans
+     */
+    private JSONObject executePlan(JSONArray plan) {
+        JSONObject artifacts = new JSONObject();
+        
+        for (int i = 0; i < plan.length(); i++) {
+            JSONObject step = plan.getJSONObject(i);
+            String toolId = step.getString("tool_id");
+            JSONObject inputs = step.optJSONObject("inputs", new JSONObject());
+            
+            sessionLogger.logSessionEvent("tool_call", 
+                "Executing step " + (i+1) + "/" + plan.length(),
+                new JSONObject()
+                    .put("tool_id", toolId)
+                    .put("inputs", inputs)
+                    .put("rationale", step.optString("rationale", "")));
+            
+            try {
+                long toolStartTime = System.currentTimeMillis();
+                JSONObject out = runTool(toolId, inputs, artifacts);
+                long toolDuration = System.currentTimeMillis() - toolStartTime;
+                artifacts.put(toolId, out);
+                
+                // LOG FOR ACTION LOG PANEL: ✅ Success with outputs
+                JSONObject actionLogEntry = new JSONObject()
+                    .put("tool_id", toolId)
+                    .put("status", "success")
+                    .put("duration_ms", toolDuration)
+                    .put("inputs", inputs)
+                    .put("outputs", extractOutputSummary(out))
+                    .put("timestamp", System.currentTimeMillis());
+                
+                // GUARANTEED VISUAL FEEDBACK: Auto-refresh after any ImageJ write operation
+                if (isImageJWriteOperation(toolId)) {
+                    JSONObject refreshResult = runTool("ui.refresh_canvas", 
+                        new JSONObject()
+                            .put("refresh_reason", toolId)
+                            .put("cache_bust", System.currentTimeMillis()), 
+                        artifacts);
+                    
+                    // Add overlay info to action log entry
+                    String overlayUrl = refreshResult.optString("overlay_png", "");
+                    actionLogEntry.put("overlay_url", overlayUrl);
+                    actionLogEntry.put("visual_feedback", true);
+                    
+                    // Log the refresh for debugging
+                    sessionLogger.logSessionEvent("auto_refresh", 
+                        "Auto-refreshed UI after " + toolId, 
+                        new JSONObject()
+                            .put("trigger_tool", toolId)
+                            .put("overlay_url", overlayUrl));
+                }
+                
+                // Store action log entry for UI panel
+                sessionLogger.logSessionEvent("action_log", 
+                    "Tool executed successfully", actionLogEntry);
+                
+            } catch (Exception e) {
+                long toolDuration = System.currentTimeMillis() - System.currentTimeMillis(); // Will be updated
+                
+                sessionLogger.logError("tool_error", e, 
+                    new JSONObject()
+                        .put("tool_id", toolId)
+                        .put("step", i+1));
+                
+                JSONObject onFail = step.optJSONObject("on_fail");
+                if (onFail != null) {
+                    int retry = onFail.optInt("retry", 0);
+                    String nextTool = onFail.optString("next_tool", null);
+                    
+                    // LOG FOR ACTION LOG PANEL: ⚠️ Failure with retry/fallback attempt
+                    JSONObject actionLogEntry = new JSONObject()
+                        .put("tool_id", toolId)
+                        .put("status", "failed_with_recovery")
+                        .put("duration_ms", toolDuration)
+                        .put("error", e.getMessage())
+                        .put("retry_count", retry)
+                        .put("fallback_tool", nextTool)
+                        .put("timestamp", System.currentTimeMillis());
+                    
+                    if (retry > 0) {
+                        try {
+                            long retryStartTime = System.currentTimeMillis();
+                            JSONObject out = runTool(toolId, inputs, artifacts);
+                            long retryDuration = System.currentTimeMillis() - retryStartTime;
+                            
+                            artifacts.put(toolId, out);
+                            
+                            // Update action log: Retry succeeded
+                            actionLogEntry.put("status", "recovered_after_retry");
+                            actionLogEntry.put("retry_duration_ms", retryDuration);
+                            actionLogEntry.put("outputs", extractOutputSummary(out));
+                            
+                        } catch (Exception retryError) {
+                            if (nextTool != null) {
+                                try {
+                                    long fallbackStartTime = System.currentTimeMillis();
+                                    JSONObject out = runTool(nextTool, inputs, artifacts);
+                                    long fallbackDuration = System.currentTimeMillis() - fallbackStartTime;
+                                    
+                                    artifacts.put(nextTool, out);
+                                    
+                                    // Update action log: Fallback succeeded
+                                    actionLogEntry.put("status", "recovered_with_fallback");
+                                    actionLogEntry.put("fallback_duration_ms", fallbackDuration);
+                                    actionLogEntry.put("outputs", extractOutputSummary(out));
+                                } catch (Exception fallbackError) {
+                                    actionLogEntry.put("status", "failed_permanently");
+                                    throw new RuntimeException("Both primary and fallback tools failed", fallbackError);
+                                }
+                            } else {
+                                actionLogEntry.put("status", "failed_permanently");
+                                throw new RuntimeException("Tool failed with no fallback available", retryError);
+                            }
+                        }
+                    } else {
+                        if (nextTool != null) {
+                            try {
+                                long fallbackStartTime = System.currentTimeMillis();
+                                JSONObject out = runTool(nextTool, inputs, artifacts);
+                                long fallbackDuration = System.currentTimeMillis() - fallbackStartTime;
+                                
+                                artifacts.put(nextTool, out);
+                                
+                                // Update action log: Fallback succeeded  
+                                actionLogEntry.put("status", "recovered_with_fallback");
+                                actionLogEntry.put("fallback_duration_ms", fallbackDuration);
+                                actionLogEntry.put("outputs", extractOutputSummary(out));
+                            } catch (Exception fallbackError) {
+                                actionLogEntry.put("status", "failed_permanently");
+                                throw new RuntimeException("Both primary and fallback tools failed", fallbackError);
+                            }
+                        } else {
+                            actionLogEntry.put("status", "failed_permanently");
+                            throw new RuntimeException("Tool failed with no fallback available", e);
+                        }
+                    }
+                    
+                    // Store action log entry for UI panel
+                    sessionLogger.logSessionEvent("action_log", 
+                        "Tool failed but recovered", actionLogEntry);
+                    
+                } else {
+                    // LOG FOR ACTION LOG PANEL: ⚠️ Permanent failure
+                    JSONObject actionLogEntry = new JSONObject()
+                        .put("tool_id", toolId)
+                        .put("status", "failed_permanently")
+                        .put("duration_ms", toolDuration)
+                        .put("error", e.getMessage())
+                        .put("timestamp", System.currentTimeMillis());
+                    
+                    sessionLogger.logSessionEvent("action_log", 
+                        "Tool failed permanently", actionLogEntry);
+                        
+                    throw new RuntimeException("Tool execution failed permanently", e);
+                }
+            }
+        }
+        
+        return artifacts;
+    }
+    
+    /**
+     * Tool execution dispatcher
+     */
+    private JSONObject runTool(String toolId, JSONObject inputs, JSONObject artifacts) throws Exception {
+        switch (toolId) {
+            case "registry.list_tools":
+                registryLoaded = true; // Mark registry as loaded after successful call
+                return createRegistryResponse();
+            case "imagej.open_image":
+                return executeImageJTool("open_image", inputs);
+            case "imagej.sds.quantify_lanes":
+                return executeImageJTool("detect_lanes", inputs);
+            case "imagej.assay.detect_colonies":
+                return assayOps.detectColonies(inputs);
+            case "imagej.assay.measure_colonies":
+                return assayOps.measureColonies(inputs);
+            case "imagej.assay.annotate":
+                return assayOps.annotate(inputs);
+            case "imagej.assay.export":
+                return assayOps.export(inputs);
+            case "imagej.assay.run_macro":
+                return assayOps.runMacro(inputs);
+            case "imagej.overlay.annotate":
+                return executeOverlayAnnotate(inputs);
+            case "ui.refresh_canvas":
+                return executeRefreshCanvas(inputs);
+            case "export.results":
+                return executeExportResults(inputs);
+            case "workflows.preset":
+                return executePresetWorkflow(inputs);
+            default:
+                throw new RuntimeException("Unknown tool: " + toolId);
+        }
+    }
+    
+    private JSONObject createRegistryResponse() {
+        return new JSONObject()
+            .put("tools", new JSONArray()
+                .put(new JSONObject().put("id", "registry.list_tools").put("desc", "List available tools"))
+                .put(new JSONObject().put("id", "imagej.open_image").put("desc", "Open an image using ImageJ"))
+                .put(new JSONObject().put("id", "imagej.sds.quantify_lanes").put("desc", "Detect lanes/bands and compute densitometry"))
+                .put(new JSONObject().put("id", "imagej.assay.detect_colonies").put("desc", "Detect colonies with stain/layout options"))
+                .put(new JSONObject().put("id", "imagej.assay.measure_colonies").put("desc", "Measure colony intensity, circularity, eccentricity"))
+                .put(new JSONObject().put("id", "imagej.assay.annotate").put("desc", "Add colony labels with id, blue_index, size_bin"))
+                .put(new JSONObject().put("id", "imagej.assay.export").put("desc", "Export colony CSV + overlay PNG"))
+                .put(new JSONObject().put("id", "imagej.assay.run_macro").put("desc", "Run baseline ImageJ macro for quick-test comparison"))
+                .put(new JSONObject().put("id", "ui.refresh_canvas").put("desc", "Force UI to repaint layers"))
+                .put(new JSONObject().put("id", "workflows.preset").put("desc", "Run named preset workflow")));
+    }
+    
+    private JSONObject executeImageJTool(String legacyAction, JSONObject inputs) throws Exception {
+        // Map new tool IDs to legacy tool execution
+        JSONObject parameters = new JSONObject();
+        
+        if ("detect_lanes".equals(legacyAction)) {
+            if (inputs.has("lane_count")) {
+                parameters.put("expected_lanes", inputs.getInt("lane_count"));
+            }
+        } else if ("count_colonies_by_color".equals(legacyAction)) {
+            if (inputs.has("blue_threshold")) {
+                parameters.put("color_groups", new JSONArray().put("blue").put("white"));
+            }
+        }
+        
+        return executeTool(legacyAction, parameters);
+    }
+    
+    private JSONObject executeOverlayAnnotate(JSONObject inputs) throws Exception {
+        // CRITICAL: All annotation must use Overlay + ROI Manager approach
+        String imageHandle = inputs.optString("image_handle", currentImageHandle);
+        if (imageHandle == null) {
+            imageHandle = sessionStore.getMostRecentImageHandle();
+        }
+        
+        SessionStore.ImageRecord img = sessionStore.getImage(imageHandle);
+        if (img == null) {
+            throw new RuntimeException("Image not found: " + imageHandle);
+        }
+        
+        // Example annotation pattern (following your specification)
+        JSONArray annotations = inputs.optJSONArray("annotations");
+        if (annotations != null) {
+            ij.gui.Overlay ov = img.image.getOverlay();
+            if (ov == null) {
+                ov = new ij.gui.Overlay();
+            }
+            
+            for (int i = 0; i < annotations.length(); i++) {
+                JSONObject ann = annotations.getJSONObject(i);
+                String type = ann.optString("type", "oval");
+                int x = ann.optInt("x", 0);
+                int y = ann.optInt("y", 0);
+                int w = ann.optInt("width", 20);
+                int h = ann.optInt("height", 20);
+                String label = ann.optString("label", "");
+                String color = ann.optString("color", "cyan");
+                
+                // Create ROI following the exact pattern you specified
+                ij.gui.Roi roi;
+                switch (type) {
+                    case "oval":
+                        roi = new ij.gui.OvalRoi(x, y, w, h);
+                        break;
+                    case "rectangle":
+                        roi = new ij.gui.Roi(x, y, w, h);
+                        break;
+                    case "line":
+                        roi = new ij.gui.Line(x, y, x + w, y + h);
+                        break;
+                    default:
+                        roi = new ij.gui.OvalRoi(x, y, w, h);
+                }
+                
+                // Apply annotation styling (never modify pixel data)
+                switch (color.toLowerCase()) {
+                    case "blue":
+                        roi.setStrokeColor(java.awt.Color.getHSBColor(0.58f, 1f, 1f));
+                        break;
+                    case "red":
+                        roi.setStrokeColor(java.awt.Color.RED);
+                        break;
+                    case "yellow":
+                        roi.setStrokeColor(java.awt.Color.YELLOW);
+                        break;
+                    default:
+                        roi.setStrokeColor(java.awt.Color.CYAN);
+                }
+                roi.setStrokeWidth(2);
+                if (!label.isEmpty()) {
+                    roi.setName(label);
+                }
+                
+                // Add to Overlay (never to pixel data)
+                ov.add(roi);
+            }
+            
+            // Apply overlay to image
+            img.image.setOverlay(ov);
+        }
+        
+        // Generate transparent overlay PNG using new exporter
+        return exportOverlayPNG();
+    }
+    
+    private JSONObject executeRefreshCanvas(JSONObject inputs) throws Exception {
+        // Force overlay refresh with cache-busting - return latest overlay URL
+        long timestamp = inputs.optLong("cache_bust", System.currentTimeMillis());
+        String refreshReason = inputs.optString("refresh_reason", "manual");
+        
+        // Generate fresh overlay PNG with cache-busting timestamp
+        String overlayUrl = "/overlays/current.png?t=" + timestamp;
+        
+        // Export fresh overlay if image is available
+        String imageHandle = inputs.optString("image_handle", currentImageHandle);
+        if (imageHandle == null) {
+            imageHandle = sessionStore.getMostRecentImageHandle();
+        }
+        
+        String actualOverlayPath = null;
+        if (imageHandle != null) {
+            try {
+                JSONObject overlayResult = exportOverlayPNG();
+                actualOverlayPath = overlayResult.optString("overlay_png");
+                
+                // Update URL to point to actual file with cache-busting
+                if (actualOverlayPath != null) {
+                    overlayUrl = actualOverlayPath + "?t=" + timestamp;
+                }
+            } catch (Exception e) {
+                System.err.println("Failed to export overlay for refresh: " + e.getMessage());
+            }
+        }
+        
+        return new JSONObject()
+            .put("success", true)
+            .put("overlay_png", overlayUrl)
+            .put("refresh_reason", refreshReason)
+            .put("timestamp", timestamp)
+            .put("cache_busted", true);
+    }
+    
+    private JSONObject executeExportResults(JSONObject inputs) throws Exception {
+        JSONArray tables = inputs.optJSONArray("tables");
+        JSONArray images = inputs.optJSONArray("images");
+        JSONArray paths = new JSONArray();
+        
+        if (tables != null) {
+            for (int i = 0; i < tables.length(); i++) {
+                paths.put("/exports/" + tables.getString(i));
+            }
+        }
+        
+        if (images != null) {
+            for (int i = 0; i < images.length(); i++) {
+                paths.put("/exports/" + images.getString(i));
+            }
+        }
+        
+        return new JSONObject().put("paths", paths);
+    }
+    
+    private JSONObject executePresetWorkflow(JSONObject inputs) throws Exception {
+        String workflowName = inputs.getString("name");
+        JSONObject params = inputs.optJSONObject("params", new JSONObject());
+        
+        // Preset workflows: thin arrays of tool IDs, no bespoke code paths
+        sessionLogger.logSessionEvent("preset_workflow", 
+            "Executing preset workflow: " + workflowName, 
+            new JSONObject().put("workflow", workflowName));
+        
+        // Get preset tool steps as thin arrays
+        JSONArray steps = getPresetSteps(workflowName, params);
+        
+        // Execute as standard plan using same executor
+        return executePlan(steps);
+    }
+    
+    private JSONArray getPresetSteps(String workflowName, JSONObject params) {
+        return switch (workflowName) {
+            case "SDS_PAGE_DENSITOMETRY" -> new JSONArray()
+                .put(new JSONObject().put("tool_id", "imagej.open_image").put("inputs", params))
+                .put(new JSONObject().put("tool_id", "imagej.sds.quantify_lanes").put("inputs", new JSONObject()))
+                .put(new JSONObject().put("tool_id", "imagej.overlay.annotate").put("inputs", new JSONObject()))
+                .put(new JSONObject().put("tool_id", "export.results").put("inputs", new JSONObject()));
+                
+            case "COLONY_BLUE_SCORING" -> {
+                JSONObject colonyParams = new JSONObject(params.toString());
+                if (!colonyParams.has("stain")) {
+                    colonyParams.put("stain", "x-gal"); // Default for blue scoring
+                }
+                yield new JSONArray()
+                    .put(new JSONObject().put("tool_id", "imagej.open_image").put("inputs", params))
+                    .put(new JSONObject().put("tool_id", "imagej.assay.detect_colonies").put("inputs", colonyParams))
+                    .put(new JSONObject().put("tool_id", "imagej.assay.annotate").put("inputs", new JSONObject()))
+                    .put(new JSONObject().put("tool_id", "imagej.assay.export").put("inputs", new JSONObject()));
+            }
+            
+            default -> throw new RuntimeException("Unknown preset workflow: " + workflowName + 
+                ". Available presets: SDS_PAGE_DENSITOMETRY, COLONY_BLUE_SCORING");
+        };
+    }
+    
+    /**
+     * Export transparent overlay PNG (non-destructive)
+     */
+    private JSONObject exportOverlayPNG() throws Exception {
+        String imageHandle = currentImageHandle;
+        if (imageHandle == null) {
+            imageHandle = sessionStore.getMostRecentImageHandle();
+        }
+        
+        if (imageHandle == null) {
+            throw new RuntimeException("No image available for overlay export");
+        }
+        
+        SessionStore.ImageRecord img = sessionStore.getImage(imageHandle);
+        if (img == null) {
+            throw new RuntimeException("Image not found: " + imageHandle);
+        }
+        
+        // Use OverlayExporter to create transparent PNG
+        java.io.File overlayFile = exportOverlayPNGFile(img.image);
+        
+        return new JSONObject()
+            .put("overlay_png", overlayFile.getAbsolutePath())
+            .put("width", img.image.getWidth())
+            .put("height", img.image.getHeight())
+            .put("transparent", true);
+    }
+    
+    private java.io.File exportOverlayPNGFile(ij.ImagePlus imp) throws Exception {
+        int w = imp.getWidth(), h = imp.getHeight();
+        java.awt.image.BufferedImage png = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        java.awt.Graphics2D g = png.createGraphics();
+        g.setComposite(java.awt.AlphaComposite.SrcOver);
+        g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+        
+        // CRITICAL: Only export from Overlay + ROI Manager, never from pixel data
+        ij.gui.Overlay ov = imp.getOverlay();
+        if (ov != null) {
+            for (ij.gui.Roi r : ov.toArray()) {
+                // Ensure ROI has proper annotation styling
+                if (r.getStrokeColor() == null) {
+                    r.setStrokeColor(java.awt.Color.CYAN); // default annotation color
+                }
+                if (r.getStrokeWidth() == 0) {
+                    r.setStrokeWidth(2); // default annotation width
+                }
+                r.drawOverlay(g); // respects stroke/fill/labels from Overlay
+            }
+        }
+        
+        // Also check ROI Manager for additional annotations
+        ij.plugin.frame.RoiManager roiManager = ij.plugin.frame.RoiManager.getRoiManager();
+        if (roiManager != null) {
+            ij.gui.Roi[] rois = roiManager.getRoisAsArray();
+            for (ij.gui.Roi r : rois) {
+                if (r.getStrokeColor() == null) {
+                    r.setStrokeColor(java.awt.Color.YELLOW); // ROI Manager default
+                }
+                if (r.getStrokeWidth() == 0) {
+                    r.setStrokeWidth(2);
+                }
+                r.drawOverlay(g);
+            }
+        }
+        
+        g.dispose();
+        
+        java.io.File out = new java.io.File(System.getProperty("java.io.tmpdir"), 
+            "overlay_" + System.currentTimeMillis() + ".png");
+        javax.imageio.ImageIO.write(png, "PNG", out);
+        
+        return out;
     }
     
     /**
@@ -858,5 +1488,177 @@ public class GeminiOrchestrator {
                 return String.format("OrchestrationResult{success=false, error='%s'}", errorMessage);
             }
         }
+    }
+    
+    /**
+     * Detect if user command matches a known preset workflow
+     */
+    private boolean isPresetWorkflow(String userCommand) {
+        String cmd = userCommand.toLowerCase().trim();
+        
+        // Colony Blue Scoring preset patterns
+        if (cmd.contains("blue") && (cmd.contains("colonies") || cmd.contains("colony"))) {
+            return true;
+        }
+        if (cmd.contains("x-gal") || cmd.contains("xgal")) {
+            return true;
+        }
+        if (cmd.matches(".*analyz.*coloni.*") && cmd.contains("blue")) {
+            return true;
+        }
+        
+        // SDS-PAGE Densitometry preset patterns  
+        if (cmd.contains("gel") && (cmd.contains("lane") || cmd.contains("band"))) {
+            return true;
+        }
+        if (cmd.contains("sds") || cmd.contains("page")) {
+            return true;
+        }
+        if (cmd.contains("densitometry") || cmd.contains("quantif")) {
+            return true;
+        }
+        
+        // Explicit preset names
+        if (cmd.contains("colony_blue_scoring") || cmd.contains("sds_page_densitometry")) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Detect if tool performs ImageJ write operations requiring visual feedback
+     */
+    private boolean isImageJWriteOperation(String toolId) {
+        return switch (toolId) {
+            // Detection operations that add overlays
+            case "imagej.open_image",
+                 "imagej.sds.quantify_lanes",
+                 "imagej.assay.detect_colonies",
+                 "imagej.assay.measure_colonies",
+                 "imagej.assay.annotate",
+                 "imagej.assay.run_macro" -> true;
+            
+            // Workflow presets that perform detection/annotation
+            case "workflows.preset" -> true;
+            
+            // Canvas refresh is not a write operation (avoid recursion)
+            case "ui.refresh_canvas" -> false;
+            
+            // Registry and export operations don't modify overlays
+            case "registry.list_tools",
+                 "imagej.assay.export",
+                 "export.results" -> false;
+            
+            default -> toolId.startsWith("imagej.");
+        };
+    }
+    
+    /**
+     * Extract meaningful output summary for Action Log Panel
+     */
+    private JSONObject extractOutputSummary(JSONObject toolOutput) {
+        JSONObject summary = new JSONObject();
+        
+        // Common output fields to highlight in Action Log
+        String[] importantFields = {
+            "colonies_detected", "lanes_found", "bands_total",
+            "measurements", "exported_files", "overlay_png",
+            "colonies_measured", "annotations_added", "success"
+        };
+        
+        for (String field : importantFields) {
+            if (toolOutput.has(field)) {
+                Object value = toolOutput.get(field);
+                
+                // Format file arrays nicely
+                if (field.equals("exported_files") && value instanceof JSONArray) {
+                    JSONArray files = (JSONArray) value;
+                    summary.put(field, formatFileList(files));
+                }
+                // Format overlay URLs nicely  
+                else if (field.equals("overlay_png") && value instanceof String) {
+                    String path = (String) value;
+                    summary.put(field, extractFilename(path));
+                }
+                // Keep other values as-is
+                else {
+                    summary.put(field, value);
+                }
+            }
+        }
+        
+        return summary;
+    }
+    
+    private String formatFileList(JSONArray files) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < files.length(); i++) {
+            if (i > 0) sb.append(", ");
+            String file = files.optString(i, "");
+            sb.append(extractFilename(file));
+        }
+        return sb.toString();
+    }
+    
+    private String extractFilename(String path) {
+        if (path == null || path.isEmpty()) return "";
+        
+        // Extract just the filename from full path
+        int lastSlash = path.lastIndexOf('/');
+        if (lastSlash >= 0 && lastSlash < path.length() - 1) {
+            return path.substring(lastSlash + 1);
+        }
+        return path;
+    }
+    
+    /**
+     * Get action log entries for right-hand UI panel display
+     */
+    public JSONArray getActionLogEntries() {
+        JSONArray actionLog = new JSONArray();
+        
+        try {
+            // Get recent session events of type "action_log"
+            JSONObject sessionStats = sessionLogger.getSessionStatistics();
+            JSONArray allEvents = sessionStats.optJSONArray("recent_events");
+            
+            if (allEvents != null) {
+                for (int i = 0; i < allEvents.length(); i++) {
+                    JSONObject event = allEvents.getJSONObject(i);
+                    if ("action_log".equals(event.optString("event_type"))) {
+                        JSONObject data = event.optJSONObject("data");
+                        if (data != null) {
+                            actionLog.put(data);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to retrieve action log: " + e.getMessage());
+        }
+        
+        return actionLog;
+    }
+    
+    /**
+     * Get latest overlay thumbnail URL for Action Log Panel
+     */
+    public String getLatestOverlayThumbnail() {
+        try {
+            String imageHandle = currentImageHandle;
+            if (imageHandle == null) {
+                imageHandle = sessionStore.getMostRecentImageHandle();
+            }
+            
+            if (imageHandle != null) {
+                JSONObject overlayResult = exportOverlayPNG();
+                return overlayResult.optString("overlay_png", "") + "?t=" + System.currentTimeMillis();
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to get overlay thumbnail: " + e.getMessage());
+        }
+        
+        return null;
     }
 }
