@@ -1,5 +1,11 @@
 # Plate Analysis Defaults System ✅
 
+> **Doc Meta**
+> - **Purpose:** Default parameter system for automated plate analysis and colony detection
+> - **Scope:** Configuration values, phone photography workflows, and X-gal screening defaults
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Overview
 
 Successfully implemented comprehensive default values and configuration system for agar plate analysis, optimized for common phone photography workflows. Based on user workflow analysis showing standardized processes for 90mm X-gal plates.

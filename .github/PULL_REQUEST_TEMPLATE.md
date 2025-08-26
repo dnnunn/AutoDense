@@ -1,3 +1,11 @@
+# Pull Request Template
+
+> **Doc Meta**
+> - **Purpose:** Standardized template for documentation cleanup pull requests
+> - **Scope:** PR structure, checklists, and quality gates for documentation changes
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Summary
 Concise description of what changed and why. Focus on consolidation, deprecation, and canonical sources of truth.
 

@@ -1,5 +1,11 @@
 # Core PlateDetector Implementation ✅
 
+> **Doc Meta**
+> - **Purpose:** Technical implementation details for core plate detection algorithm
+> - **Scope:** Step-by-step pipeline, ImageJ integration, and ellipse fitting process
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Overview
 
 Successfully implemented the core plate detection algorithm exactly as specified:

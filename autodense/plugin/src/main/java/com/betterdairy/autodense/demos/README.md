@@ -1,5 +1,11 @@
 # AutoDense Demo System
 
+> **Doc Meta**
+> - **Purpose:** Demo system organization and integration documentation
+> - **Scope:** Demo structure, UI integration, and usage scenarios
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 Organized demonstration files for user experience enhancement.
 
 ## Directory Structure

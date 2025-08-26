@@ -1,0 +1,57 @@
+# AutoDense Development Startup Guide
+
+> **Doc Meta**
+> - **Purpose:** Quick start guide for AutoDense development environment setup and workflow
+> - **Scope:** Build commands, testing procedures, and development workflow
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
+## Read Claude.md
+
+## Read Latest Session Summary
+
+/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/sessionsummaryQuick Start Commands
+
+### 1. Build AutoDense
+
+```bash
+cd /path/to/AutoDense
+mvn -q -DskipTests=true -f autodense/pom.xml -pl plugin -am clean install
+```
+
+### 2. Run AutoDense for Testing
+
+```bash
+mvn -q -f autodense/plugin/pom.xml exec:java \
+  -Dexec.mainClass=com.betterdairy.autodense.plugin.OpenAnalyzeCommand \
+  -Dexec.classpathScope=runtime
+```
+
+## Development Workflow
+
+### After Code Changes:
+
+1. **Kill existing processes** (if running):
+   ```bash
+   pkill -f ImageJ
+   ```
+2. **Rebuild**:
+   ```bash
+   mvn -q -DskipTests=true -f autodense/pom.xml -pl plugin -am clean install
+   ```
+3. **Restart**:
+   ```bash
+   mvn -q -f autodense/plugin/pom.xml exec:java \
+     -Dexec.mainClass=com.betterdairy.autodense.plugin.OpenAnalyzeCommand \
+     -Dexec.classpathScope=runtime
+   ```
+
+### Troubleshooting
+
+### Build fails:
+
+### Plugin not in menu:
+
+### Natural Language Interface:
+
+## Architecture Notes

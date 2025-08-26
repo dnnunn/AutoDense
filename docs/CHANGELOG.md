@@ -1,5 +1,11 @@
 # AutoDense Changelog
 
+> **Doc Meta**
+> - **Purpose:** Version history with detailed change tracking and feature additions
+> - **Scope:** All notable changes, features, and technical improvements by version
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 All notable changes to the AutoDense gel densitometry project are documented in this file.
 
 ## [0.2.0-SNAPSHOT] - 2025-08-22

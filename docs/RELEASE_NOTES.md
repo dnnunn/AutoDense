@@ -1,5 +1,11 @@
 # AutoDense Release Notes
 
+> **Doc Meta**
+> - **Purpose:** User-facing release documentation with feature highlights and breaking changes
+> - **Scope:** Major features, UI changes, and user-impacting updates by version
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Version 12.01 Enhanced - August 2025
 
 ### 🎉 Major New Features Since Last Release

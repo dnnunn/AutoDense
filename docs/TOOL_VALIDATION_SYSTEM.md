@@ -1,5 +1,11 @@
 # Tool Validation and Response System
 
+> **Doc Meta**
+> - **Purpose:** Quality assurance system for tool validation and response verification
+> - **Scope:** Tool validation utilities, response systems, and error handling
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Overview
 
 This document describes the standardized tool validation and response system implemented in AutoDense, including the ToolSchemaValidator utility and simplified response methods.
