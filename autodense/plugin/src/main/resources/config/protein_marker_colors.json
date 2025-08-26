@@ -1,0 +1,15 @@
+{
+  "SeeBlue_Plus2": [
+    { "name": "Blue", "h_min": 180, "h_max": 255, "s_min": 60, "v_min": 30 },
+    { "name": "Pink", "h_min": 300, "h_max": 350, "s_min": 40, "v_min": 40 }
+  ],
+  "PageRuler_Prestained": [
+    { "name": "Blue", "h_min": 180, "h_max": 255, "s_min": 60, "v_min": 30 },
+    { "name": "Orange", "h_min": 20, "h_max": 45, "s_min": 60, "v_min": 40 }
+  ],
+  "NEB_Colored_Protein": [
+    { "name": "Blue", "h_min": 180, "h_max": 255, "s_min": 60, "v_min": 30 },
+    { "name": "Red", "h_min": 0, "h_max": 20, "s_min": 60, "v_min": 40 },
+    { "name": "Orange", "h_min": 25, "h_max": 45, "s_min": 60, "v_min": 40 }
+  ]
+}

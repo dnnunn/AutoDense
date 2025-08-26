@@ -16,6 +16,7 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
+import ij.process.ColorProcessor;
 
 public final class SdsCalib {
 
@@ -31,7 +32,7 @@ public final class SdsCalib {
                                                      Path outCsv) throws Exception {
         var ladder = loadProteinLadder(ladderName);
         var bands  = Csv.read(bandsCsv);          // id,lane,y_px,intensity
-        int laneIdx = (laneIndexIn != null) ? laneIndexIn : autoDetectLadderLane(bands, ladder);
+        int laneIdx = (laneIndexIn != null) ? laneIndexIn : autoDetectLadderLaneByColor(imp, ladderName);
 
         // well_y: top edge of lane ROI
         var laneBounds = laneBoundsFromOverlay(imp, laneIdx);
@@ -90,11 +91,14 @@ public final class SdsCalib {
 
         Map<Integer, Double> idToKDa = new HashMap<>();
         Map<Integer, Double> idToY   = new HashMap<>();
+        Map<Integer, Integer> idToLane = new HashMap<>();
         for (var r : rows) {
             int id = Integer.parseInt(r.get("id"));
             idToKDa.put(id, Double.parseDouble(r.get("kDa")));
             idToY.put(id,   Double.parseDouble(r.get("y_px")));
+            idToLane.put(id, Integer.parseInt(r.get("lane")));
         }
+        
         // Add text labels near each band tick mark (your band ticks were Line ROIs named band_***)
         for (Roi r : imp.getOverlay().toArray()) {
             String name = r.getName();
@@ -103,6 +107,7 @@ public final class SdsCalib {
                 String idStr = name.split("_")[1];
                 int id = Integer.parseInt(idStr);
                 Double kda = idToKDa.get(id);
+                Integer lane = idToLane.get(id);
                 if (kda != null) {
                     Rectangle b = r.getBounds();
                     String txt = String.format("%.0f kDa", roundNice(kda));
@@ -111,6 +116,11 @@ public final class SdsCalib {
                     tr.setFillColor(new Color(0,0,0,160));
                     tr.setCurrentFont(new Font("SansSerif", Font.PLAIN, 12));
                     ov.add(tr);
+                    
+                    // Add color tag for ladder lane if this band is highly colored
+                    if (lane != null && isHighlyColored(imp, b.x, b.y)) {
+                        addColorTag(ov, b.x - 20, b.y, "●");
+                    }
                 }
             }
         }
@@ -118,8 +128,115 @@ public final class SdsCalib {
         OverlayExporter.exportOverlayPNG(imp, outPng.toFile());
         return Map.of("mw_overlay_png", outPng.toString(), "mw_csv", mwCsv.toString());
     }
+    
+    private static boolean isHighlyColored(ImagePlus imp, int x, int y) {
+        try {
+            var cp = imp.getProcessor().convertToColorProcessor();
+            float[] hsv = autodense.color.HsvOps.pixelHSV(cp, x, y);
+            // Consider highly colored if saturation > 40% and value > 30%
+            return hsv[1] > 40 && hsv[2] > 30;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 
     // --- helpers ---
+    
+    static class ColorBand {
+        String name; 
+        int hMin, hMax, sMin, vMin;
+    }
+    
+    @SuppressWarnings("unchecked")
+    static List<ColorBand> loadMarkerProfile(String ladderName) throws Exception {
+        try (var is = SdsCalib.class.getResourceAsStream("/config/protein_marker_colors.json")) {
+            var om = new ObjectMapper();
+            var m = (Map<String, List<Map<String,Object>>>) om.readValue(is, Map.class);
+            var raw = m.get(ladderName);
+            if (raw==null) return java.util.Collections.emptyList();
+            List<ColorBand> out = new ArrayList<>();
+            for (var r : raw) {
+                ColorBand cb = new ColorBand();
+                cb.name = (String) r.get("name");
+                cb.hMin = ((Number) r.get("h_min")).intValue();
+                cb.hMax = ((Number) r.get("h_max")).intValue();
+                cb.sMin = ((Number) r.get("s_min")).intValue();
+                cb.vMin = ((Number) r.get("v_min")).intValue();
+                out.add(cb);
+            }
+            return out;
+        } catch (Exception e) {
+            System.err.println("Could not load marker profile for " + ladderName + ": " + e.getMessage());
+            return java.util.Collections.emptyList();
+        }
+    }
+
+    public static int autoDetectLadderLaneByColor(ImagePlus imp, String ladderName) {
+        try {
+            var cp = imp.getProcessor().convertToColorProcessor();
+            Overlay ov = imp.getOverlay(); 
+            if (ov==null) throw new IllegalStateException("No lanes overlay");
+            
+            List<Roi> lanes = java.util.Arrays.asList(ov.toArray()).stream()
+                .filter(r -> r.getName()!=null && r.getName().startsWith("lane_"))
+                .collect(Collectors.toList());
+            var markers = loadMarkerProfile(ladderName);
+            
+            if (markers.isEmpty()) {
+                System.out.println("No color markers found for " + ladderName + ", falling back to band spacing analysis");
+                return 1; // fallback to lane 1 if no color profile
+            }
+
+            int bestLane=1; 
+            double bestScore=-1;
+            for (Roi lane : lanes) {
+                var b = lane.getBounds();
+                int hits=0;
+                // sample every 2 px along y, across a central stripe in x
+                int x0=b.x + (int)(b.width*0.3), x1=b.x + (int)(b.width*0.7);
+                for (int y=b.y; y<b.y+b.height; y+=2){
+                    int count=0;
+                    for (int x=x0; x<x1; x+=3){
+                        float[] hsv = autodense.color.HsvOps.pixelHSV(cp, x, y);
+                        for (var mk : markers){
+                            boolean hueIn = (mk.hMin <= mk.hMax) ?
+                                (hsv[0]>=mk.hMin && hsv[0]<=mk.hMax) :
+                                (hsv[0]>=mk.hMin || hsv[0]<=mk.hMax); // wrap-around
+                            if (hueIn && hsv[1]>=mk.sMin && hsv[2]>=mk.vMin){ 
+                                count++; 
+                                break; 
+                            }
+                        }
+                    }
+                    if (count > ((x1-x0)/3)*0.5) hits++; // row looks "colored" across mid stripe
+                }
+                double score = hits / (double)(b.height/2); // normalized density
+                if (score > bestScore){ 
+                    bestScore=score; 
+                    bestLane = parseLaneIndex(lane.getName()); 
+                }
+            }
+            
+            System.out.println("Color-based ladder detection: lane " + bestLane + " (score: " + String.format("%.3f", bestScore) + ")");
+            return bestLane;
+        } catch (Exception e) {
+            System.err.println("Color detection failed: " + e.getMessage() + ", using fallback");
+            return 1; // fallback to lane 1 on error
+        }
+    }
+
+    private static int parseLaneIndex(String name){
+        // "lane_7" -> 7
+        return Integer.parseInt(name.substring(name.indexOf('_')+1));
+    }
+
+    private static void addColorTag(Overlay ov, int x, int y, String name){
+        var tag = new TextRoi(x, y, name);
+        tag.setCurrentFont(new Font("SansSerif", Font.BOLD, 10));
+        tag.setStrokeColor(Color.white);
+        tag.setFillColor(new Color(0,0,0,160));
+        ov.add(tag);
+    }
 
     @SuppressWarnings("unchecked")
     private static List<Integer> loadProteinLadder(String name) throws Exception {
