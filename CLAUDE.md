@@ -4,6 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Always open lint and fix linter errors as they arise. Do not let them accumulate
 
+## 🚨 BRANCH SAFETY PROTOCOL 🚨
+**BEFORE ANY GIT OPERATION:**
+1. Run `git branch --show-current` to confirm current branch
+2. **NEVER** switch branches during active development without explicit user request
+3. **ALWAYS** stay on the designated feature branch until work is complete
+4. If you accidentally switch branches, immediately return to the correct branch
+
 ## Project Overview
 
 AutoDense is a comprehensive laboratory image analysis application built as a standalone Mac-native Fiji/ImageJ2 app with AI-powered control via Google Gemini. The system uses a **handle-based architecture** where Gemini acts as the planner and ImageJ/Fiji executes the actual image analysis operations.
