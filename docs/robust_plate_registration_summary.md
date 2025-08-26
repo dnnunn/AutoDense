@@ -1,5 +1,11 @@
 # Robust Plate Registration for Colony Growth Analysis
 
+> **Doc Meta**
+> - **Purpose:** Plate alignment system for colony growth analysis and time-series tracking
+> - **Scope:** Registration algorithms, fiducial detection, and geometric alignment methods
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## ✅ **Completed Implementation**
 
 I have successfully implemented a comprehensive robust plate registration system with the following components:

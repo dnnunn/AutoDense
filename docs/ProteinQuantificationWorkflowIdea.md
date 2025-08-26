@@ -16,6 +16,12 @@ Below is a drop‑in plan with schema, execution order, and Java stubs that fit 
 
 # 1) NL/Tool surface (keep Gemini on rails)
 
+> **Doc Meta**
+> - **Purpose:** Natural language interface design and tool surface for protein quantification workflows
+> - **Scope:** Standard curve calibration, protein quantification, and Excel export workflows
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 Add three actions:
 
 1. `calibrate_amount`

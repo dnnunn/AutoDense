@@ -1,5 +1,11 @@
 # AutoDense Frontend Enhancements
 
+> **Doc Meta**
+> - **Purpose:** UI improvements for user experience, interface design, and workflow optimization
+> - **Scope:** Voice input, document upload, console management, and enhanced interface features
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## Overview
 Enhanced the AutoDense UI with advanced user interaction capabilities to take full advantage of Gemini AI at the frontend level.
 

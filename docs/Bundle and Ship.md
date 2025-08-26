@@ -1,5 +1,11 @@
 # Ship strategy (what to bundle vs. fetch)
 
+> **Doc Meta**
+> - **Purpose:** Distribution strategy document detailing what to bundle vs fetch for deployment
+> - **Scope:** App packaging, model distribution, notarization, and update strategies
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 - **Bundle the core app separately from models.**
    Make a lean, signed, notarized `.app` (Fiji + your plugin + llama-server) ≈ 300–500 MB.
    Put models in a **separate “Models Pack” DMG/PKG**. Users can:

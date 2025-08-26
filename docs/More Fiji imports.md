@@ -1,5 +1,11 @@
 # Pre‑analysis image hygiene (orientation & framing)
 
+> **Doc Meta**
+> - **Purpose:** Pre-analysis image preprocessing guide for orientation and framing operations
+> - **Scope:** Image rotation, cropping, illumination correction, and quality enhancement techniques
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 - **Rotate / Deskew**
   - *Why*: Make wells perfectly horizontal; band metrics depend on vertical distance.
   - *How*: User draws a line along the well row; use “Rotate… angle=−getAngle(line)”.

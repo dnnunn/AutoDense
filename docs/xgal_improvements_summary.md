@@ -1,5 +1,11 @@
 # X-gal Blue/White Detection Improvements
 
+> **Doc Meta**
+> - **Purpose:** X-gal blue/white detection system improvements for bacterial screening assays
+> - **Scope:** Auto-calibration enhancements, session persistence, and detection accuracy improvements
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## ✅ Completed Implementation
 
 ### 1. Auto-Calibration Default Setting

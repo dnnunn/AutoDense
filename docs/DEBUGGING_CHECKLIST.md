@@ -1,4 +1,11 @@
 # AutoDense Debugging Checklist
+
+> **Doc Meta**
+> - **Purpose:** Comprehensive troubleshooting guide for common issues and diagnostic procedures
+> - **Scope:** Debug tasks, testing protocols, and systematic issue resolution steps
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 **Next Session Priorities**
 
 ## 🎯 **Immediate Debug Tasks (Start Here Tomorrow)**

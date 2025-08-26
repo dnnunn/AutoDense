@@ -1,5 +1,11 @@
 # Perspective Robustness Analysis: How the System Handles Different Photo Angles and Distances
 
+> **Doc Meta**
+> - **Purpose:** Analysis of system performance with different photo angles and camera distances
+> - **Scope:** Geometric robustness, perspective handling, and algorithmic adaptations
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## **Your Question is Spot-On!**
 
 You're absolutely right to question whether the system can handle plates photographed from different angles and distances. The **original geometric descriptor had serious flaws** for this exact scenario. I've now enhanced it significantly.

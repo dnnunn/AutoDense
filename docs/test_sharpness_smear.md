@@ -1,5 +1,11 @@
 # Sharpness and Smear Implementation Test
 
+> **Doc Meta**
+> - **Purpose:** Implementation testing for image quality detection and sharpness analysis
+> - **Scope:** Band sharpness metrics, smear quantification, and CSV export enhancements
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 ## What Was Implemented
 
 ### 1. Quant.java Enhancements

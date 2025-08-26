@@ -1,5 +1,11 @@
 # AutoDense Documentation
 
+> **Doc Meta**
+> - **Purpose:** Comprehensive documentation overview and navigation guide
+> - **Scope:** Complete feature documentation, API reference, and user guides
+> - **Owner:** @davidnunn
+> - **Last-verified:** 2025-08-26
+
 **AI-Powered Gel Densitometry Analysis with Natural Language Control**
 
 Version: 0.1.0  
