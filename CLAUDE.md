@@ -5,7 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Always open lint and fix linter errors as they arise. Do not let them accumulate
 
 ## 🚨 BRANCH SAFETY PROTOCOL 🚨
+
 **BEFORE ANY GIT OPERATION:**
+
 1. Run `git branch --show-current` to confirm current branch
 2. **NEVER** switch branches during active development without explicit user request
 3. **ALWAYS** stay on the designated feature branch until work is complete
@@ -29,76 +31,17 @@ AutoDense is a comprehensive laboratory image analysis application built as a st
 
 ### Core Design Principle
 
-- **Gemini = Planner**: Emits structured tool calls, never processes pixels
-- **ImageJ = Executor**: Performs all image operations, maintains state
-- **Handles = References**: Images and overlays referenced by handles, not pixels
-
 ### Key Components
 
-1. **SessionStore** (`/plugin/src/main/java/com/betterdairy/autodense/session/SessionStore.java`)
-
-   - Maintains all state (images, overlays, analysis results)
-   - Issues handles (e.g., `img_abc123`, `ov_def456`)
-   - Never passes pixels to LLM
-2. **GelAnalysisTools** (`/plugin/src/main/java/com/betterdairy/autodense/tools/GelAnalysisTools.java`)
-
-   - Tool implementations for Gemini function calling
-   - Each tool operates on handles, not pixels
-   - Available tools:
-     - `open_image`: Load gel image → returns image_handle
-     - `preprocess`: Apply enhancements (rotate, flip, contrast, background)
-     - `detect_lanes`: Find lanes → returns overlay_handle
-     - `detect_bands`: Find bands within lanes
-     - `adjust_lanes`: Fine-tune lane positions
-     - `render_overlay_png`: Export view for user
-     - `quantify_bands`: Measure band intensities with PCR normalization support
-     - `calibrate_standard_curve`: **NEW** Protein quantification with %CV and LOQ/LLOQ
-     - `compare_lanes`: **NEW** MW-aware statistical comparison with multiple testing
-     - `export_volcano_plot`: **NEW** Generate volcano plot PNG for lane comparisons
-     - `enable_band_assist`: Enable user-assisted band identification
-     - `disable_band_assist`: Disable user-assisted mode
-     - `configure_band_assist`: Configure BandAssist parameters
-     - `start_timeseries_analysis`: **NEW** Initialize colony growth tracking
-     - `add_timepoint`: **NEW** Add time point to growth analysis
-     - `align_plate_images`: **NEW** Align plates for time-series
-     - `analyze_xgal_blueness`: **NEW** X-gal colony classification
-     - `export_timeseries_data`: **NEW** Export growth data
-     - `export_results`: Save CSV/JSON/PNG with enhanced metadata
-3. **GeminiOrchestrator** (`/plugin/src/main/java/com/betterdairy/autodense/orchestrator/GeminiOrchestrator.java`)
-
-   - Coordinates Gemini planning with ImageJ execution
-   - Sends tool schemas to Gemini
-   - Executes tool calls from Gemini
-   - Returns results with handles
-   - **NEW**: Integrated with comprehensive session logging
-4. **SessionLogger** (`/plugin/src/main/java/com/betterdairy/autodense/session/SessionLogger.java`)
-
-   - **NEW**: Comprehensive JSON logging system for troubleshooting and training
-   - Logs all conversations between user and Gemini
-   - Records all tool calls with parameters, results, and execution times
-   - Tracks session events, errors, and API interactions
-   - Automatic log rotation and cleanup
-   - Privacy-aware sanitization (removes API keys, truncates large data)
+1. **SessionStore**
+2. **GelAnalysisTools**
+3. PlateAnalysisTools
+4. **GeminiOrchestrator**
+5. **SessionLogger** (
 
 ### Workflow Example
 
-```
-User: "Open gel.tif, detect 12 lanes, find bands, export CSV"
-↓
-Gemini: tool_call("open_image", {path: "gel.tif"})
-← Returns: {image_handle: "img_abc123"}
-↓
-Gemini: tool_call("detect_lanes", {image_handle: "img_abc123", expected_lanes: 12})
-← Returns: {overlay_handle: "ov_def456", lanes_found: 12}
-↓
-Gemini: tool_call("detect_bands", {image_handle: "img_abc123"})
-← Returns: {bands_total: 67}
-↓
-Gemini: tool_call("export_results", {image_handle: "img_abc123", formats: ["csv"]})
-← Returns: {exported_files: ["results.csv"]}
-```
-
-## Build System
+Build System
 
 Maven single-module project using Java 17:
 
@@ -123,38 +66,11 @@ mvn -q -f autodense/plugin/pom.xml exec:java \
 
 ### Gel Analysis
 
-- **LaneDetector**: Finds gel lanes via vertical projection analysis
-- **BandDetector**: Identifies protein bands within lanes using 1D profile analysis
-- **FijiBandDetector**: Enhanced band detection with Fiji algorithms
-- **BandQuantification**: Quantifies band intensities with background subtraction
-- **Calibrator**: Fits molecular weight calibration curves + **NEW StandardCurveFitter**
-- **LaneComparator**: **NEW** MW-aware statistical comparison with multiple testing correction
-- **Normalizer**: Applies various normalization strategies including **NEW PCR housekeeping**
-- **ImagePreprocessor**: Handles saturation, contrast, filtering
-- **WorkflowManager**: Manages analysis pipelines
-
 ### Colony Analysis
 
-- **TimeSeriesColonyTracker**: **NEW** Individual colony tracking across time points
-- **PlateAlignment**: **NEW** Feature-based and orientation mark image registration
-- **XGalBluenessAnalyzer**: **NEW** X-gal colony classification and blueness quantification
+- n
 
 ### User Interface
-
-- **GelUI**: Enhanced with voice input, document upload, and console management
-- **AssistBandTool**: **NEW** User-assisted band identification system
-- **OverlayRenderer**: Enhanced with volcano plot visualization
-
-## Migration from Old Architecture
-
-### Old System (Removed)
-
-- **GelUI.java**: Monolithic UI with embedded NLP (deprecated)
-- **NaturalLanguageProcessor**: Pattern matching system (removed)
-- **nl module**: Local LLM via llama.cpp (removed)
-- **GGUF models**: Local model files (removed)
-- Direct pixel manipulation
-- Context loss between commands
 
 ### Current System
 
@@ -164,36 +80,30 @@ mvn -q -f autodense/plugin/pom.xml exec:java \
 - **Embedded chat**: Direct conversation in UI
 - **Tool-based execution**: Structured function calls
 
-### Key Changes
-
-| Removed            | Current                     |
-| ------------------ | --------------------------- |
-| Local LLM server   | Gemini Cloud API only       |
-| NL module          | Plugin module only          |
-| Pattern matching   | Vision analysis + reasoning |
-| Dialog-based chat  | Embedded chat interface     |
-| llama.cpp binaries | No local inference          |
-
-## API Configuration
+### API Configuration
 
 ### 🔑 Gemini API Key Setup (CRITICAL)
 
 **AutoDense REQUIRES a valid Gemini API key to function.** The application will fail with clear error messages if an invalid key is provided.
 
 #### Step 1: Get Your API Key
+
 1. Visit: https://makersuite.google.com/app/apikey
 2. Sign in with your Google account
 3. Create a new API key
 4. Copy the key (starts with "AIza...")
 
 #### Step 2: Set the API Key
+
 **Option A - Environment Variable (Recommended):**
+
 ```bash
 export GEMINI_API_KEY=your_actual_key_here
 mvn -f autodense/plugin/pom.xml exec:java -Dexec.mainClass=com.betterdairy.autodense.plugin.EnhancedImageJLauncher
 ```
 
 **Option B - System Property:**
+
 ```bash
 mvn -f autodense/plugin/pom.xml exec:java \
   -Dexec.mainClass=com.betterdairy.autodense.plugin.EnhancedImageJLauncher \
@@ -202,6 +112,7 @@ mvn -f autodense/plugin/pom.xml exec:java \
 
 **Option C - Configuration File:**
 Create `api-config.properties` in the root directory:
+
 ```properties
 GEMINI_API_KEY=your_actual_key_here
 ```
@@ -209,8 +120,9 @@ GEMINI_API_KEY=your_actual_key_here
 #### Common API Key Issues
 
 ❌ **NEVER use these placeholder values:**
+
 - `placeholder`
-- `your_api_key_here` 
+- `your_api_key_here`
 - `your_key`
 - `test`
 - `demo`
@@ -218,13 +130,17 @@ GEMINI_API_KEY=your_actual_key_here
 ✅ **Valid keys look like:** `AIzaSyD...` (39 characters total)
 
 #### Error Prevention
+
 The application now validates API keys at startup and will:
+
 - Show clear warnings in the ImageJ log for invalid keys
-- Prevent GeminiOrchestrator initialization with placeholder keys  
+- Prevent GeminiOrchestrator initialization with placeholder keys
 - Display helpful setup instructions when keys are missing/invalid
 
 #### Troubleshooting
+
 If you see "API key not valid" errors:
+
 1. Check your key is correctly set: `echo $GEMINI_API_KEY`
 2. Verify it starts with "AIza" and is ~39 characters
 3. Test it works at: https://makersuite.google.com/app/apikey
