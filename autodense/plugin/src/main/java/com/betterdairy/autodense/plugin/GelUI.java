@@ -75,7 +75,7 @@ public class GelUI {
             .build();
         
         // Initialize GeminiOrchestrator (proper architecture)
-        String geminiApiKey = System.getProperty("GEMINI_API_KEY", System.getenv("GEMINI_API_KEY"));
+        String geminiApiKey = loadGeminiApiKey();
         if (geminiApiKey != null && !geminiApiKey.isEmpty()) {
             this.orchestrator = new GeminiOrchestrator(geminiApiKey);
             System.out.println("✓ GeminiOrchestrator initialized with handle-based architecture");
@@ -592,7 +592,7 @@ public class GelUI {
             protected Boolean doInBackground() throws Exception {
                 try {
                     // Check if Gemini API key is available
-                    String apiKey = System.getProperty("GEMINI_API_KEY", System.getenv("GEMINI_API_KEY"));
+                    String apiKey = loadGeminiApiKey();
                     if (apiKey == null || apiKey.trim().isEmpty()) {
                         return false;
                     }
@@ -2429,5 +2429,51 @@ public class GelUI {
         
         JOptionPane.showMessageDialog(frame, docHelpText, 
             "Document Upload Help", JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    /**
+     * Load Gemini API key from multiple sources in priority order:
+     * 1. System property: -DGEMINI_API_KEY=key
+     * 2. Environment variable: GEMINI_API_KEY=key  
+     * 3. Configuration file: api-config.properties
+     */
+    private String loadGeminiApiKey() {
+        // Priority 1: System property
+        String apiKey = System.getProperty("GEMINI_API_KEY");
+        if (apiKey != null && !apiKey.trim().isEmpty()) {
+            System.out.println("🔑 Using Gemini API key from system property");
+            return apiKey.trim();
+        }
+        
+        // Priority 2: Environment variable
+        apiKey = System.getenv("GEMINI_API_KEY");
+        if (apiKey != null && !apiKey.trim().isEmpty()) {
+            System.out.println("🔑 Using Gemini API key from environment variable");
+            return apiKey.trim();
+        }
+        
+        // Priority 3: Configuration file
+        try {
+            java.io.File configFile = new java.io.File("api-config.properties");
+            if (configFile.exists()) {
+                java.util.Properties props = new java.util.Properties();
+                try (java.io.FileInputStream fis = new java.io.FileInputStream(configFile)) {
+                    props.load(fis);
+                    apiKey = props.getProperty("GEMINI_API_KEY");
+                    if (apiKey != null && !apiKey.trim().isEmpty()) {
+                        System.out.println("🔑 Using Gemini API key from api-config.properties");
+                        return apiKey.trim();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("⚠️  Failed to read api-config.properties: " + e.getMessage());
+        }
+        
+        System.err.println("❌ No Gemini API key found in any location:");
+        System.err.println("   • System property: -DGEMINI_API_KEY=key");
+        System.err.println("   • Environment: export GEMINI_API_KEY=key");
+        System.err.println("   • Config file: api-config.properties");
+        return null;
     }
 }

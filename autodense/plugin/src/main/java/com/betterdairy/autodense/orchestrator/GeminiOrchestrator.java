@@ -230,6 +230,24 @@ public class GeminiOrchestrator {
                 case "clear_session" -> canonicalTools.clear_session(parameters);
                 
                 // =============================================================================
+                // SPECIAL RESPONSE TYPES (Not actual tools)
+                // =============================================================================
+                case "clarification_needed" -> new JSONObject()
+                    .put("success", true)
+                    .put("message", parameters.optString("question", "Clarification needed"))
+                    .put("response_type", "clarification");
+                case "plan_executed" -> new JSONObject()
+                    .put("success", true)
+                    .put("message", "Plan executed successfully")
+                    .put("response_type", "plan_result")
+                    .put("artifacts", parameters.optString("artifacts", "{}"));
+                case "registry.list_tools" -> new JSONObject()
+                    .put("success", true)
+                    .put("message", "Registry loaded")
+                    .put("response_type", "registry")
+                    .put("tools", getAvailableToolsList());
+                
+                // =============================================================================
                 // UI OPERATIONS (Web Interface Integration)
                 // =============================================================================
                 case "ui.refresh_canvas" -> gelAnalysisTools.refreshCanvas(parameters);
@@ -521,6 +539,22 @@ public class GeminiOrchestrator {
         // Convert Gemini parameters to tool parameters
         JSONObject toolParameters = new JSONObject(geminiResponse.parameters);
         
+        // Special handling for response types that aren't real tools
+        if ("clarification_needed".equals(geminiResponse.action)) {
+            toolParameters.put("question", geminiResponse.analysis);
+            return executeTool(geminiResponse.action, toolParameters);
+        }
+        if ("plan_executed".equals(geminiResponse.action)) {
+            // Extract artifacts from parameters and pass them to the handler
+            String artifacts = toolParameters.optString("artifacts", "{}");
+            toolParameters.put("artifacts", artifacts);
+            return executeTool(geminiResponse.action, toolParameters);
+        }
+        if ("registry.list_tools".equals(geminiResponse.action)) {
+            // Registry loading doesn't need image handles
+            return executeTool(geminiResponse.action, toolParameters);
+        }
+        
         // Before dispatch: ensure image_handle is present or inject last active
         if (!toolParameters.has("image_handle") || toolParameters.isNull("image_handle")) {
             String last = (currentImageHandle != null) ? currentImageHandle : sessionStore.getMostRecentImageHandle();
@@ -575,8 +609,22 @@ public class GeminiOrchestrator {
     // Business logic methods (moved from GeminiApiClient)
     
     private String createSystemPrompt() {
+        // Get current session context
+        String imageContext = "";
+        if (currentImageHandle != null && sessionStore.hasImage(currentImageHandle)) {
+            imageContext = "\n\n📸 CURRENT SESSION STATE:\n" +
+                "- Image loaded: YES (handle: " + currentImageHandle + ")\n" +
+                "- Image ready for analysis - you can proceed with workflows\n" +
+                "- NO need to ask for image paths - use loaded image directly\n";
+        } else {
+            imageContext = "\n\n📸 CURRENT SESSION STATE:\n" +
+                "- Image loaded: NO\n" +
+                "- User must provide an image before analysis\n";
+        }
+        
         return """
             You are an orchestration engine. You NEVER analyze images yourself and you NEVER describe what you "see".
+            """ + imageContext + """
             
             CRITICAL: You must choose between TWO execution modes - PRESET vs AD-HOC:
             
@@ -843,6 +891,13 @@ public class GeminiOrchestrator {
                 } else if ("run".equals(action) && parsedResponse.has("plan")) {
                     // Execute plan with finite-state executor
                     JSONArray plan = parsedResponse.getJSONArray("plan");
+                    
+                    // ENHANCED DEBUG: Show full Gemini plan before execution
+                    System.out.println("DEBUG: ===== GEMINI GENERATED PLAN =====");
+                    System.out.println("DEBUG: Original command: " + originalCommand);
+                    System.out.println("DEBUG: Full plan JSON: " + plan.toString(2));
+                    System.out.println("DEBUG: Plan steps count: " + plan.length());
+                    
                     JSONObject artifacts = executePlan(plan);
                     
                     GelAnalysisResponse response = new GelAnalysisResponse();
@@ -892,6 +947,12 @@ public class GeminiOrchestrator {
             JSONObject step = plan.getJSONObject(i);
             String toolId = step.getString("tool_id");
             JSONObject inputs = step.optJSONObject("inputs", new JSONObject());
+            
+            // ENHANCED DEBUG LOGGING
+            System.out.println("DEBUG: ===== EXECUTING PLAN STEP " + (i+1) + "/" + plan.length() + " =====");
+            System.out.println("DEBUG: Tool ID: " + toolId);
+            System.out.println("DEBUG: Full inputs JSON: " + inputs.toString(2));
+            System.out.println("DEBUG: Rationale: " + step.optString("rationale", ""));
             
             sessionLogger.logSessionEvent("tool_call", 
                 "Executing step " + (i+1) + "/" + plan.length(),
