@@ -1319,17 +1319,58 @@ public class GeminiOrchestrator {
         // Get preset tool steps as thin arrays
         JSONArray steps = getPresetSteps(workflowName, params);
         
+        // Guard: Skip open_image if we already have an image loaded
+        if (hasCurrentImage()) {
+            steps = removeOpenImageStep(steps);
+            sessionLogger.logSessionEvent("open_image_skipped", 
+                "Skipped open_image step - using current image handle: " + currentImageHandle,
+                new JSONObject().put("current_image_handle", currentImageHandle));
+        }
+        
         // Execute as standard plan using same executor
         return executePlan(steps);
     }
     
     private JSONArray getPresetSteps(String workflowName, JSONObject params) {
         return switch (workflowName) {
-            case "SDS_PAGE_DENSITOMETRY" -> new JSONArray()
-                .put(new JSONObject().put("tool_id", "imagej.open_image").put("inputs", params))
-                .put(new JSONObject().put("tool_id", "imagej.sds.quantify_lanes").put("inputs", new JSONObject()))
-                .put(new JSONObject().put("tool_id", "imagej.overlay.annotate").put("inputs", new JSONObject()))
-                .put(new JSONObject().put("tool_id", "export.results").put("inputs", new JSONObject()));
+            case "SDS_PAGE_DENSITOMETRY" -> {
+                // Extract lane parameters from params for proper routing  
+                int expectedLanes = params != null ? params.optInt("lane_count", 12) : 12;
+                int markerLane = params != null ? params.optInt("marker_lane", 1) : 1;
+                
+                // Create corrected parameter objects
+                JSONObject openImageParams = new JSONObject();
+                if (params != null && params.has("path")) {
+                    openImageParams.put("path", params.getString("path"));
+                }
+                
+                JSONObject laneParams = new JSONObject()
+                    .put("expected_lanes", expectedLanes)
+                    .put("marker_lane", markerLane)
+                    .put("constant_spacing", false)
+                    .put("lane_width_fraction", 0.40)
+                    .put("min_peak_distance", 20);
+                    
+                JSONObject bandParams = new JSONObject()
+                    .put("method", "peak")
+                    .put("smooth_sigma", 2.0)
+                    .put("min_prominence", 0.06)
+                    .put("min_peak_distance", 10);
+                    
+                JSONObject preprocessParams = new JSONObject()
+                    .put("mode", "coomassie_default");
+                
+                yield new JSONArray()
+                    .put(new JSONObject().put("tool_id", "imagej.open_image").put("inputs", openImageParams))
+                    .put(new JSONObject().put("tool_id", "preprocess").put("inputs", preprocessParams))
+                    .put(new JSONObject().put("tool_id", "detect_lanes").put("inputs", laneParams))
+                    .put(new JSONObject().put("tool_id", "detect_bands").put("inputs", bandParams))
+                    .put(new JSONObject().put("tool_id", "render_overlay_png").put("inputs", new JSONObject()
+                        .put("lane_color", "blue")
+                        .put("band_color", "lime")
+                        .put("thickness", 2)))
+                    .put(new JSONObject().put("tool_id", "export_results").put("inputs", new JSONObject()));
+            }
                 
             case "COLONY_BLUE_SCORING" -> {
                 JSONObject colonyParams = new JSONObject(params.toString());
@@ -1738,6 +1779,30 @@ public class GeminiOrchestrator {
         }
         
         return null;
+    }
+    
+    /**
+     * Check if we currently have an image loaded that can be used for analysis
+     */
+    private boolean hasCurrentImage() {
+        return (currentImageHandle != null && sessionStore.hasImage(currentImageHandle)) ||
+               sessionStore.getMostRecentImageHandle() != null;
+    }
+    
+    /**
+     * Remove any open_image steps from a plan when an image is already loaded
+     */
+    private JSONArray removeOpenImageStep(JSONArray steps) {
+        JSONArray filteredSteps = new JSONArray();
+        for (int i = 0; i < steps.length(); i++) {
+            JSONObject step = steps.getJSONObject(i);
+            String toolId = step.optString("tool_id", "");
+            // Skip any open_image related steps
+            if (!toolId.equals("imagej.open_image") && !toolId.equals("open_image")) {
+                filteredSteps.put(step);
+            }
+        }
+        return filteredSteps;
     }
     
     /**

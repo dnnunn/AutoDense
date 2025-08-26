@@ -5,6 +5,8 @@ import ij.IJ;
 import ij.process.ImageProcessor;
 import org.json.JSONArray;
 import org.json.JSONObject;
+import com.betterdairy.autodense.img.IJUtils;
+import com.betterdairy.autodense.img.LaneWiseBackground;
 
 /**
  * SINGLE SOURCE OF TRUTH for all image preprocessing operations.
@@ -66,8 +68,57 @@ public final class ImagePreprocessor {
                     boolean smoothing = step.optBoolean("smoothing", false);
                     workingImg = subtractBackground(workingImg, method, radius, sliding, smoothing);
                 }
+                case "8-bit" -> {
+                    IJUtils.silenceRoiManager(workingImg);
+                    IJ.run(workingImg, "8-bit", "");
+                }
+                case "enhance_contrast" -> {
+                    double saturated = step.optDouble("saturated", 0.3);
+                    boolean normalize = step.optBoolean("normalize", true);
+                    String params = "saturated=" + saturated;
+                    if (normalize) params += " normalize";
+                    IJ.run(workingImg, "Enhance Contrast...", params);
+                }
+                case "gaussian_blur" -> {
+                    double sigma = step.optDouble("sigma", 1.0);
+                    IJ.run(workingImg, "Gaussian Blur...", "sigma=" + sigma);
+                }
+                case "lane_wise_background" -> {
+                    int radius = step.optInt("radius", 60);
+                    double quantile = step.optDouble("quantile", 0.15);
+                    LaneWiseBackground.subtract(workingImg, radius, quantile);
+                }
                 default -> throw new IllegalArgumentException("Unknown preprocessing operation: " + op);
             }
+        }
+        
+        return workingImg;
+    }
+    
+    /**
+     * Apply preset preprocessing mode for common gel analysis workflows.
+     * 
+     * @param imp The input image
+     * @param mode The preprocessing mode name
+     * @param destructive If true, modifies original image; if false, works on duplicate  
+     * @return The processed image
+     */
+    public static ImagePlus applyMode(ImagePlus imp, String mode, boolean destructive) {
+        ImagePlus workingImg = destructive ? imp : imp.duplicate();
+        
+        switch (mode) {
+            case "coomassie_default" -> {
+                IJUtils.silenceRoiManager(workingImg);
+                IJ.run(workingImg, "8-bit", "");
+                // Do NOT invert for Coomassie if downstream expects dark-on-light=false
+                IJ.run(workingImg, "Enhance Contrast...", "saturated=0.3 normalize");
+                // Gentle denoise before baseline
+                IJ.run(workingImg, "Gaussian Blur...", "sigma=1");
+                // Lane-wise background subtraction
+                LaneWiseBackground.subtract(workingImg, 60, 0.15);
+                workingImg.updateAndDraw();
+            }
+            default -> throw new IllegalArgumentException("Unknown preprocessing mode: " + mode);
         }
         
         return workingImg;

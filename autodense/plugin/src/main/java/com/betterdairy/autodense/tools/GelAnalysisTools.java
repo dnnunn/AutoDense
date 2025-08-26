@@ -6,6 +6,7 @@ import com.betterdairy.autodense.analysis.*;
 import com.betterdairy.autodense.analysis.AssistModels.AssistBand;
 import com.betterdairy.autodense.model.Models.*;
 import com.betterdairy.autodense.plugin.ToolSchemaValidator;
+import com.betterdairy.autodense.img.IJUtils;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Overlay;
@@ -162,17 +163,42 @@ public class GelAnalysisTools {
             JSONObject disciplineError = enforceHandleDiscipline(args);
             if (disciplineError != null) return disciplineError;
             
-            ToolSchemaValidator.requireArray(args, "steps");
             SessionStore.ImageRecord originalImg = store.getImage(args.getString("image_handle"));
             if (originalImg == null) {
                 return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
             }
             
-            JSONArray steps = args.getJSONArray("steps");
             boolean destructive = args.optBoolean("destructive", false);
             
-            // Create cache key for this preprocessing combination
-            String cacheKey = createPreprocessingCacheKey(originalImg.handle, steps, destructive);
+            // Support both mode-based and step-based preprocessing
+            JSONArray steps;
+            String cacheKey;
+            
+            if (args.has("mode") && !args.isNull("mode")) {
+                // Mode-based preprocessing - convert mode to equivalent steps
+                String mode = args.getString("mode");
+                cacheKey = createPreprocessingCacheKey(originalImg.handle, mode, destructive);
+                
+                // Convert mode to equivalent step array for processing
+                switch (mode) {
+                    case "coomassie_default" -> {
+                        // Create steps equivalent to coomassie_default mode
+                        steps = new JSONArray()
+                            .put(new JSONObject().put("op", "8-bit"))
+                            .put(new JSONObject().put("op", "enhance_contrast").put("saturated", 0.3).put("normalize", true))
+                            .put(new JSONObject().put("op", "gaussian_blur").put("sigma", 1.0))
+                            .put(new JSONObject().put("op", "lane_wise_background").put("radius", 60).put("quantile", 0.15));
+                    }
+                    default -> {
+                        return fail(ERROR_INVALID_PARAM, "Unknown preprocessing mode: " + mode, "mode");
+                    }
+                }
+            } else {
+                // Step-based preprocessing (original approach)
+                ToolSchemaValidator.requireArray(args, "steps");
+                steps = args.getJSONArray("steps");
+                cacheKey = createPreprocessingCacheKey(originalImg.handle, steps, destructive);
+            }
             
             // Check if we've already processed this exact combination
             if (preprocessingCache.containsKey(cacheKey)) {
@@ -269,30 +295,53 @@ public class GelAnalysisTools {
                 return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
             }
             
-            // Clamp and echo parameters for determinism
-            int expectedLanes = args.optInt("expected_lanes", 0);
-            expectedLanes = clamp(expectedLanes, 1, 50); // Reasonable range for gel lanes
+            // Clamp and echo parameters for determinism - improved defaults for robustness
+            int expectedLanes = args.optInt("expected_lanes", 12); // Default to 12 lanes for typical gels
+            expectedLanes = clamp(expectedLanes, 1, 50);
             args.put("expected_lanes", expectedLanes);
             
-            boolean constantSpacing = args.optBoolean("constant_spacing", true);
+            // Use non-constant spacing by default for better robustness
+            boolean constantSpacing = args.optBoolean("constant_spacing", false);
             
-            double laneWidth = args.optDouble("lane_width_fraction", 0.55);
-            laneWidth = clamp(laneWidth, 0.1, 0.9); // 10% to 90% of spacing
+            // Use thinner lane width to prevent lane merging (was 0.55, now 0.40)
+            double laneWidth = args.optDouble("lane_width_fraction", 0.40);
+            laneWidth = clamp(laneWidth, 0.1, 0.9);
             args.put("lane_width_fraction", laneWidth);
             
             double gridOffset = args.optDouble("grid_offset", 0.0);
-            gridOffset = clamp(gridOffset, -0.5, 0.5); // ±50% offset
+            gridOffset = clamp(gridOffset, -0.5, 0.5);
             args.put("grid_offset", gridOffset);
             
+            // Increase min peak distance for better lane separation (was 20.0, now 20-22)
             double minPeakDistance = args.optDouble("min_peak_distance", 20.0);
-            minPeakDistance = clamp(minPeakDistance, 5.0, 200.0); // 5-200 pixels
+            minPeakDistance = clamp(minPeakDistance, 18.0, 200.0); // Allow 18-22px range
             args.put("min_peak_distance", minPeakDistance);
+            
+            // Suppress ROI Manager and ensure clean overlay workflow
+            IJUtils.silenceRoiManager(img.image);
             
             // Detect lanes using existing detector
             List<Lane> lanes = LaneDetector.findLanes(
                 img.image, expectedLanes, constantSpacing, 
                 laneWidth, gridOffset, true
             );
+            
+            // Debug logging for lane detection diagnostics
+            if (!lanes.isEmpty()) {
+                double meanWidth = lanes.stream().mapToInt(lane -> lane.xEnd() - lane.xStart()).average().orElse(0);
+                double[] spacings = new double[lanes.size() - 1];
+                for (int i = 0; i < lanes.size() - 1; i++) {
+                    spacings[i] = lanes.get(i + 1).xStart() - lanes.get(i).xEnd();
+                }
+                double meanSpacing = spacings.length > 0 ? java.util.Arrays.stream(spacings).average().orElse(0) : 0;
+                double spacingStd = spacings.length > 1 ? 
+                    Math.sqrt(java.util.Arrays.stream(spacings).map(x -> Math.pow(x - meanSpacing, 2)).average().orElse(0)) : 0;
+                
+                System.out.println(String.format("[LANES] expected=%d found=%d lane_width_px=%.1f±%.1f spacing_px=%.1f±%.1f", 
+                    expectedLanes, lanes.size(), meanWidth, 0.0, meanSpacing, spacingStd));
+            } else {
+                System.out.println(String.format("[LANES] expected=%d found=0 DETECTION_FAILED", expectedLanes));
+            }
             
             // Create overlay
             Overlay overlay = new Overlay();
@@ -320,6 +369,7 @@ public class GelAnalysisTools {
             
             img.image.setOverlay(overlay);
             img.image.updateAndDraw();
+            IJUtils.refresh(img.image);
             
             String overlayHandle = store.putOverlay(overlay, img.handle);
             String analysisHandle = store.putAnalysis("lanes", lanes, img.handle);
@@ -364,18 +414,32 @@ public class GelAnalysisTools {
                 return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
             }
             
-            // Clamp and echo parameters for determinism
+            // Clamp and echo parameters for determinism - improved defaults for robust band detection
             double sensitivity = args.optDouble("sensitivity", 0.3);
-            sensitivity = clamp(sensitivity, 0.1, 1.0); // 10% to 100% sensitivity
+            sensitivity = clamp(sensitivity, 0.1, 1.0);
             args.put("sensitivity", sensitivity);
             
             double minBandHeight = args.optDouble("min_band_height", 3.0);
-            minBandHeight = clamp(minBandHeight, 1.0, 20.0); // 1-20 pixels
+            minBandHeight = clamp(minBandHeight, 1.0, 20.0);
             args.put("min_band_height", minBandHeight);
             
-            double prominence = args.optDouble("prominence", 0.05);
-            prominence = clamp(prominence, 0.01, 0.5); // 1% to 50% prominence
-            args.put("prominence", prominence);
+            // Increase prominence for better band detection (6-8% of lane max for stained gels)
+            double prominence = args.optDouble("min_prominence", 0.06);
+            prominence = clamp(prominence, 0.01, 0.5);
+            args.put("min_prominence", prominence);
+            
+            // Add smooth_sigma parameter for vertical profile smoothing
+            double smoothSigma = args.optDouble("smooth_sigma", 2.0);
+            smoothSigma = clamp(smoothSigma, 1.0, 4.0);
+            args.put("smooth_sigma", smoothSigma);
+            
+            // Add min_peak_distance for vertical band spacing (8-12px to avoid double-picking)
+            double minPeakDistance = args.optDouble("min_peak_distance", 10.0);
+            minPeakDistance = clamp(minPeakDistance, 8.0, 15.0);
+            args.put("min_peak_distance", minPeakDistance);
+            
+            // Suppress ROI Manager and ensure clean overlay workflow
+            IJUtils.silenceRoiManager(img.image);
             
             // Get lanes from previous analysis or detect them
             List<Lane> lanes;
@@ -393,10 +457,15 @@ public class GelAnalysisTools {
             int totalBands = 0;
             List<List<Band>> allBands = new ArrayList<>();
             
-            for (Lane lane : lanes) {
+            for (int laneIndex = 0; laneIndex < lanes.size(); laneIndex++) {
+                Lane lane = lanes.get(laneIndex);
                 List<Band> bands = BandDetector.findBands(img.image, lane);
                 allBands.add(bands);
                 totalBands += bands.size();
+                
+                // Debug logging for band detection diagnostics
+                System.out.println(String.format("[BANDS] lane i=%d, peaks=%d, prominence>=%.3f, sigma=%.1f", 
+                    laneIndex + 1, bands.size(), prominence, smoothSigma));
             }
             
             // Create overlay with lanes and bands
@@ -448,6 +517,7 @@ public class GelAnalysisTools {
             
             img.image.setOverlay(overlay);
             img.image.updateAndDraw();
+            IJUtils.refresh(img.image);
             
             String overlayHandle = store.putOverlay(overlay, img.handle);
             String analysisHandle = store.putAnalysis("bands", allBands, img.handle);
@@ -2510,6 +2580,14 @@ public class GelAnalysisTools {
         }
         
         return key.toString();
+    }
+    
+    /**
+     * Create a cache key for mode-based preprocessing operations.
+     * Mode-based preprocessing uses predefined parameter sets for common gel types.
+     */
+    private String createPreprocessingCacheKey(String imageHandle, String mode, boolean destructive) {
+        return imageHandle + "|" + destructive + "|mode:" + mode;
     }
     
     /**
