@@ -2,6 +2,7 @@ package com.betterdairy.autodense.tools;
 
 import com.betterdairy.autodense.session.SessionStore;
 import com.betterdairy.autodense.session.SessionRecovery;
+import com.betterdairy.autodense.analysis.OverlayRenderer;
 // Analysis imports added dynamically as needed
 import com.betterdairy.autodense.model.Models.*;
 import com.betterdairy.autodense.plugin.ToolSchemaValidator;
@@ -812,7 +813,7 @@ public class PlateAnalysisTools {
                 label
             );
             textLabel.setStrokeColor(dotColor);
-            textLabel.setFont(new Font("SansSerif", Font.BOLD, 10));
+            textLabel.setFont(OverlayRenderer.BOLD_FONT);
             overlay.add(textLabel);
         }
         
@@ -877,7 +878,7 @@ public class PlateAnalysisTools {
                 label
             );
             textLabel.setStrokeColor(dotColor);
-            textLabel.setFont(new Font("SansSerif", Font.BOLD, 9));
+            textLabel.setFont(OverlayRenderer.SMALL_FONT);
             overlay.add(textLabel);
         }
         
@@ -904,7 +905,7 @@ public class PlateAnalysisTools {
         // Legend title
         TextRoi title = new TextRoi(legendX, legendY, "Colony Classification & Size:");
         title.setStrokeColor(Color.BLACK);
-        title.setFont(new Font("SansSerif", Font.BOLD, 11));
+        title.setFont(OverlayRenderer.BOLD_FONT);
         overlay.add(title);
         
         // Classification legend
@@ -914,14 +915,14 @@ public class PlateAnalysisTools {
         for (int i = 0; i < classLabels.length; i++) {
             TextRoi legendEntry = new TextRoi(legendX, legendY + (i + 1) * legendSpacing, classLabels[i]);
             legendEntry.setStrokeColor(colors[i]);
-            legendEntry.setFont(new Font("SansSerif", Font.PLAIN, 9));
+            legendEntry.setFont(OverlayRenderer.SMALL_FONT);
             overlay.add(legendEntry);
         }
         
         // Size legend
         TextRoi sizeTitle = new TextRoi(legendX, legendY + 65, "Size Categories:");
         sizeTitle.setStrokeColor(Color.BLACK);
-        sizeTitle.setFont(new Font("SansSerif", Font.BOLD, 10));
+        sizeTitle.setFont(OverlayRenderer.BOLD_FONT);
         overlay.add(sizeTitle);
         
         String[] sizeLabels = {
@@ -933,7 +934,7 @@ public class PlateAnalysisTools {
         for (int i = 0; i < sizeLabels.length; i++) {
             TextRoi sizeEntry = new TextRoi(legendX, legendY + 80 + i * 12, sizeLabels[i]);
             sizeEntry.setStrokeColor(Color.DARK_GRAY);
-            sizeEntry.setFont(new Font("SansSerif", Font.PLAIN, 8));
+            sizeEntry.setFont(OverlayRenderer.SMALL_FONT);
             overlay.add(sizeEntry);
         }
     }
@@ -955,7 +956,7 @@ public class PlateAnalysisTools {
         // Legend title
         TextRoi title = new TextRoi(legendX, legendY, "Colony Classification:");
         title.setStrokeColor(Color.BLACK);
-        title.setFont(new Font("SansSerif", Font.BOLD, 11));
+        title.setFont(OverlayRenderer.BOLD_FONT);
         overlay.add(title);
         
         // Legend entries
@@ -965,7 +966,7 @@ public class PlateAnalysisTools {
         for (int i = 0; i < labels.length; i++) {
             TextRoi legendEntry = new TextRoi(legendX, legendY + (i + 1) * legendSpacing, labels[i]);
             legendEntry.setStrokeColor(colors[i]);
-            legendEntry.setFont(new Font("SansSerif", Font.PLAIN, 10));
+            legendEntry.setFont(OverlayRenderer.NORMAL_FONT);
             overlay.add(legendEntry);
         }
     }
@@ -1221,7 +1222,7 @@ public class PlateAnalysisTools {
         // Add plate info text
         TextRoi infoText = new TextRoi(10, 10, String.format("Plate: %.0f px radius", radius));
         infoText.setStrokeColor(Color.GREEN);
-        infoText.setFont(new Font("SansSerif", Font.BOLD, 12));
+        infoText.setFont(OverlayRenderer.BOLD_FONT);
         overlay.add(infoText);
         
         return overlay;
