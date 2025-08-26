@@ -1,0 +1,43 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Cache Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: maven-
+
+      - name: Download Fiji (headless)
+        run: |
+          curl -L -o fiji.zip https://downloads.imagej.net/fiji/latest/fiji-linux64.zip
+          unzip -q fiji.zip -d ./fiji
+          echo "FIJI_BIN=$(pwd)/fiji/Fiji.app/ImageJ-linux64" >> $GITHUB_ENV
+
+      - name: Unit tests
+        run: mvn -B -q -DskipITs=false test
+
+      - name: Golden image tests
+        run: |
+          mkdir -p target/artifacts
+          $FIJI_BIN --headless --console --run scripts/golden_xgal.ijm "in='testdata/xgal_plate.jpg', out='target/artifacts'"
+          $FIJI_BIN --headless --console --run scripts/golden_sds.ijm  "in='testdata/sds_gel.tif', out='target/artifacts'"
+          python3 scripts/verify_golden.py --artifacts target/artifacts --gold testdata/golden
+
+      - name: Upload artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts
+          path: target/artifacts

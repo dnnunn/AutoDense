@@ -1,0 +1,18 @@
+{
+  "SDS_PAGE_DENSITOMETRY": {
+    "params": { "smooth_px": 9, "min_prominence": 200.0, "min_distance_px": 8, "background": "rolling50" }
+  },
+  "SDS_PAGE_DENSITOMETRY_MW": {
+    "params": {
+      "smooth_px": 9,
+      "min_prominence": 200.0,
+      "min_distance_px": 8,
+      "ladder": "SeeBlue_Plus2",
+      "lane_index": null,
+      "front_y": null
+    }
+  },
+  "AGAROSE_ETBR": {
+    "params": { "smooth_px": 9, "min_prominence": 150.0, "min_distance_px": 6, "ladder": "NEB_QuickLoad_1kb", "lane_index": 1 }
+  }
+}
