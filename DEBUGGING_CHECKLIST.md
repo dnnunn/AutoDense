@@ -65,7 +65,7 @@
 ### **Basic Workflow Tests**
 ```bash
 # Start AutoDense (with debug logging)
-export GEMINI_API_KEY="AIzaSyAAaCtNbMtDhutBUT1R9ZbN7n62jZ7Ynwk" 
+# API key will be read from api-config.properties automatically
 mvn -q -f autodense/plugin/pom.xml exec:java \
   -Dexec.mainClass=com.betterdairy.autodense.plugin.EnhancedImageJLauncher \
   -Dexec.classpathScope=runtime
