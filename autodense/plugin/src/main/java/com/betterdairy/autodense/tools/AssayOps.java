@@ -489,6 +489,63 @@ public class AssayOps {
         return blueIndex;
     }
     
+    /**
+     * Public API: Compute CIELAB-based blue index for unified blue detection
+     * Used by XGalBluenessAnalyzer to delegate to unified core
+     */
+    public static double computeCIELABBlueIndex(ImagePlus image, int x, int y, int radius) {
+        if (image == null) return 0.0;
+        
+        // Convert to CIELAB if needed
+        ImagePlus labImage = convertImageToCIELAB(image);
+        if (labImage == null) return 0.0;
+        
+        // Extract region around colony
+        ij.process.ImageProcessor processor = labImage.getStack().getProcessor(3); // b* channel
+        
+        // Sample pixels in radius around center point
+        double sumBStar = 0.0;
+        int count = 0;
+        
+        for (int dy = -radius; dy <= radius; dy++) {
+            for (int dx = -radius; dx <= radius; dx++) {
+                int px = x + dx;
+                int py = y + dy;
+                
+                // Check bounds and circular region
+                if (px >= 0 && px < processor.getWidth() && 
+                    py >= 0 && py < processor.getHeight() &&
+                    dx*dx + dy*dy <= radius*radius) {
+                    
+                    sumBStar += processor.getf(px, py);
+                    count++;
+                }
+            }
+        }
+        
+        if (count == 0) return 0.0;
+        
+        double avgBStar = sumBStar / count;
+        // CIELAB blue index: more negative b* = more blue
+        return Math.max(0.0, -avgBStar / 100.0);
+    }
+    
+    /**
+     * Public API: Convert image to CIELAB color space
+     */
+    public static ImagePlus convertImageToCIELAB(ImagePlus imp) {
+        if (imp == null) return null;
+        
+        ImagePlus lab = imp.duplicate();
+        try {
+            ij.IJ.run(lab, "Lab Stack", "");
+            return lab;
+        } catch (Exception e) {
+            // Fallback: return original image if CIELAB conversion fails
+            return imp.duplicate();
+        }
+    }
+    
     private float computeAdaptiveThreshold(ij.process.FloatProcessor blueIndex, float k) {
         // T = median(blue_index) + k * MAD (k≈2.5)
         float[] pixels = (float[]) blueIndex.getPixels();

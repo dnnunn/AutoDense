@@ -27,6 +27,21 @@ import java.util.Map;
  */
 public final class OverlayRenderer {
     private OverlayRenderer(){}
+    
+    // CONSISTENT FONT/STROKE DEFAULTS - Set once to prevent golden overlay wiggling
+    // These fonts work consistently across headless vs GUI ImageJ environments
+    // MONOSPACED chosen because it renders identically on all systems/platforms
+    // whereas Arial/SansSerif can vary between macOS/Linux/Windows
+    public static final Font SMALL_FONT = new Font(Font.MONOSPACED, Font.PLAIN, 9);
+    public static final Font NORMAL_FONT = new Font(Font.MONOSPACED, Font.PLAIN, 12);
+    public static final Font BOLD_FONT = new Font(Font.MONOSPACED, Font.BOLD, 12);
+    public static final Font LARGE_FONT = new Font(Font.MONOSPACED, Font.BOLD, 14);
+    public static final Font TITLE_FONT = new Font(Font.MONOSPACED, Font.BOLD, 16);
+    
+    // Consistent stroke widths
+    public static final float THIN_STROKE = 1.0f;
+    public static final float NORMAL_STROKE = 2.0f;
+    public static final float THICK_STROKE = 3.0f;
 
     /** 
      * Build an overlay with lane boxes and band boxes+labels from existing lanes.
@@ -68,7 +83,7 @@ public final class OverlayRenderer {
                     if (b.smearPercent > 15.0) {
                         label += String.format(" (%.0f%% smear)", b.smearPercent);
                     }
-                    TextRoi tr = new TextRoi(b.xStart + 2, b.yStart + 12, label, new Font("Arial", Font.PLAIN, 10));
+                    TextRoi tr = new TextRoi(b.xStart + 2, b.yStart + 12, label, SMALL_FONT);
                     tr.setStrokeColor(Color.YELLOW);
                     tr.setFillColor(new Color(0, 0, 0, 120));
                     ov.add(tr);
@@ -96,7 +111,7 @@ public final class OverlayRenderer {
             
             // Band label
             String label = (labelPrefix != null ? labelPrefix + " " : "") + "#" + bandNumber;
-            TextRoi tr = new TextRoi(b.xStart + 2, b.yStart + 12, label, new Font("Arial", Font.PLAIN, 10));
+            TextRoi tr = new TextRoi(b.xStart + 2, b.yStart + 12, label, SMALL_FONT);
             tr.setStrokeColor(Color.WHITE);
             tr.setFillColor(new Color(0, 0, 0, 140));
             ov.add(tr);
@@ -141,7 +156,7 @@ public final class OverlayRenderer {
             if (b.smearPercent > 15.0) {
                 label += String.format(" [%.0f%% smear]", b.smearPercent);
             }
-            TextRoi tr = new TextRoi(b.xStart + 2, b.yStart - 15, label, new Font("Arial", Font.BOLD, 11));
+            TextRoi tr = new TextRoi(b.xStart + 2, b.yStart - 15, label, BOLD_FONT);
             tr.setStrokeColor(Color.MAGENTA);
             tr.setFillColor(new Color(255, 255, 255, 200));
             ov.add(tr);
@@ -244,7 +259,7 @@ public final class OverlayRenderer {
                     colony.x() + radiusPx + 5, 
                     colony.y() - 5, 
                     sizeText, 
-                    new Font("Arial", Font.PLAIN, 9)
+                    SMALL_FONT
                 );
                 sizeLabel.setStrokeColor(colonyColor);
                 sizeLabel.setFillColor(new Color(255, 255, 255, 200));
@@ -256,7 +271,7 @@ public final class OverlayRenderer {
         if (showSummary && !colonies.isEmpty()) {
             String summary = String.format("Colonies: %d", colonies.size());
             TextRoi summaryLabel = new TextRoi(
-                10, 10, summary, new Font("Arial", Font.BOLD, 12)
+                10, 10, summary, BOLD_FONT
             );
             summaryLabel.setStrokeColor(Color.BLACK);
             summaryLabel.setFillColor(new Color(255, 255, 0, 200));
@@ -298,7 +313,7 @@ public final class OverlayRenderer {
                 colony.x() + radiusPx + 3, 
                 colony.y() + radiusPx + 3, 
                 classification, 
-                new Font("Arial", Font.PLAIN, 8)
+                SMALL_FONT
             );
             classLabel.setStrokeColor(classColor);
             classLabel.setFillColor(new Color(0, 0, 0, 150));
@@ -331,7 +346,7 @@ public final class OverlayRenderer {
         overlay.add(legendBg);
         
         // Legend title
-        TextRoi title = new TextRoi(x, y, "Classifications", new Font("Arial", Font.BOLD, 10));
+        TextRoi title = new TextRoi(x, y, "Classifications", BOLD_FONT);
         title.setStrokeColor(Color.BLACK);
         overlay.add(title);
         
@@ -350,7 +365,7 @@ public final class OverlayRenderer {
             
             // Label
             TextRoi label = new TextRoi(x + 20, entryY + 2, classification, 
-                                       new Font("Arial", Font.PLAIN, 9));
+                                       SMALL_FONT);
             label.setStrokeColor(Color.BLACK);
             overlay.add(label);
         }
@@ -410,7 +425,7 @@ public final class OverlayRenderer {
                 colony.x - 5, 
                 colony.y - 8, 
                 promptText, 
-                new Font("Arial", Font.BOLD, 16)
+                TITLE_FONT
             );
             prompt.setStrokeColor(Color.WHITE);
             prompt.setFillColor(new Color(128, 128, 128, 200));
@@ -420,7 +435,7 @@ public final class OverlayRenderer {
         // Add summary text if there are uncertain colonies
         if (uncertainCount > 0) {
             String summaryText = uncertainCount + " uncertain colonies - click to assist";
-            TextRoi summary = new TextRoi(10, 10, summaryText, new Font("Arial", Font.BOLD, 12));
+            TextRoi summary = new TextRoi(10, 10, summaryText, BOLD_FONT);
             summary.setStrokeColor(Color.WHITE);
             summary.setFillColor(new Color(128, 128, 128, 180));
             overlay.add(summary);
@@ -472,7 +487,7 @@ public final class OverlayRenderer {
             targetColony.x() + radiusPx + 10, 
             targetColony.y() - 10, 
             instructionText, 
-            new Font("Arial", Font.BOLD, 14)
+            LARGE_FONT
         );
         instruction.setStrokeColor(Color.WHITE);
         instruction.setFillColor(new Color(0, 0, 0, 200));
@@ -565,7 +580,7 @@ public final class OverlayRenderer {
                 TextRoi yLabel = new TextRoi(offsetX + margin - 35, yPos - 5, 
                                            String.format("%.1f", yVal));
                 yLabel.setStrokeColor(Color.BLACK);
-                yLabel.setFont(new Font("Arial", Font.PLAIN, 10));
+                yLabel.setFont(NORMAL_FONT);
                 yLabel.setName("Y_Label_" + i);
                 overlay.add(yLabel);
             }
@@ -589,7 +604,7 @@ public final class OverlayRenderer {
                     TextRoi xLabel = new TextRoi(xPos - 10, offsetY + margin + innerHeight + 15, 
                                                String.format("%.1f", xVal));
                     xLabel.setStrokeColor(Color.BLACK);
-                    xLabel.setFont(new Font("Arial", Font.PLAIN, 10));
+                    xLabel.setFont(NORMAL_FONT);
                     xLabel.setName("X_Label_" + (i + 5));
                     overlay.add(xLabel);
                 }
@@ -693,14 +708,14 @@ public final class OverlayRenderer {
         TextRoi xAxisLabel = new TextRoi(offsetX + plotWidth/2 - 30, offsetY + plotHeight - 15, 
                                         "Log2 Fold Change");
         xAxisLabel.setStrokeColor(Color.BLACK);
-        xAxisLabel.setFont(new Font("Arial", Font.BOLD, 12));
+        xAxisLabel.setFont(BOLD_FONT);
         xAxisLabel.setName("X_Axis_Label");
         overlay.add(xAxisLabel);
         
         // Y-axis label (rotated text approximation)
         TextRoi yAxisLabel = new TextRoi(offsetX + 5, offsetY + plotHeight/2, "-Log10 P-value");
         yAxisLabel.setStrokeColor(Color.BLACK);
-        yAxisLabel.setFont(new Font("Arial", Font.BOLD, 12));
+        yAxisLabel.setFont(BOLD_FONT);
         yAxisLabel.setName("Y_Axis_Label");
         overlay.add(yAxisLabel);
         
@@ -709,7 +724,7 @@ public final class OverlayRenderer {
                                     analysis.totalPeaks, analysis.significantPeaks);
         TextRoi titleLabel = new TextRoi(offsetX + plotWidth/2 - 80, offsetY + 10, title);
         titleLabel.setStrokeColor(Color.BLACK);
-        titleLabel.setFont(new Font("Arial", Font.BOLD, 14));
+        titleLabel.setFont(LARGE_FONT);
         titleLabel.setName("Plot_Title");
         overlay.add(titleLabel);
         
@@ -742,7 +757,7 @@ public final class OverlayRenderer {
         for (int i = 0; i < legendTexts.length; i++) {
             TextRoi legendEntry = new TextRoi(legendX, legendY + i * 15, legendTexts[i]);
             legendEntry.setStrokeColor(legendColors[i]);
-            legendEntry.setFont(new Font("Arial", Font.PLAIN, 10));
+            legendEntry.setFont(NORMAL_FONT);
             legendEntry.setName("Legend_Entry_" + i);
             overlay.add(legendEntry);
         }
