@@ -7,6 +7,7 @@ import com.betterdairy.autodense.analysis.*;
 import com.betterdairy.autodense.analysis.AssistModels.AssistBand;
 import com.betterdairy.autodense.model.Models.*;
 import com.betterdairy.autodense.plugin.ToolSchemaValidator;
+import com.betterdairy.autodense.validation.SecureToolValidator;
 import com.betterdairy.autodense.img.IJUtils;
 import autodense.util.OverlayExporter;
 import ij.IJ;
@@ -121,10 +122,14 @@ public class GelAnalysisTools {
     /**
      * Tool: open_image
      * Load a gel image into the session
+     * 
+     * Security: Path traversal protection, file extension validation
      */
     public JSONObject openImage(JSONObject args) {
-        ToolSchemaValidator.require(args, "path");
+        // SECURITY: Validate and sanitize file path to prevent directory traversal attacks
+        SecureToolValidator.Tools.validateOpenImage(args);
         try {
+            // Path is now validated and sanitized
             String path = args.getString("path");
             ImagePlus imp = IJ.openImage(path);
             if (imp == null) {
@@ -160,12 +165,15 @@ public class GelAnalysisTools {
     /**
      * Tool: preprocess
      * Apply preprocessing steps to an image
+     * 
+     * Security: Parameter validation, operation limits, handle validation
      * IMPORTANT: All preprocessing operations are destructive and will modify pixel data.
      * Set "destructive": true to modify the original image in place.
      * If destructive=false or omitted, creates a duplicate and processes that instead.
      */
     public JSONObject preprocess(JSONObject args) {
-        ToolSchemaValidator.requireImageHandle(args);
+        // SECURITY: Validate preprocessing parameters and limit operations
+        SecureToolValidator.Tools.validatePreprocess(args);
         try {
             // Enforce handle discipline first
             JSONObject disciplineError = enforceHandleDiscipline(args);
@@ -287,11 +295,14 @@ public class GelAnalysisTools {
     }
     
     /**
-     * Tool: detect_lanes
+     * Tool: detect_lanes  
      * Detect lanes in a gel image
+     * 
+     * Security: Handle validation, parameter range checking
      */
     public JSONObject detectLanes(JSONObject args) {
-        ToolSchemaValidator.requireImageHandle(args);
+        // SECURITY: Validate all parameters with ranges and handle format
+        SecureToolValidator.Tools.validateDetectLanes(args);
         try {
             // Enforce handle discipline first
             JSONObject disciplineError = enforceHandleDiscipline(args);

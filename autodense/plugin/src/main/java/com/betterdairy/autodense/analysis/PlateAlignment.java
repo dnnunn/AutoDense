@@ -1,6 +1,7 @@
 package com.betterdairy.autodense.analysis;
 
 import com.betterdairy.autodense.session.SessionStore;
+import com.betterdairy.autodense.performance.PerformanceOptimizer;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.process.ImageProcessor;
@@ -537,12 +538,21 @@ public class PlateAlignment {
     }
     
     private static double calculateEdgeStrength(ImageProcessor ip, int x, int y) {
-        // Simple Sobel edge detection
-        double gx = ip.getPixelValue(x + 1, y - 1) + 2 * ip.getPixelValue(x + 1, y) + ip.getPixelValue(x + 1, y + 1)
-                  - ip.getPixelValue(x - 1, y - 1) - 2 * ip.getPixelValue(x - 1, y) - ip.getPixelValue(x - 1, y + 1);
+        // Optimized Sobel edge detection using fast pixel array access
+        float[] pixels = PerformanceOptimizer.FastPixelOps.getPixelArrayFloat(
+            new ImagePlus("temp", ip));
+        int width = ip.getWidth();
         
-        double gy = ip.getPixelValue(x - 1, y + 1) + 2 * ip.getPixelValue(x, y + 1) + ip.getPixelValue(x + 1, y + 1)
-                  - ip.getPixelValue(x - 1, y - 1) - 2 * ip.getPixelValue(x, y - 1) - ip.getPixelValue(x + 1, y - 1);
+        // Calculate array indices for 3x3 neighborhood
+        int c = y * width + x;  // center pixel
+        
+        // Sobel X gradient
+        double gx = pixels[c - width + 1] + 2 * pixels[c + 1] + pixels[c + width + 1]
+                  - pixels[c - width - 1] - 2 * pixels[c - 1] - pixels[c + width - 1];
+        
+        // Sobel Y gradient  
+        double gy = pixels[c + width - 1] + 2 * pixels[c + width] + pixels[c + width + 1]
+                  - pixels[c - width - 1] - 2 * pixels[c - width] - pixels[c - width + 1];
         
         return Math.sqrt(gx * gx + gy * gy);
     }
@@ -1252,13 +1262,22 @@ public class PlateAlignment {
             return 0.0;
         }
         
-        // Calculate image gradients
+        // Optimized gradient calculation using fast pixel array access
+        float[] pixels = PerformanceOptimizer.FastPixelOps.getPixelArrayFloat(
+            new ImagePlus("temp", ip));
+        int width = ip.getWidth();
+        
         double Ixx = 0, Iyy = 0, Ixy = 0;
         
+        // Process 7x7 neighborhood (dy = -3 to 3, dx = -3 to 3)
         for (int dy = -3; dy <= 3; dy++) {
+            int rowOffset = (y + dy) * width;
             for (int dx = -3; dx <= 3; dx++) {
-                double Ix = ip.getPixelValue(x + dx + 1, y + dy) - ip.getPixelValue(x + dx - 1, y + dy);
-                double Iy = ip.getPixelValue(x + dx, y + dy + 1) - ip.getPixelValue(x + dx, y + dy - 1);
+                int centerIdx = rowOffset + (x + dx);
+                
+                // Calculate gradients using array indexing instead of getPixelValue calls
+                double Ix = pixels[centerIdx + 1] - pixels[centerIdx - 1];
+                double Iy = pixels[centerIdx + width] - pixels[centerIdx - width];
                 
                 Ixx += Ix * Ix;
                 Iyy += Iy * Iy;
