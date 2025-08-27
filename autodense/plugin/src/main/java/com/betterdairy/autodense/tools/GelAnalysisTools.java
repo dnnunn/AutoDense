@@ -2,6 +2,7 @@ package com.betterdairy.autodense.tools;
 
 import com.betterdairy.autodense.session.SessionStore;
 import com.betterdairy.autodense.session.SessionRecovery;
+import com.betterdairy.autodense.util.ErrorHandler;
 import com.betterdairy.autodense.analysis.*;
 import com.betterdairy.autodense.analysis.AssistModels.AssistBand;
 import com.betterdairy.autodense.model.Models.*;
@@ -145,8 +146,14 @@ public class GelAnalysisTools {
                 .put("handle_persistence_reminder", 
                      "This image handle must be included in every tool call: detect_lanes, detect_bands, quantify_bands, etc.");
                 
-        } catch (Exception e) {
-            return recovery.createRecoveryResponse("open_image", e);
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("open_image", e, null, recovery);
+        } catch (RuntimeException e) {
+            // Handle other runtime errors (file access issues from IJ.openImage, etc.)
+            if (e.getMessage() != null && e.getMessage().contains("file")) {
+                return ErrorHandler.handleFileError("open_image", e, null, recovery);
+            }
+            return ErrorHandler.handleUnexpectedError("open_image", e, null, recovery);
         }
     }
     
@@ -393,8 +400,14 @@ public class GelAnalysisTools {
             
             return ok("detect_lanes", data);
                 
-        } catch (Exception e) {
-            return recovery.createRecoveryResponse("detect_lanes", e);
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("detect_lanes", e, null, recovery);
+        } catch (IllegalStateException e) {
+            return ErrorHandler.handleSessionError("detect_lanes", e, null, recovery);
+        } catch (NullPointerException e) {
+            return ErrorHandler.handleImageProcessingError("detect_lanes", e, null, recovery);
+        } catch (RuntimeException e) {
+            return ErrorHandler.handleUnexpectedError("detect_lanes", e, null, recovery);
         }
     }
     
