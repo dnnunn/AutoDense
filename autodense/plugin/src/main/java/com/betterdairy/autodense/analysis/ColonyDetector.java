@@ -16,7 +16,11 @@ import java.util.List;
 /**
  * Pure functional colony detection using native ImageJ operations.
  * Implements LoG blob detection and watershed splitting.
+ * 
+ * @deprecated Use {@link UnifiedColonyDetector} instead. This class will be removed in a future version.
+ *             UnifiedColonyDetector provides better accuracy and consistency.
  */
+@Deprecated
 public final class ColonyDetector {
     
     /**

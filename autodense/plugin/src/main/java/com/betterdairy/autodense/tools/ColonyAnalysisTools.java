@@ -5,6 +5,9 @@ import com.betterdairy.autodense.analysis.ColonyAssistModels.*;
 import com.betterdairy.autodense.model.Models.Colony;
 import com.betterdairy.autodense.model.Models.ColonyColor;
 import com.betterdairy.autodense.session.SessionStore;
+import com.betterdairy.autodense.session.SessionRecovery;
+import com.betterdairy.autodense.session.SessionAnalysisKeys;
+import com.betterdairy.autodense.session.SessionStorageMigrator;
 import ij.gui.Overlay;
 import ij.gui.OvalRoi;
 import org.json.JSONArray;
@@ -13,15 +16,47 @@ import org.json.JSONObject;
 import java.util.List;
 
 /**
- * Clean functional colony analysis tools.
- * Pure functions with explicit dependencies - no hidden state.
+ * Clean functional colony analysis tools with enhanced handle validation.
+ * Implements HandleGuard protection for all tool operations.
  */
 public final class ColonyAnalysisTools {
+    
+    private final SessionStore store;
+    private final SessionRecovery recovery;
+    private final HandleGuard handleGuard;
+    private final SessionStorageMigrator.CompatibilityLayer compatibility;
+    
+    /**
+     * Validated storage operation wrapper
+     */
+    private String putAnalysisWithValidation(String storageKey, Object data, String imageHandle) {
+        // Basic validation
+        if (storageKey == null || storageKey.trim().isEmpty()) {
+            throw new IllegalArgumentException("Storage key cannot be null or empty");
+        }
+        if (imageHandle == null || imageHandle.trim().isEmpty()) {
+            throw new IllegalArgumentException("Image handle cannot be null or empty");
+        }
+        
+        // Validate key format (warn if not standardized, but don't fail)
+        if (!SessionAnalysisKeys.isStandardizedKey(storageKey)) {
+            System.err.println("WARNING: Using non-standardized storage key: " + storageKey);
+        }
+        
+        return store.putAnalysis(storageKey, data, imageHandle);
+    }
+    
+    public ColonyAnalysisTools(SessionStore store) {
+        this.store = store;
+        this.recovery = new SessionRecovery(store);
+        this.handleGuard = new HandleGuard(store, recovery);
+        this.compatibility = new SessionStorageMigrator.CompatibilityLayer(store);
+    }
     
     /**
      * Success response helper
      */
-    private static JSONObject ok(String tool, JSONObject data) {
+    private JSONObject ok(String tool, JSONObject data) {
         return new JSONObject()
             .put("success", true)
             .put("tool", tool)
@@ -31,7 +66,7 @@ public final class ColonyAnalysisTools {
     /**
      * Error response helper
      */
-    private static JSONObject error(String tool, String message, String field) {
+    private JSONObject error(String tool, String message, String field) {
         return new JSONObject()
             .put("success", false)
             .put("tool", tool)
@@ -51,45 +86,51 @@ public final class ColonyAnalysisTools {
     }
     
     /**
-     * Detect plate boundary and calibrate scale
+     * Detect plate boundary and calibrate scale with enhanced handle validation
      */
-    public static JSONObject detectPlate(JSONObject args, SessionStore store) {
+    public JSONObject detectPlate(JSONObject args) {
         try {
-            String imageHandle = args.getString("image_handle");
-            SessionStore.ImageRecord rec = store.getImage(imageHandle);
-            
-            if (rec == null) {
-                return error("detect_plate", "Image not found", "image_handle");
+            // Apply comprehensive handle protection
+            HandleGuard.HandleValidationResult validation = handleGuard.protectToolCall(args, "detect_plate");
+            if (!validation.isValid()) {
+                return validation.createErrorResponse();
             }
             
-            // Use defaults for common phone photography workflow
-            var plateDefaults = PlateAnalysisDefaults.StandardPlateDimensions.standard90mm();
-            double dishMM = args.optDouble("dish_diameter_mm", plateDefaults.dishDiameterMm());
-            String thresholdMethod = args.optString("threshold_method", "Triangle");
-            boolean correctIllumination = args.optBoolean("correct_illumination", true);
+            SessionStore.ImageRecord rec = store.getImage(validation.imageHandle);
+            if (rec == null) {
+                return error("detect_plate", "Image not found after validation", "image_handle");
+            }
+            
+            // Standardized parameter extraction
+            var plateParams = ParameterConverter.PlateDetectionParams.fromArgs(args);
             
             // Detect plate using core detector
-            PlateDetector.Result result = PlateDetector.detect(rec.image, thresholdMethod);
+            PlateDetector.Result result = PlateDetector.detect(rec.image, plateParams.thresholdMethod());
                 
-            // Store plate data in session
-            String plateHandle = "plate_" + System.currentTimeMillis();
-            store.putAnalysis(plateHandle, result, imageHandle);
+            // Store plate data in session using standardized key
+            String plateStorageKey = SessionAnalysisKeys.PlateKeys.detection(validation.imageHandle);
+            String plateHandle = putAnalysisWithValidation(plateStorageKey, result, validation.imageHandle);
             
             // Calculate pixels per mm
-            double pxPerMM = result.pxPerMM(dishMM);
+            double pxPerMM = result.pxPerMM(plateParams.dishDiameterMM());
             
-            return ok("detect_plate", new JSONObject()
+            JSONObject response = ok("detect_plate", new JSONObject()
                 .put("plate_handle", plateHandle)
                 .put("pixels_per_mm", pxPerMM)
+                .put("dish_diameter_mm", plateParams.dishDiameterMM())
+                .put("threshold_method", plateParams.thresholdMethod())
                 .put("center_x", result.centerX())
                 .put("center_y", result.centerY())
                 .put("radius_px", result.radiusPx())
+                .put("radius_mm", result.radiusPx() / pxPerMM)
                 .put("major_axis", result.majorAxis())
                 .put("minor_axis", result.minorAxis())
                 .put("axis_ratio", result.axisRatio())
                 .put("angle_degrees", result.angle())
                 .put("was_deskewed", result.wasDeskewed())
                 .put("illumination_corrected", result.illuminationCorrected()));
+            
+            return handleGuard.addPersistenceGuidance(response, validation.imageHandle);
                 
         } catch (Exception e) {
             return error("detect_plate", e.getMessage(), "processing");
@@ -97,31 +138,48 @@ public final class ColonyAnalysisTools {
     }
     
     /**
-     * Count colonies within plate region
+     * Count colonies within plate region with enhanced handle validation
      */
-    public static JSONObject countColonies(JSONObject args, SessionStore store) {
+    public JSONObject countColonies(JSONObject args) {
         try {
-            String imageHandle = args.getString("image_handle");
-            SessionStore.ImageRecord rec = store.getImage(imageHandle);
-            
-            if (rec == null) {
-                return error("count_colonies", "Image not found", "image_handle");
+            // Apply comprehensive handle protection
+            HandleGuard.HandleValidationResult validation = handleGuard.protectToolCall(args, "count_colonies");
+            if (!validation.isValid()) {
+                return validation.createErrorResponse();
             }
             
-            // Get plate data
-            PlateDetector.Result plate = getPlateFromSession(store, imageHandle);
+            SessionStore.ImageRecord rec = store.getImage(validation.imageHandle);
+            if (rec == null) {
+                return error("count_colonies", "Image not found after validation", "image_handle");
+            }
+            
+            // Get plate data and calibration
+            PlateDetector.Result plate = getPlateFromSession(store, validation.imageHandle);
             OvalRoi plateRoi = plate != null ? plate.plateRoi() : null;
-            
-            // Use defaults based on estimated resolution
             double pxPerMM = plate != null ? plate.pxPerMM(90.0) : 20.0; // fallback estimate
-            var sizeDefaults = PlateAnalysisDefaults.CalibrationHelper.recommendColonySizes(pxPerMM);
             
-            int minD = args.optInt("min_diam_px", sizeDefaults.minDiameterPx());
-            int maxD = args.optInt("max_diam_px", sizeDefaults.maxDiameterPx());
-            boolean split = args.optBoolean("split_touching", true);
+            // Standardized parameter extraction with unit conversion
+            var detectionParams = ParameterConverter.ColonyDetectionParams.fromArgs(args, pxPerMM);
             
-            // Detect colonies using pure function
-            List<Colony> colonies = ColonyDetector.detect(rec.image, plateRoi, minD, maxD, split);
+            // Validate parameters
+            var validation_result = ParameterConverter.Validation.validateColonyParams(detectionParams);
+            if (!validation_result.isValid) {
+                return error("count_colonies", validation_result.errorMessage, validation_result.parameterName);
+            }
+            
+            // Create unified detector parameters
+            UnifiedColonyDetector.DetectionParams unifiedParams = new UnifiedColonyDetector.DetectionParams();
+            unifiedParams.minDiameterPx = detectionParams.minDiameterPx();
+            unifiedParams.maxDiameterPx = detectionParams.maxDiameterPx();
+            unifiedParams.minCircularity = detectionParams.minCircularity();
+            unifiedParams.minSolidity = detectionParams.minSolidity();
+            unifiedParams.splitTouchingColonies = detectionParams.splitTouching();
+            unifiedParams.removeRimArtifacts = detectionParams.removeRimArtifacts();
+            unifiedParams.blueThreshold = detectionParams.blueThreshold();
+            unifiedParams.useAdaptiveThreshold = detectionParams.useAdaptiveThreshold();
+            
+            // Detect colonies using unified detection system
+            List<Colony> colonies = UnifiedColonyDetector.detect(rec.image, plateRoi, unifiedParams, pxPerMM);
             
             // Update colony diameters with proper mm conversion
             if (plate != null) {
@@ -130,18 +188,26 @@ public final class ColonyAnalysisTools {
             
             // Create and apply overlay
             Overlay ov = ColonyOverlay.renderDetection(colonies);
-            String ovh = store.putOverlay(ov, imageHandle);
+            String ovh = store.putOverlay(ov, validation.imageHandle);
             rec.image.setOverlay(ov);
             
-            // Store colony data
-            store.putAnalysis("colonies_" + imageHandle, colonies, imageHandle);
+            // Store colony data using standardized key
+            String colonyStorageKey = SessionAnalysisKeys.ColonyKeys.detection(validation.imageHandle);
+            putAnalysisWithValidation(colonyStorageKey, colonies, validation.imageHandle);
             
-            return ok("count_colonies", new JSONObject()
+            JSONObject response = ok("count_colonies", new JSONObject()
                 .put("overlay_handle", ovh)
                 .put("colony_count", colonies.size())
-                .put("min_diameter_px", minD)
-                .put("max_diameter_px", maxD)
-                .put("split_touching", split));
+                .put("min_diameter_px", detectionParams.minDiameterPx())
+                .put("max_diameter_px", detectionParams.maxDiameterPx())
+                .put("min_diameter_mm", ParameterConverter.UnitConversion.pxToMm(detectionParams.minDiameterPx(), pxPerMM))
+                .put("max_diameter_mm", ParameterConverter.UnitConversion.pxToMm(detectionParams.maxDiameterPx(), pxPerMM))
+                .put("min_circularity", detectionParams.minCircularity())
+                .put("min_solidity", detectionParams.minSolidity())
+                .put("split_touching", detectionParams.splitTouching())
+                .put("pixels_per_mm", pxPerMM));
+            
+            return handleGuard.addPersistenceGuidance(response, validation.imageHandle);
                 
         } catch (Exception e) {
             return error("count_colonies", e.getMessage(), "processing");
@@ -151,7 +217,7 @@ public final class ColonyAnalysisTools {
     /**
      * Classify colonies using Lab color analysis
      */
-    public static JSONObject classifyColonies(JSONObject args, SessionStore store) {
+    public JSONObject classifyColonies(JSONObject args) {
         try {
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord rec = store.getImage(imageHandle);
@@ -161,7 +227,7 @@ public final class ColonyAnalysisTools {
             }
             
             // Get existing colony data
-            List<Colony> colonies = getColoniesFromSession(store, imageHandle);
+            List<Colony> colonies = getColoniesFromSession(imageHandle);
             if (colonies == null || colonies.isEmpty()) {
                 return error("classify_colonies", "No colonies found. Run count_colonies first.", "colonies");
             }
@@ -197,8 +263,9 @@ public final class ColonyAnalysisTools {
             Overlay ov = ColonyOverlay.render(colonies, pxPerMM);
             rec.image.setOverlay(ov);
             
-            // Update stored colony data
-            store.putAnalysis("colonies_" + imageHandle, colonies, imageHandle);
+            // Update stored colony data using standardized key
+            String colonyStorageKey = SessionAnalysisKeys.ColonyKeys.detection(imageHandle);
+            putAnalysisWithValidation(colonyStorageKey, colonies, imageHandle);
             
             JSONObject result = new JSONObject()
                 .put("classes", new JSONObject(classSummary))
@@ -237,10 +304,10 @@ public final class ColonyAnalysisTools {
      * @param size_bins_mm Array of size edges in mm. Example: [0.2, 1.0, 2.0] creates bins:
      *                     ≤0.2mm=tiny, 0.2-1.0mm=small, 1.0-2.0mm=medium, >2.0mm=large
      */
-    public static JSONObject binColonies(JSONObject args, SessionStore store) {
+    public JSONObject binColonies(JSONObject args) {
         try {
             String imageHandle = store.getLastActiveImageHandle();
-            List<Colony> colonies = getColoniesFromSession(store, imageHandle);
+            List<Colony> colonies = getColoniesFromSession(imageHandle);
             
             if (colonies == null || colonies.isEmpty()) {
                 return error("bin_colonies", "No colonies found", "colonies");
@@ -260,8 +327,9 @@ public final class ColonyAnalysisTools {
             List<Colony> binnedColonies = Binner.applyAndReturn(colonies, pxPerMM, edgesMM);
             var binSummary = Binner.summary(binnedColonies);
             
-            // Update stored colony data with binning results
-            store.putAnalysis("colonies_" + imageHandle, binnedColonies, imageHandle);
+            // Update stored colony data with binning results using standardized key
+            String colonyStorageKey = SessionAnalysisKeys.ColonyKeys.binning(imageHandle);
+            putAnalysisWithValidation(colonyStorageKey, binnedColonies, imageHandle);
             
             return ok("bin_colonies", new JSONObject()
                 .put("bins", new JSONObject(binSummary))
@@ -275,7 +343,7 @@ public final class ColonyAnalysisTools {
     /**
      * Normalize colonies for cross-plate comparison
      */
-    public static JSONObject normalizeColonies(JSONObject args, SessionStore store) {
+    public JSONObject normalizeColonies(JSONObject args) {
         try {
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord rec = store.getImage(imageHandle);
@@ -285,7 +353,7 @@ public final class ColonyAnalysisTools {
             }
             
             // Get existing colony data
-            List<Colony> colonies = getColoniesFromSession(store, imageHandle);
+            List<Colony> colonies = getColoniesFromSession(imageHandle);
             if (colonies == null || colonies.isEmpty()) {
                 return error("normalize_colonies", "No colonies found. Run count_colonies first.", "colonies");
             }
@@ -302,8 +370,9 @@ public final class ColonyAnalysisTools {
             ColonyNormalizer.NormalizationResult result = ColonyNormalizer.normalize(
                 rec.image, colonies, plate.plateRoi(), pxPerMM, enableQuadrants);
             
-            // Store normalized data
-            store.putAnalysis("normalized_" + imageHandle, result, imageHandle);
+            // Store normalized data using standardized key
+            String normalizationStorageKey = SessionAnalysisKeys.ColonyKeys.normalization(imageHandle);
+            putAnalysisWithValidation(normalizationStorageKey, result, imageHandle);
             
             // Generate portable thresholds
             var portableThresholds = ColonyNormalizer.createPortableThresholds(result.colonies());
@@ -331,7 +400,7 @@ public final class ColonyAnalysisTools {
      * Output columns: colony_id,x_mm,y_mm,eq_diam_mm,L,a,b,L_bg,a_bg,b_bg,b_delta,dE_bg,snr_L,
      *                 xgal_binary,xgal_grade,size_bin,label,confidence
      */
-    public static JSONObject exportDetailedFeatures(JSONObject args, SessionStore store) {
+    public JSONObject exportDetailedFeatures(JSONObject args) {
         try {
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord rec = store.getImage(imageHandle);
@@ -340,7 +409,7 @@ public final class ColonyAnalysisTools {
                 return error("export_detailed_features", "Image not found", "image_handle");
             }
             
-            List<Colony> colonies = getColoniesFromSession(store, imageHandle);
+            List<Colony> colonies = getColoniesFromSession(imageHandle);
             if (colonies == null || colonies.isEmpty()) {
                 return error("export_detailed_features", "No colonies found", "colonies");
             }
@@ -414,7 +483,7 @@ public final class ColonyAnalysisTools {
     /**
      * Export colony data in multiple formats
      */
-    public static JSONObject exportColonies(JSONObject args, SessionStore store) {
+    public JSONObject exportColonies(JSONObject args) {
         try {
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord rec = store.getImage(imageHandle);
@@ -423,7 +492,7 @@ public final class ColonyAnalysisTools {
                 return error("export_colonies", "Image not found", "image_handle");
             }
             
-            List<Colony> colonies = getColoniesFromSession(store, imageHandle);
+            List<Colony> colonies = getColoniesFromSession(imageHandle);
             if (colonies == null || colonies.isEmpty()) {
                 return error("export_colonies", "No colonies found", "colonies");
             }
@@ -442,7 +511,7 @@ public final class ColonyAnalysisTools {
     /**
      * Enable colony identification assist mode
      */
-    public static JSONObject enableColonyAssist(JSONObject args, SessionStore store) {
+    public JSONObject enableColonyAssist(JSONObject args) {
         try {
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord rec = store.getImage(imageHandle);
@@ -452,7 +521,7 @@ public final class ColonyAnalysisTools {
             }
             
             // Get existing colony and plate data
-            List<Colony> colonies = getColoniesFromSession(store, imageHandle);
+            List<Colony> colonies = getColoniesFromSession(imageHandle);
             if (colonies == null) {
                 colonies = List.of(); // Empty list if no colonies detected yet
             }
@@ -468,8 +537,9 @@ public final class ColonyAnalysisTools {
             AssistColonyTool assistTool = new AssistColonyTool(rec.image, plate.plateRoi(), pxPerMM);
             assistTool.initializeWithColonies(colonies);
             
-            // Store assist tool in session
-            store.putAnalysis("colony_assist_" + imageHandle, assistTool, imageHandle);
+            // Store assist tool in session using standardized key
+            String assistStorageKey = SessionAnalysisKeys.ColonyKeys.assist(imageHandle);
+            putAnalysisWithValidation(assistStorageKey, assistTool, imageHandle);
             
             return ok("enable_colony_assist", new JSONObject()
                 .put("colony_assist_enabled", true)
@@ -489,7 +559,7 @@ public final class ColonyAnalysisTools {
     /**
      * Disable colony identification assist mode
      */
-    public static JSONObject disableColonyAssist(JSONObject args, SessionStore store) {
+    public JSONObject disableColonyAssist(JSONObject args) {
         try {
             String imageHandle = args.getString("image_handle");
             
@@ -502,8 +572,9 @@ public final class ColonyAnalysisTools {
             // Extract current colonies from assist tool
             List<Colony> finalColonies = assistTool.getCurrentColonies();
             
-            // Update stored colony data with assist results
-            store.putAnalysis("colonies_" + imageHandle, finalColonies, imageHandle);
+            // Update stored colony data with assist results using standardized key
+            String colonyStorageKey = SessionAnalysisKeys.ColonyKeys.detection(imageHandle);
+            putAnalysisWithValidation(colonyStorageKey, finalColonies, imageHandle);
             
             // Remove assist tool from session (if removeAnalysis method exists)
             // store.removeAnalysis("colony_assist_" + imageHandle);
@@ -529,7 +600,7 @@ public final class ColonyAnalysisTools {
     /**
      * Handle user click in colony assist mode
      */
-    public static JSONObject colonyAssistClick(JSONObject args, SessionStore store) {
+    public JSONObject colonyAssistClick(JSONObject args) {
         try {
             String imageHandle = args.getString("image_handle");
             double clickX = args.getDouble("click_x");
@@ -571,7 +642,7 @@ public final class ColonyAnalysisTools {
     /**
      * Propagate colony class using machine learning
      */
-    public static JSONObject propagateColonyClass(JSONObject args, SessionStore store) {
+    public JSONObject propagateColonyClass(JSONObject args) {
         try {
             String imageHandle = args.getString("image_handle");
             String targetClassStr = args.getString("target_class");
@@ -614,7 +685,7 @@ public final class ColonyAnalysisTools {
     /**
      * Manually relabel colony
      */
-    public static JSONObject relabelColony(JSONObject args, SessionStore store) {
+    public JSONObject relabelColony(JSONObject args) {
         try {
             String imageHandle = args.getString("image_handle");
             double clickX = args.getDouble("click_x");
@@ -671,6 +742,20 @@ public final class ColonyAnalysisTools {
         return null;
     }
     
+    /**
+     * Get colony data from session with backward compatibility support
+     * Tries standardized keys first, falls back to legacy patterns
+     */
+    private List<Colony> getColoniesFromSession(String imageHandle) {
+        @SuppressWarnings("unchecked")
+        List<Colony> colonies = (List<Colony>) compatibility.getColonyData(
+            imageHandle, SessionAnalysisKeys.AnalysisType.COLONY_DETECTION);
+        return colonies;
+    }
+    
+    /**
+     * Legacy method - kept for backward compatibility
+     */
     @SuppressWarnings("unchecked")
     private static List<Colony> getColoniesFromSession(SessionStore store, String imageHandle) {
         List<String> analyses = store.getAnalysesForImage(imageHandle);

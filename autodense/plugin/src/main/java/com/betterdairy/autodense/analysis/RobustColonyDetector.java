@@ -13,7 +13,11 @@ import java.util.List;
 /**
  * Robust colony detection using ImageJ's ParticleAnalyzer for accurate sizing.
  * Integrates with ColonyAnalysisParams for comprehensive edge-case handling.
+ * 
+ * @deprecated Use {@link UnifiedColonyDetector} instead. This class will be removed in a future version.
+ *             UnifiedColonyDetector consolidates the best features from all detection approaches.
  */
+@Deprecated
 public final class RobustColonyDetector {
 
     /**
