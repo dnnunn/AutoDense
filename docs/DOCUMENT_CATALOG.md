@@ -10,7 +10,7 @@
 
 This catalog provides a centralized reference for all AutoDense documentation, including concise summaries, categories, word counts, and verification dates. Use this as a starting point to navigate the documentation ecosystem.
 
-**Total Documents:** 57 files across 8 categories
+**Total Documents:** 69 files across 9 categories
 
 ---
 
@@ -116,20 +116,32 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 |----------|---------|--------|---------------|
 | **SessionSummaries/Session_summary_August_20_2025.md** | Development session wrap-up covering UI/UX improvements and AI strategy design | 690 | 2025-08-26 |
 | **SessionSummaries/Session_summary_August_25_2025.md** | Architecture restoration session documenting critical system breakdown and fixes | 1128 | 2025-08-26 |
+| **SessionSummaries/Session_summary_August_27_2025.md** | LLM toolkit development session creating reusable audit and debug toolkits with multi-provider support | 2847 | 2025-08-27 |
+| **NextSteps/NextSteps_August_27_2025.md** | Priority tasks for LLM toolkit deployment, colony counting fixes, and consensus audit implementation | 1654 | 2025-08-27 |
+| **Issues/Issues_August_27_2025.md** | Critical compilation blockers and system issues discovered during toolkit development with priority matrix | 2118 | 2025-08-27 |
 | **ChatGPT/Cleanup.md** | Comprehensive documentation cleanup strategy and quality improvement guidelines | 4306 | 2025-08-26 |
 | **ChatGPT/What to fix (surgical and minimal).md** | Targeted fix list for preset wiring and band detection issues | 1955 | - |
 | **docs/DOCUMENTATION.md** | Comprehensive documentation overview and navigation guide | 2531 | 2025-08-26 |
+
+## 🛠️ Development Toolkits & Utilities
+
+| Document | Summary | Words | Last Verified |
+|----------|---------|--------|---------------|
+| **llm-audit-toolkit/README.md** | Comprehensive multi-LLM codebase auditor with automated analysis and consensus building | 1847 | 2025-08-27 |
+| **llm-audit-toolkit/PACKAGE.md** | Distribution and integration guide for audit toolkit deployment across projects | 2134 | 2025-08-27 |
+| **llm-debug-toolkit/README.md** | Interactive debugging assistant with guided prompt engineering and multi-LLM analysis | 2287 | 2025-08-27 |
+| **llm-debug-toolkit/PACKAGE.md** | Packaging guide for debug toolkit with team integration and CI/CD workflows | 2058 | 2025-08-27 |
 
 ---
 
 ## 📈 Catalog Statistics
 
-- **Total Documents:** 57 files  
-- **Total Word Count:** ~65,500 words
-- **Verified Documents:** 27 (47.4%)
-- **Categories:** 8 major categories
+- **Total Documents:** 69 files  
+- **Total Word Count:** ~78,800 words
+- **Verified Documents:** 34 (49.3%)
+- **Categories:** 9 major categories
 - **Deprecated/Tombstoned:** 3 documents
-- **Average Document Size:** 1,149 words
+- **Average Document Size:** 1,142 words
 
 ## 🔄 Maintenance Instructions
 
@@ -149,4 +161,4 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 
 ---
 
-*Last updated: 2025-08-26 | Maintained via WRAPUP.md session procedures*
+*Last updated: 2025-08-27 | Maintained via WRAPUP.md session procedures*
