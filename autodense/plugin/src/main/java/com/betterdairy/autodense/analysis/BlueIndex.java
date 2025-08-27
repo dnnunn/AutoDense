@@ -31,9 +31,10 @@ public final class BlueIndex {
     
     /**
      * Calculate blue index from RGB using CIELAB b* channel (float version).
+     * Uses proper rounding instead of truncation for better precision.
      */
     public static double blueIndex(float r, float g, float b) {
-        return blueIndex((int)r, (int)g, (int)b);
+        return blueIndex(Math.round(r), Math.round(g), Math.round(b));
     }
     
     /**
@@ -122,10 +123,13 @@ public final class BlueIndex {
         y /= yn;  
         z /= zn;
         
-        // Apply Lab transformation
-        x = (x > 0.008856) ? Math.pow(x, 1.0/3.0) : (7.787 * x + 16.0/116.0);
-        y = (y > 0.008856) ? Math.pow(y, 1.0/3.0) : (7.787 * y + 16.0/116.0);
-        z = (z > 0.008856) ? Math.pow(z, 1.0/3.0) : (7.787 * z + 16.0/116.0);
+        // Apply Lab transformation with precise CIE constants
+        double epsilon = 0.008856451679; // (6/29)^3 - precise CIE epsilon  
+        double kappa = 903.2962963; // (29/3)^3 - precise CIE kappa
+        
+        x = (x > epsilon) ? Math.pow(x, 1.0/3.0) : (kappa * x + 16.0) / 116.0;
+        y = (y > epsilon) ? Math.pow(y, 1.0/3.0) : (kappa * y + 16.0) / 116.0;
+        z = (z > epsilon) ? Math.pow(z, 1.0/3.0) : (kappa * z + 16.0) / 116.0;
         
         double L = 116 * y - 16;
         double a = 500 * (x - y);

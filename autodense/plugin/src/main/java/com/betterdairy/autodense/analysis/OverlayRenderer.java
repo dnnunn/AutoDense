@@ -45,14 +45,33 @@ public final class OverlayRenderer {
 
     /** 
      * Build an overlay with lane boxes and band boxes+labels from existing lanes.
+     * @deprecated Use fromLanes(lanes, allBands, imageHeight, imageWidth) for proper positioning
      */
+    @Deprecated
     public static Overlay fromLanes(List<Lane> lanes, List<List<AssistBand>> allBands) {
+        return fromLanes(lanes, allBands, 400, 600); // Default dimensions for backward compatibility
+    }
+    
+    /** 
+     * Build an overlay with lane boxes and band boxes+labels from existing lanes.
+     * @deprecated Use fromLanes(lanes, allBands, imageHeight, imageWidth) for proper positioning
+     */
+    @Deprecated
+    public static Overlay fromLanes(List<Lane> lanes, List<List<AssistBand>> allBands, int imageHeight) {
+        return fromLanes(lanes, allBands, imageHeight, 600); // Default width for backward compatibility
+    }
+    
+    /** 
+     * Build an overlay with lane boxes and band boxes+labels from existing lanes.
+     * Uses actual image dimensions for proper ROI positioning and bounds checking.
+     */
+    public static Overlay fromLanes(List<Lane> lanes, List<List<AssistBand>> allBands, int imageHeight, int imageWidth) {
         Overlay ov = new Overlay();
         
         // Render lanes (light green outline)
         for (int i = 0; i < lanes.size(); i++) {
             Lane ln = lanes.get(i);
-            Roi laneR = new Roi(ln.xStart(), 0, ln.xEnd() - ln.xStart() + 1, 400); // Use reasonable height
+            Roi laneR = new Roi(ln.xStart(), 0, ln.xEnd() - ln.xStart() + 1, imageHeight);
             laneR.setStrokeColor(new Color(0, 255, 0, 100));
             laneR.setStrokeWidth(1.0);
             laneR.setName("Lane " + (i + 1));
@@ -68,7 +87,7 @@ public final class OverlayRenderer {
                 for (AssistBand b : bands) {
                     // If smear is significant (>15%), draw smear region first as faint gradient
                     if (b.smearPercent > 15.0) {
-                        addSmearRegion(ov, b, lanes.get(laneIdx));
+                        addSmearRegion(ov, b, lanes.get(laneIdx), imageHeight, imageWidth);
                     }
                     
                     // Band rectangle
@@ -83,7 +102,10 @@ public final class OverlayRenderer {
                     if (b.smearPercent > 15.0) {
                         label += String.format(" (%.0f%% smear)", b.smearPercent);
                     }
-                    TextRoi tr = new TextRoi(b.xStart + 2, b.yStart + 12, label, SMALL_FONT);
+                    // Position text label with bounds checking
+                    int textX = Math.max(0, b.xStart + 2);
+                    int textY = Math.max(12, Math.min(imageHeight - 5, b.yStart + 12));
+                    TextRoi tr = new TextRoi(textX, textY, label, SMALL_FONT);
                     tr.setStrokeColor(Color.YELLOW);
                     tr.setFillColor(new Color(0, 0, 0, 120));
                     ov.add(tr);
@@ -122,8 +144,18 @@ public final class OverlayRenderer {
 
     /**
      * Create an overlay specifically for assisted bands with confidence indicators.
+     * @deprecated Use createAssistedBandOverlay(assistedBands, imageHeight, imageWidth) for proper bounds checking
      */
+    @Deprecated
     public static Overlay createAssistedBandOverlay(List<AssistBand> assistedBands) {
+        return createAssistedBandOverlay(assistedBands, 400, 600); // Default dimensions
+    }
+    
+    /**
+     * Create an overlay specifically for assisted bands with confidence indicators.
+     * Uses actual image dimensions for proper bounds checking.
+     */
+    public static Overlay createAssistedBandOverlay(List<AssistBand> assistedBands, int imageHeight, int imageWidth) {
         Overlay ov = new Overlay();
         
         for (int i = 0; i < assistedBands.size(); i++) {
@@ -131,7 +163,7 @@ public final class OverlayRenderer {
             
             // If smear is significant (>15%), draw smear region first as faint gradient
             if (b.smearPercent > 15.0) {
-                addSmearRegion(ov, b, null); // No lane info for assisted bands
+                addSmearRegion(ov, b, null, imageHeight, imageWidth); // No lane info for assisted bands
             }
             
             // Color based on confidence: high = green, medium = orange, low = red
@@ -169,18 +201,23 @@ public final class OverlayRenderer {
      * Add a smear region visualization as a faint gradient box.
      * The smear region extends vertically from the band to show migration spreading.
      */
-    private static void addSmearRegion(Overlay ov, AssistBand band, Lane lane) {
-        // Calculate smear region dimensions
+    private static void addSmearRegion(Overlay ov, AssistBand band, Lane lane, int imageHeight, int imageWidth) {
+        // Calculate smear region dimensions with bounds checking
         // Smear extends both above and below the band, proportional to smear percentage
         int smearExtension = Math.max(5, (int)(band.heightPx() * (band.smearPercent / 100.0) * 2));
-        int smearTop = band.yStart - smearExtension;
-        int smearBottom = band.yEnd + smearExtension;
+        int smearTop = Math.max(0, band.yStart - smearExtension);
+        int smearBottom = Math.min(imageHeight - 1, band.yEnd + smearExtension);
         int smearHeight = smearBottom - smearTop;
         
         // Use lane boundaries if available, otherwise use band boundaries with padding
-        int smearLeft = lane != null ? lane.xStart() : band.xStart - 2;
-        int smearRight = lane != null ? lane.xEnd() : band.xEnd + 2;
+        int smearLeft = lane != null ? Math.max(0, lane.xStart()) : Math.max(0, band.xStart - 2);
+        int smearRight = lane != null ? Math.min(imageWidth - 1, lane.xEnd()) : Math.min(imageWidth - 1, band.xEnd + 2);
         int smearWidth = smearRight - smearLeft;
+        
+        // Validate positive dimensions before creating ROI
+        if (smearWidth <= 0 || smearHeight <= 0) {
+            return; // Skip invalid smear region
+        }
         
         // Create smear region rectangle with faint fill
         Roi smearRoi = new Roi(smearLeft, smearTop, smearWidth, smearHeight);

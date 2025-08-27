@@ -12,7 +12,10 @@ public final class HsvOps {
     
     public static float[] pixelHSV(ColorProcessor cp, int x, int y){
         int c = cp.get(x,y); 
-        int r=(c&0xff0000)>>16, g=(c&0xff00)>>8, b=c&0xff;
+        // Explicit RGB channel extraction with proper parentheses for clarity
+        int r = (c & 0xff0000) >> 16;
+        int g = (c & 0xff00) >> 8;
+        int b = c & 0xff;
         return rgbToHsv(r,g,b);
     }
 }

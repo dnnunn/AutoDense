@@ -111,8 +111,8 @@ public final class LaneDetector {
         for (int pxAbs : peaks) {
             int p = pxAbs - xLeft;
             int l = p, r = p;
-            while (l - 1 >= 1 && smooth[l - 1] <= smooth[l]) l--;
-            while (r + 1 < w - 1 && smooth[r + 1] <= smooth[r]) r++;
+            while (l - 1 >= 0 && smooth[l - 1] <= smooth[l]) l--;
+            while (r + 1 < w && smooth[r + 1] <= smooth[r]) r++;
             int pad = Math.max(6, minDist / 8);
             int xl = Math.max(xLeft, xLeft + l - pad);
             int xr = Math.min(xRight, xLeft + r + pad);
@@ -397,7 +397,10 @@ public final class LaneDetector {
                 double[] rowProfile = BufferPool.getDoubleBuffer(W);
                 int rowStart = y * W;
                 for (int x = 0; x < W; x++) {
-                    rowProfile[x] = pixels[rowStart + x];
+                    int pixelIndex = rowStart + x;
+                    if (pixelIndex >= 0 && pixelIndex < pixels.length) {
+                        rowProfile[x] = pixels[pixelIndex];
+                    }
                 }
                 // Simple gradient analysis to detect tilt
                 // This is a placeholder - full implementation would be more sophisticated

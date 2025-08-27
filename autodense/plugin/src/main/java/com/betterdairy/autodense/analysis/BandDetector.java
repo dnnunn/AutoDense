@@ -223,23 +223,29 @@ public final class BandDetector {
         float[] pixels = (float[]) ip.convertToFloat().getPixels();
         int width = ip.getWidth();
         
-        // Above flank using array indexing
+        // Above flank using array indexing with bounds checking
         int aboveStart = Math.max(0, y0 - flankHeight - 2);
         int aboveEnd = Math.max(0, y0 - 2);
         for (int y = aboveStart; y <= aboveEnd; y++) {
             int rowStart = y * width;
-            for (int x = x0; x <= x1; x++) {
-                bgSamples.add(pixels[rowStart + x]);
+            for (int x = Math.max(0, x0); x <= Math.min(width - 1, x1); x++) {
+                int pixelIndex = rowStart + x;
+                if (pixelIndex >= 0 && pixelIndex < pixels.length) {
+                    bgSamples.add(pixels[pixelIndex]);
+                }
             }
         }
         
-        // Below flank using array indexing
+        // Below flank using array indexing with bounds checking
         int belowStart = Math.min(ip.getHeight() - 1, y1 + 2);
         int belowEnd = Math.min(ip.getHeight() - 1, y1 + 2 + flankHeight);
         for (int y = belowStart; y <= belowEnd; y++) {
             int rowStart = y * width;
-            for (int x = x0; x <= x1; x++) {
-                bgSamples.add(pixels[rowStart + x]);
+            for (int x = Math.max(0, x0); x <= Math.min(width - 1, x1); x++) {
+                int pixelIndex = rowStart + x;
+                if (pixelIndex >= 0 && pixelIndex < pixels.length) {
+                    bgSamples.add(pixels[pixelIndex]);
+                }
             }
         }
         

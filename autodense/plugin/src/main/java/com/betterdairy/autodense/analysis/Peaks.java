@@ -13,8 +13,8 @@ public final class Peaks {
      * Find the index of the maximum value in the specified range [y0, y1].
      */
     public static int argmax(float[] v, int y0, int y1) {
-        y0 = Math.max(1, y0); 
-        y1 = Math.min(v.length - 2, y1);
+        y0 = Math.max(0, y0); 
+        y1 = Math.min(v.length - 1, y1);
         int idx = y0; 
         float best = -Float.MAX_VALUE;
         for (int i = y0; i <= y1; i++) {
@@ -77,8 +77,8 @@ public final class Peaks {
      * Returns OptionalInt.empty() if no suitable peak is found.
      */
     public static OptionalInt bestProminent(float[] v, int y0, int y1, float minProm) {
-        y0 = Math.max(1, y0); 
-        y1 = Math.min(v.length - 2, y1);
+        y0 = Math.max(1, y0); // Need to access v[i-1], so minimum index is 1
+        y1 = Math.min(v.length - 2, y1); // Need to access v[i+1], so maximum index is length-2
         int best = -1; 
         float bestProm = 0;
         
