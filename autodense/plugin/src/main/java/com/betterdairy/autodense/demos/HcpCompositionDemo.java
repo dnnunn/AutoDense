@@ -8,8 +8,13 @@ import ij.process.ByteProcessor;
 import org.json.JSONObject;
 import org.json.JSONArray;
 
-import javax.swing.*;
-import java.awt.*;
+import javax.swing.JFrame;
+import javax.swing.JTextArea;
+import javax.swing.JScrollPane;
+import javax.swing.JButton;
+import javax.swing.SwingUtilities;
+import java.awt.BorderLayout;
+import java.awt.Font;
 
 /**
  * Demo showcasing HCP (Host Cell Protein) composition analysis functionality.

@@ -3,7 +3,9 @@ package com.betterdairy.autodense.demos.performance;
 import ij.ImagePlus;
 import ij.process.FloatProcessor;
 import com.betterdairy.autodense.model.Models;
-import com.betterdairy.autodense.analysis.*;
+import com.betterdairy.autodense.analysis.Profiles;
+import com.betterdairy.autodense.analysis.LaneDetector;
+import com.betterdairy.autodense.analysis.BandDetector;
 
 public class SyntheticGelTest {
 
