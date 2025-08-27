@@ -92,7 +92,8 @@ public class HandleGuard {
     private void logToSession(String toolName, String message, String level) {
         String logMessage = String.format("[%s] %s: %s", level, toolName, message);
         // Always use system logging for now (SessionLogger integration can be added later)
-        System.err.println("HandleGuard: " + logMessage);
+        // TODO: Integrate with proper SessionLogger when available
+        java.util.logging.Logger.getLogger(HandleGuard.class.getName()).info(logMessage);
     }
     
     /**

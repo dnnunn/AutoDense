@@ -3,6 +3,7 @@ package com.betterdairy.autodense.tools;
 import com.betterdairy.autodense.session.SessionStore;
 import com.betterdairy.autodense.session.SessionRecovery;
 import com.betterdairy.autodense.model.Models.*;
+import com.betterdairy.autodense.util.ErrorHandler;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Overlay;
@@ -26,6 +27,24 @@ import java.util.ArrayList;
  * - imagej.assay.export: CSV + overlay PNG output
  */
 public class AssayOps {
+    
+    private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(AssayOps.class.getName());
+    
+    /**
+     * Resource cleanup utility for ImageJ objects to prevent memory leaks
+     */
+    private static void safeCleanup(ImagePlus... images) {
+        for (ImagePlus img : images) {
+            if (img != null) {
+                try {
+                    img.flush();
+                } catch (Exception e) {
+                    logger.log(java.util.logging.Level.FINE, "Error during ImagePlus cleanup", e);
+                }
+            }
+        }
+    }
+    
     
     private final SessionStore store;
     private final SessionRecovery recovery;
@@ -113,7 +132,9 @@ public class AssayOps {
             
             SessionStore.ImageRecord imgRecord = store.getImage(imageHandle);
             if (imgRecord == null) {
-                return createErrorResponse("image_not_found", "Image handle not found: " + imageHandle);
+                return ErrorHandler.handleValidationError("assay_tool", 
+                    new IllegalArgumentException("Image handle not found: " + imageHandle), 
+                    null, recovery);
             }
             
             ImagePlus imp = imgRecord.image;
@@ -139,7 +160,7 @@ public class AssayOps {
                 .put("plate_layout", layout.getWells());
                 
         } catch (Exception e) {
-            return createErrorResponse("detection_failed", e.getMessage());
+            return ErrorHandler.handleUnexpectedError("detect_colonies", e, logger, recovery);
         }
     }
     
@@ -154,7 +175,9 @@ public class AssayOps {
             
             SessionStore.ImageRecord imgRecord = store.getImage(imageHandle);
             if (imgRecord == null) {
-                return createErrorResponse("image_not_found", "Image handle not found: " + imageHandle);
+                return ErrorHandler.handleValidationError("assay_tool", 
+                    new IllegalArgumentException("Image handle not found: " + imageHandle), 
+                    null, recovery);
             }
             
             ImagePlus imp = imgRecord.image;
@@ -180,14 +203,22 @@ public class AssayOps {
                 .put("colonies_measured", colonies.size());
                 
         } catch (Exception e) {
-            return createErrorResponse("measurement_failed", e.getMessage());
+            return ErrorHandler.handleUnexpectedError("measure_colonies", e, logger, recovery);
         }
     }
     
     /**
-     * imagej.assay.annotate
-     * Add annotations with labels: id, blue_index, size_bin, row/col
-     * CRITICAL: Uses Overlay + ROI Manager pattern (never pixel data)
+     * Annotates colonies with labels showing ID, size classification, and other properties.
+     * Tool ID: imagej.assay.annotate
+     * Uses overlay patterns only - never modifies pixel data directly.
+     * 
+     * @param params JSON object containing annotation parameters:
+     *               - image_handle (String): Handle to the image to annotate
+     *               - labels (JSONArray): Array of label configurations
+     *               - font_size (Integer): Font size for labels (default: 12)
+     *               - label_color (String): Color for labels
+     * @return JSON object with annotation results and overlay handle
+     * @throws IllegalArgumentException if image handle is invalid
      */
     public JSONObject annotate(JSONObject params) {
         try {
@@ -196,7 +227,9 @@ public class AssayOps {
             
             SessionStore.ImageRecord imgRecord = store.getImage(imageHandle);
             if (imgRecord == null) {
-                return createErrorResponse("image_not_found", "Image handle not found: " + imageHandle);
+                return ErrorHandler.handleValidationError("assay_tool", 
+                    new IllegalArgumentException("Image handle not found: " + imageHandle), 
+                    null, recovery);
             }
             
             ImagePlus imp = imgRecord.image;
@@ -222,7 +255,7 @@ public class AssayOps {
                 .put("annotations_added", annotations != null ? annotations.length() : 0);
                 
         } catch (Exception e) {
-            return createErrorResponse("annotation_failed", e.getMessage());
+            return ErrorHandler.handleUnexpectedError("annotate_colonies", e, logger, recovery);
         }
     }
     
@@ -237,7 +270,9 @@ public class AssayOps {
             
             SessionStore.ImageRecord imgRecord = store.getImage(imageHandle);
             if (imgRecord == null) {
-                return createErrorResponse("image_not_found", "Image handle not found: " + imageHandle);
+                return ErrorHandler.handleValidationError("assay_tool", 
+                    new IllegalArgumentException("Image handle not found: " + imageHandle), 
+                    null, recovery);
             }
             
             ImagePlus imp = imgRecord.image;
@@ -283,7 +318,7 @@ public class AssayOps {
                 .put("method", "imagej_macro_baseline");
                 
         } catch (Exception e) {
-            return createErrorResponse("macro_execution_failed", e.getMessage());
+            return ErrorHandler.handleUnexpectedError("run_xgal_macro", e, logger, recovery);
         }
     }
     
@@ -300,7 +335,9 @@ public class AssayOps {
             
             SessionStore.ImageRecord imgRecord = store.getImage(imageHandle);
             if (imgRecord == null) {
-                return createErrorResponse("image_not_found", "Image handle not found: " + imageHandle);
+                return ErrorHandler.handleValidationError("assay_tool", 
+                    new IllegalArgumentException("Image handle not found: " + imageHandle), 
+                    null, recovery);
             }
             
             JSONArray exportPaths = new JSONArray();
@@ -326,7 +363,7 @@ public class AssayOps {
                 .put("exported_files", exportPaths);
                 
         } catch (Exception e) {
-            return createErrorResponse("export_failed", e.getMessage());
+            return ErrorHandler.handleUnexpectedError("export_colony_data", e, logger, recovery);
         }
     }
     
@@ -343,8 +380,12 @@ public class AssayOps {
                 // Basic colony detection for neutral-red or no stain
                 colonies = detectBasicColonies(imp, minSize, maxSize);
             }
+        } catch (IllegalArgumentException e) {
+            logger.log(java.util.logging.Level.WARNING, "Invalid parameters for colony detection", e);
+            throw e;
         } catch (Exception e) {
-            System.err.println("Colony detection failed: " + e.getMessage());
+            logger.log(java.util.logging.Level.SEVERE, "Colony detection failed", e);
+            throw new RuntimeException("Colony detection encountered an unexpected error: " + e.getMessage(), e);
         }
         
         return colonies;
@@ -355,10 +396,11 @@ public class AssayOps {
      */
     private List<Colony> detectXGalColonies(ImagePlus imp, double minSize, double maxSize) {
         List<Colony> colonies = new ArrayList<>();
+        ImagePlus balanced = null;
         
         try {
             // Step 1: White-balance using plate blank region (or automatic gray-world)
-            ImagePlus balanced = whiteBalance(imp);
+            balanced = whiteBalance(imp);
             
             // Step 2: Compute blue_index using canonical CIELAB helper
             ij.process.FloatProcessor blueIndex = computeBlueIndex(balanced);
@@ -433,8 +475,15 @@ public class AssayOps {
             // Apply overlay to image (never modify pixel data)
             imp.setOverlay(ov);
             
+        } catch (IllegalArgumentException e) {
+            logger.log(java.util.logging.Level.WARNING, "Invalid parameters for X-gal detection", e);
+            throw e;
         } catch (Exception e) {
-            System.err.println("X-gal detection failed: " + e.getMessage());
+            logger.log(java.util.logging.Level.SEVERE, "X-gal detection failed", e);
+            throw new RuntimeException("X-gal colony detection failed: " + e.getMessage(), e);
+        } finally {
+            // Ensure proper resource cleanup
+            safeCleanup(balanced);
         }
         
         return colonies;
@@ -536,8 +585,9 @@ public class AssayOps {
             ij.IJ.run(lab, "Lab Stack", "");
             return lab;
         } catch (Exception e) {
+            lab.flush(); // Cleanup on error
             // Fallback: return original image if CIELAB conversion fails
-            return imp.duplicate();
+            return imp.duplicate(); // caller responsible for cleanup
         }
     }
     
@@ -739,14 +789,9 @@ public class AssayOps {
                     "Consider investigating differences between Java and macro detection");
                 
         } catch (Exception e) {
-            return createErrorResponse("comparison_failed", e.getMessage());
+            return ErrorHandler.handleUnexpectedError("compare_plate_conditions", e, logger, recovery);
         }
     }
     
-    private JSONObject createErrorResponse(String errorType, String message) {
-        return new JSONObject()
-            .put("success", false)
-            .put("error_type", errorType)
-            .put("error_message", message);
-    }
+    // Note: createErrorResponse method is defined above as static utility
 }

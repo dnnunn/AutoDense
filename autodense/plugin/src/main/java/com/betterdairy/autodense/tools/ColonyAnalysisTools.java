@@ -8,18 +8,22 @@ import com.betterdairy.autodense.session.SessionStore;
 import com.betterdairy.autodense.session.SessionRecovery;
 import com.betterdairy.autodense.session.SessionAnalysisKeys;
 import com.betterdairy.autodense.session.SessionStorageMigrator;
+import com.betterdairy.autodense.util.ErrorHandler;
 import ij.gui.Overlay;
 import ij.gui.OvalRoi;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.List;
+import java.util.logging.Logger;
 
 /**
  * Clean functional colony analysis tools with enhanced handle validation.
  * Implements HandleGuard protection for all tool operations.
  */
 public final class ColonyAnalysisTools {
+    
+    private static final Logger logger = Logger.getLogger(ColonyAnalysisTools.class.getName());
     
     private final SessionStore store;
     private final SessionRecovery recovery;
@@ -69,6 +73,7 @@ public final class ColonyAnalysisTools {
     /**
      * Error response helper
      */
+    // TODO: Replace remaining error() calls with ErrorHandler - temporary method for compilation
     private JSONObject error(String tool, String message, String field) {
         return new JSONObject()
             .put("success", false)
@@ -102,7 +107,8 @@ public final class ColonyAnalysisTools {
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord rec = store.getImage(imageHandle);
             if (rec == null) {
-                return error("detect_plate", "Image not found after validation", "image_handle");
+                return ErrorHandler.handleValidationError("detect_plate", 
+                    new IllegalArgumentException("Image not found after validation"), null, recovery);
             }
             
             // Standardized parameter extraction
@@ -137,7 +143,7 @@ public final class ColonyAnalysisTools {
             return response; // No more guidance injection - clean standardized responses
                 
         } catch (Exception e) {
-            return error("detect_plate", e.getMessage(), "processing");
+            return ErrorHandler.handleUnexpectedError("detect_plate", e, null, recovery);
         }
     }
     
@@ -147,18 +153,20 @@ public final class ColonyAnalysisTools {
     public JSONObject countColonies(JSONObject args) {
         try {
             // Apply comprehensive handle protection
-            HandleGuard.HandleValidationResult validation = handleGuard.protectToolCall(args, "count_colonies");
-            if (!validation.isValid()) {
-                return validation.createErrorResponse();
+            JSONObject validationError = handleGuard.validateHandle(args, "count_colonies");
+            if (validationError != null) {
+                return validationError;
             }
             
-            SessionStore.ImageRecord rec = store.getImage(validation.imageHandle);
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord rec = store.getImage(imageHandle);
             if (rec == null) {
-                return error("count_colonies", "Image not found after validation", "image_handle");
+                return ErrorHandler.handleValidationError("count_colonies", 
+                    new IllegalArgumentException("Image not found after validation"), null, recovery);
             }
             
             // Get plate data and calibration
-            PlateDetector.Result plate = getPlateFromSession(store, validation.imageHandle);
+            PlateDetector.Result plate = getPlateFromSession(store, imageHandle);
             OvalRoi plateRoi = plate != null ? plate.plateRoi() : null;
             double pxPerMM = plate != null ? plate.pxPerMM(90.0) : 20.0; // fallback estimate
             
@@ -192,12 +200,12 @@ public final class ColonyAnalysisTools {
             
             // Create and apply overlay
             Overlay ov = ColonyOverlay.renderDetection(colonies);
-            String ovh = store.putOverlay(ov, validation.imageHandle);
+            String ovh = store.putOverlay(ov, imageHandle);
             rec.image.setOverlay(ov);
             
             // Store colony data using standardized key
-            String colonyStorageKey = SessionAnalysisKeys.ColonyKeys.detection(validation.imageHandle);
-            putAnalysisWithValidation(colonyStorageKey, colonies, validation.imageHandle);
+            String colonyStorageKey = SessionAnalysisKeys.ColonyKeys.detection(imageHandle);
+            putAnalysisWithValidation(colonyStorageKey, colonies, imageHandle);
             
             JSONObject response = ok("count_colonies", new JSONObject()
                 .put("overlay_handle", ovh)
@@ -211,7 +219,7 @@ public final class ColonyAnalysisTools {
                 .put("split_touching", detectionParams.splitTouching())
                 .put("pixels_per_mm", pxPerMM));
             
-            return handleGuard.addPersistenceGuidance(response, validation.imageHandle);
+            return handleGuard.addPersistenceGuidance(response, imageHandle);
                 
         } catch (Exception e) {
             return error("count_colonies", e.getMessage(), "processing");

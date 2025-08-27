@@ -1,14 +1,17 @@
 package com.betterdairy.autodense.tools;
 
-import com.betterdairy.autodense.session.SessionStore;
-import com.betterdairy.autodense.session.SessionRecovery;
-import com.betterdairy.autodense.util.ErrorHandler;
+// AutoDense Core
 import com.betterdairy.autodense.analysis.*;
 import com.betterdairy.autodense.analysis.AssistModels.AssistBand;
+import com.betterdairy.autodense.img.IJUtils;
 import com.betterdairy.autodense.model.Models.*;
 import com.betterdairy.autodense.plugin.ToolSchemaValidator;
+import com.betterdairy.autodense.session.SessionRecovery;
+import com.betterdairy.autodense.session.SessionStore;
+import com.betterdairy.autodense.util.ErrorHandler;
 import com.betterdairy.autodense.validation.SecureToolValidator;
-import com.betterdairy.autodense.img.IJUtils;
+
+// External Libraries
 import autodense.util.OverlayExporter;
 import ij.IJ;
 import ij.ImagePlus;
@@ -17,34 +20,72 @@ import ij.gui.Roi;
 import ij.gui.TextRoi;
 import ij.io.FileSaver;
 import ij.process.ImageProcessor;
-// Removed unused ImageJ imports
-import org.json.JSONObject;
 import org.json.JSONArray;
+import org.json.JSONObject;
 
+// Java Standard Library
+import javax.imageio.ImageIO;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Rectangle;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.text.DecimalFormat;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
- * Tool implementations for Gemini function calling.
- * Each tool operates on handles, not pixels.
+ * Tool implementations for Gemini function calling in AutoDense gel analysis system.
+ * 
+ * <p>This class provides a comprehensive set of tools for automated gel electrophoresis
+ * image analysis, including lane detection, band detection, quantification, and various
+ * specialized analyses like digest kinetics and treatment comparisons.</p>
+ * 
+ * <h3>Key Design Principles:</h3>
+ * <ul>
+ *   <li><strong>Handle-based operations:</strong> All tools operate on handles, not raw pixels</li>
+ *   <li><strong>Deterministic processing:</strong> Parameters are clamped and echoed for reproducibility</li>
+ *   <li><strong>Comprehensive logging:</strong> All operations are logged for debugging and audit trails</li>
+ *   <li><strong>Resource management:</strong> Automatic cleanup of temporary files and resources</li>
+ *   <li><strong>Error recovery:</strong> Robust error handling with meaningful error messages</li>
+ * </ul>
+ * 
+ * <h3>Method Complexity Refactoring:</h3>
+ * <p>This class has been refactored to reduce method complexity and improve maintainability.
+ * Complex methods like {@code digestKinetics}, {@code compareTreatments}, and {@code detectBands}
+ * have been decomposed into smaller, focused helper methods following the Extract Method pattern.</p>
+ * 
+ * <h3>Threading and Performance:</h3>
+ * <p>Includes preprocessing caches for expensive operations and efficient resource management
+ * to handle large gel images and complex analyses.</p>
+ * 
+ * @author AutoDense Development Team
+ * @version 2.0
+ * @since 1.0
  */
 public class GelAnalysisTools {
+    
+    private static final Logger logger = Logger.getLogger(GelAnalysisTools.class.getName());
+    
+    /**
+     * Resource cleanup utility for ImageJ objects to prevent memory leaks
+     */
+    private static void safeCleanup(ImagePlus... images) {
+        for (ImagePlus img : images) {
+            if (img != null) {
+                try {
+                    img.flush();
+                } catch (Exception e) {
+                    logger.log(Level.FINE, "Error during ImagePlus cleanup", e);
+                }
+            }
+        }
+    }
     
     private final SessionStore store;
     private final SessionRecovery recovery;
@@ -55,13 +96,42 @@ public class GelAnalysisTools {
     private final Map<String, String> preprocessingCache = new ConcurrentHashMap<>();
     
     public GelAnalysisTools(SessionStore store) {
-        this.store = store;
+        this.store = Objects.requireNonNull(store, "SessionStore cannot be null");
         this.recovery = new SessionRecovery(store);
         this.handleGuard = new HandleGuard(store, recovery);
+        initializeTempDirectory();
+        logger.info("GelAnalysisTools initialized with temp directory: " + this.tempDir);
+    }
+
+    private void initializeTempDirectory() {
         try {
-            this.tempDir = Files.createTempDirectory("autodense_");
-        } catch (Exception e) {
+            this.tempDir = Files.createTempDirectory("autodense_gel_");
+            logger.fine("Created temporary directory: " + this.tempDir);
+        } catch (IOException e) {
             this.tempDir = Path.of(System.getProperty("java.io.tmpdir"));
+            logger.warning("Failed to create temp directory, falling back to system temp: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Clean up resources when this instance is no longer needed
+     */
+    public void cleanup() {
+        try {
+            if (tempDir != null && Files.exists(tempDir)) {
+                Files.walk(tempDir)
+                    .sorted((a, b) -> b.compareTo(a)) // Delete files before directories
+                    .forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (IOException e) {
+                            logger.warning("Failed to delete temp file: " + path + " - " + e.getMessage());
+                        }
+                    });
+                logger.fine("Cleaned up temporary directory: " + tempDir);
+            }
+        } catch (IOException e) {
+            logger.warning("Failed to cleanup temp directory: " + e.getMessage());
         }
     }
     
@@ -366,10 +436,10 @@ public class GelAnalysisTools {
                 double spacingStd = spacings.length > 1 ? 
                     Math.sqrt(java.util.Arrays.stream(spacings).map(x -> Math.pow(x - meanSpacing, 2)).average().orElse(0)) : 0;
                 
-                System.out.println(String.format("[LANES] expected=%d found=%d lane_width_px=%.1f±%.1f spacing_px=%.1f±%.1f", 
+                logger.info(String.format("[LANES] expected=%d found=%d lane_width_px=%.1f±%.1f spacing_px=%.1f±%.1f", 
                     expectedLanes, lanes.size(), meanWidth, 0.0, meanSpacing, spacingStd));
             } else {
-                System.out.println(String.format("[LANES] expected=%d found=0 DETECTION_FAILED", expectedLanes));
+                logger.warning(String.format("[LANES] expected=%d found=0 DETECTION_FAILED", expectedLanes));
             }
             
             // Create overlay
@@ -442,141 +512,183 @@ public class GelAnalysisTools {
             // Enforce handle discipline first
             JSONObject disciplineError = enforceHandleDiscipline(args);
             if (disciplineError != null) return disciplineError;
-            
-            String imageHandle = args.getString("image_handle");
-            SessionStore.ImageRecord img = store.getImage(imageHandle);
-            if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
-            }
-            
-            // Clamp and echo parameters for determinism - improved defaults for robust band detection
-            double sensitivity = args.optDouble("sensitivity", 0.3);
-            sensitivity = clamp(sensitivity, 0.1, 1.0);
-            args.put("sensitivity", sensitivity);
-            
-            double minBandHeight = args.optDouble("min_band_height", 3.0);
-            minBandHeight = clamp(minBandHeight, 1.0, 20.0);
-            args.put("min_band_height", minBandHeight);
-            
-            // Increase prominence for better band detection (6-8% of lane max for stained gels)
-            double prominence = args.optDouble("min_prominence", 0.06);
-            prominence = clamp(prominence, 0.01, 0.5);
-            args.put("min_prominence", prominence);
-            
-            // Add smooth_sigma parameter for vertical profile smoothing
-            double smoothSigma = args.optDouble("smooth_sigma", 2.0);
-            smoothSigma = clamp(smoothSigma, 1.0, 4.0);
-            args.put("smooth_sigma", smoothSigma);
-            
-            // Add min_peak_distance for vertical band spacing (8-12px to avoid double-picking)
-            double minPeakDistance = args.optDouble("min_peak_distance", 10.0);
-            minPeakDistance = clamp(minPeakDistance, 8.0, 15.0);
-            args.put("min_peak_distance", minPeakDistance);
-            
-            // Suppress ROI Manager and ensure clean overlay workflow
-            IJUtils.silenceRoiManager(img.image);
-            
-            // Get lanes from previous analysis or detect them
-            List<Lane> lanes;
-            if (args.has("analysis_handle")) {
-                SessionStore.AnalysisRecord analysis = store.getAnalysis(args.getString("analysis_handle"));
-                @SuppressWarnings("unchecked")
-                List<Lane> tempLanes = (List<Lane>) analysis.data;
-                lanes = tempLanes;
-            } else {
-                // Detect lanes first
-                lanes = LaneDetector.findLanes(img.image, 0, false, 0.55, 0.0, true);
-            }
-            
-            // Detect bands in each lane
-            int totalBands = 0;
-            List<List<Band>> allBands = new ArrayList<>();
-            
-            for (int laneIndex = 0; laneIndex < lanes.size(); laneIndex++) {
-                Lane lane = lanes.get(laneIndex);
-                List<Band> bands = BandDetector.findBands(img.image, lane);
-                allBands.add(bands);
-                totalBands += bands.size();
-                
-                // Debug logging for band detection diagnostics
-                System.out.println(String.format("[BANDS] lane i=%d, peaks=%d, prominence>=%.3f, sigma=%.1f", 
-                    laneIndex + 1, bands.size(), prominence, smoothSigma));
-            }
-            
-            // Create overlay with lanes and bands
-            Overlay overlay = new Overlay();
-            int height = img.image.getHeight();
-            
-            for (int i = 0; i < lanes.size(); i++) {
-                Lane lane = lanes.get(i);
-                int x = lane.xStart();
-                int width = Math.max(1, lane.xEnd() - lane.xStart() + 1);
-                
-                // Lane overlay (green) with label
-                Roi laneRoi = new Roi(x, 0, width, height);
-                laneRoi.setStrokeColor(new Color(0, 255, 0, 180));
-                laneRoi.setStrokeWidth(2.0);
-                laneRoi.setName("Lane " + (i + 1));
-                overlay.add(laneRoi);
-                
-                // Add lane label text overlay
-                TextRoi laneLabel = new TextRoi(x + width/2 - 10, 10, "L" + (i + 1));
-                laneLabel.setStrokeColor(new Color(0, 255, 0));
-                laneLabel.setFillColor(new Color(255, 255, 255, 200));
-                laneLabel.setFont(new Font("Arial", Font.BOLD, 14));
-                overlay.add(laneLabel);
-                
-                // Band overlays (red) with labels
-                List<Band> bands = allBands.get(i);
-                for (int b = 0; b < bands.size(); b++) {
-                    Band band = bands.get(b);
-                    int y = Math.max(0, Math.min(height - 4, band.y()));
-                    
-                    // Band rectangle
-                    Roi bandRoi = new Roi(x, y, width, 4);
-                    bandRoi.setStrokeColor(new Color(255, 0, 0, 200));
-                    bandRoi.setStrokeWidth(1.5);
-                    bandRoi.setName("Band L" + (i+1) + "B" + (b+1));
-                    overlay.add(bandRoi);
-                    
-                    // Band label (only for first few bands to avoid clutter)
-                    if (b < 3) { // Label first 3 bands in each lane
-                        TextRoi bandLabel = new TextRoi(x + width + 2, y - 2, "B" + (b+1));
-                        bandLabel.setStrokeColor(new Color(255, 0, 0));
-                        bandLabel.setFillColor(new Color(255, 255, 255, 180));
-                        bandLabel.setFont(new Font("Arial", Font.PLAIN, 10));
-                        overlay.add(bandLabel);
-                    }
-                }
-            }
-            
-            img.image.setOverlay(overlay);
-            img.image.updateAndDraw();
-            IJUtils.refresh(img.image);
-            
-            String overlayHandle = store.putOverlay(overlay, img.handle);
-            String analysisHandle = store.putAnalysis("bands", allBands, img.handle);
-            
-            // Ensure this image remains current for subsequent operations
-            store.setLastActiveImageHandle(img.handle);
-            
-            // Build standardized success response
-            JSONObject data = new JSONObject()
-                .put("lanes_analyzed", lanes.size())
-                .put("bands_total", totalBands)
-                .put("overlay_handle", overlayHandle)
-                .put("analysis_handle", analysisHandle)
-                .put("image_handle", img.handle)
-                .put("parameters_used", new JSONObject()
-                    .put("sensitivity", sensitivity)
-                    .put("min_band_height", minBandHeight)
-                    .put("prominence", prominence));
-            
-            return ok("detect_bands", data);
-                
+
+            BandDetectionParams params = validateAndPrepareBandDetectionParams(args);
+            List<Lane> lanes = getLanesForBandDetection(args, params.imageHandle);
+            BandDetectionResult result = performBandDetection(lanes, params);
+            String overlayHandle = createBandDetectionOverlay(result, params.imageHandle);
+            return formatBandDetectionResponse(result, overlayHandle, params);
         } catch (Exception e) {
             return recovery.createRecoveryResponse("detect_bands", e);
         }
+    }
+
+    // Supporting classes for band detection refactoring
+    private static class BandDetectionParams {
+        final String imageHandle;
+        final double sensitivity;
+        final double minBandHeight;
+        final double prominence;
+        final double smoothSigma;
+        final double minPeakDistance;
+
+        BandDetectionParams(String imageHandle, double sensitivity, double minBandHeight,
+                          double prominence, double smoothSigma, double minPeakDistance) {
+            this.imageHandle = imageHandle;
+            this.sensitivity = sensitivity;
+            this.minBandHeight = minBandHeight;
+            this.prominence = prominence;
+            this.smoothSigma = smoothSigma;
+            this.minPeakDistance = minPeakDistance;
+        }
+    }
+
+    private static class BandDetectionResult {
+        final List<Lane> lanes;
+        final List<List<Band>> allBands;
+        final int totalBands;
+
+        BandDetectionResult(List<Lane> lanes, List<List<Band>> allBands, int totalBands) {
+            this.lanes = lanes;
+            this.allBands = allBands;
+            this.totalBands = totalBands;
+        }
+    }
+
+    private BandDetectionParams validateAndPrepareBandDetectionParams(JSONObject args) {
+        String imageHandle = args.getString("image_handle");
+        SessionStore.ImageRecord img = store.getImage(imageHandle);
+        if (img == null) {
+            throw new IllegalArgumentException("Image not found in session");
+        }
+
+        // Clamp and validate parameters
+        double sensitivity = clamp(args.optDouble("sensitivity", 0.3), 0.1, 1.0);
+        double minBandHeight = clamp(args.optDouble("min_band_height", 3.0), 1.0, 20.0);
+        double prominence = clamp(args.optDouble("min_prominence", 0.06), 0.01, 0.5);
+        double smoothSigma = clamp(args.optDouble("smooth_sigma", 2.0), 1.0, 4.0);
+        double minPeakDistance = clamp(args.optDouble("min_peak_distance", 10.0), 8.0, 15.0);
+
+        // Echo parameters back for determinism
+        args.put("sensitivity", sensitivity);
+        args.put("min_band_height", minBandHeight);
+        args.put("min_prominence", prominence);
+        args.put("smooth_sigma", smoothSigma);
+        args.put("min_peak_distance", minPeakDistance);
+
+        // Suppress ROI Manager
+        IJUtils.silenceRoiManager(img.image);
+
+        return new BandDetectionParams(imageHandle, sensitivity, minBandHeight, 
+                                     prominence, smoothSigma, minPeakDistance);
+    }
+
+    private List<Lane> getLanesForBandDetection(JSONObject args, String imageHandle) {
+        if (args.has("analysis_handle")) {
+            SessionStore.AnalysisRecord analysis = store.getAnalysis(args.getString("analysis_handle"));
+            @SuppressWarnings("unchecked")
+            List<Lane> tempLanes = (List<Lane>) analysis.data;
+            return tempLanes;
+        } else {
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
+            return LaneDetector.findLanes(img.image, 0, false, 0.55, 0.0, true);
+        }
+    }
+
+    private BandDetectionResult performBandDetection(List<Lane> lanes, BandDetectionParams params) {
+        SessionStore.ImageRecord img = store.getImage(params.imageHandle);
+        List<List<Band>> allBands = new ArrayList<>();
+        int totalBands = 0;
+        
+        for (int laneIndex = 0; laneIndex < lanes.size(); laneIndex++) {
+            Lane lane = lanes.get(laneIndex);
+            List<Band> bands = BandDetector.findBands(img.image, lane);
+            allBands.add(bands);
+            totalBands += bands.size();
+            
+            // Debug logging for band detection diagnostics
+            logger.fine(String.format("[BANDS] lane i=%d, peaks=%d, prominence>=%.3f, sigma=%.1f", 
+                laneIndex + 1, bands.size(), params.prominence, params.smoothSigma));
+        }
+        
+        return new BandDetectionResult(lanes, allBands, totalBands);
+    }
+
+    private String createBandDetectionOverlay(BandDetectionResult result, String imageHandle) {
+        SessionStore.ImageRecord img = store.getImage(imageHandle);
+        Overlay overlay = new Overlay();
+        int height = img.image.getHeight();
+        
+        for (int i = 0; i < result.lanes.size(); i++) {
+            Lane lane = result.lanes.get(i);
+            int x = lane.xStart();
+            int width = Math.max(1, lane.xEnd() - lane.xStart() + 1);
+            
+            // Lane overlay (green) with label
+            Roi laneRoi = new Roi(x, 0, width, height);
+            laneRoi.setStrokeColor(new Color(0, 255, 0, 180));
+            laneRoi.setStrokeWidth(2.0);
+            laneRoi.setName("Lane " + (i + 1));
+            overlay.add(laneRoi);
+            
+            // Add lane label text overlay
+            TextRoi laneLabel = new TextRoi(x + width/2 - 10, 10, "L" + (i + 1));
+            laneLabel.setStrokeColor(new Color(0, 255, 0));
+            laneLabel.setFillColor(new Color(255, 255, 255, 200));
+            laneLabel.setFont(new Font("Arial", Font.BOLD, 14));
+            overlay.add(laneLabel);
+            
+            // Band overlays (red) with labels
+            List<Band> bands = result.allBands.get(i);
+            for (int b = 0; b < bands.size(); b++) {
+                Band band = bands.get(b);
+                int y = Math.max(0, Math.min(height - 4, band.y()));
+                
+                // Band rectangle
+                Roi bandRoi = new Roi(x, y, width, 4);
+                bandRoi.setStrokeColor(new Color(255, 0, 0, 200));
+                bandRoi.setStrokeWidth(1.5);
+                bandRoi.setName("Band L" + (i+1) + "B" + (b+1));
+                overlay.add(bandRoi);
+                
+                // Band label (only for first few bands to avoid clutter)
+                if (b < 3) { // Label first 3 bands in each lane
+                    TextRoi bandLabel = new TextRoi(x + width + 2, y - 2, "B" + (b+1));
+                    bandLabel.setStrokeColor(new Color(255, 0, 0));
+                    bandLabel.setFillColor(new Color(255, 255, 255, 180));
+                    bandLabel.setFont(new Font("Arial", Font.PLAIN, 10));
+                    overlay.add(bandLabel);
+                }
+            }
+        }
+        
+        img.image.setOverlay(overlay);
+        img.image.updateAndDraw();
+        IJUtils.refresh(img.image);
+        
+        return store.putOverlay(overlay, img.handle);
+    }
+
+    private JSONObject formatBandDetectionResponse(BandDetectionResult result, String overlayHandle, 
+                                                 BandDetectionParams params) {
+        SessionStore.ImageRecord img = store.getImage(params.imageHandle);
+        String analysisHandle = store.putAnalysis("bands", result.allBands, img.handle);
+        
+        // Ensure this image remains current for subsequent operations
+        store.setLastActiveImageHandle(img.handle);
+        
+        JSONObject data = new JSONObject()
+            .put("lanes_analyzed", result.lanes.size())
+            .put("bands_total", result.totalBands)
+            .put("overlay_handle", overlayHandle)
+            .put("analysis_handle", analysisHandle)
+            .put("image_handle", img.handle)
+            .put("parameters_used", new JSONObject()
+                .put("sensitivity", params.sensitivity)
+                .put("min_band_height", params.minBandHeight)
+                .put("prominence", params.prominence));
+        
+        return ok("detect_bands", data);
     }
     
     /**
@@ -939,7 +1051,7 @@ public class GelAnalysisTools {
             double housekeepingIntensity = getHousekeepingReferenceIntensity(rawResults, hkLaneIndex, hkBandIndex, enhancedAnalysis);
             
             if (housekeepingIntensity <= 0) {
-                System.err.println("Warning: Could not determine housekeeping reference intensity");
+                logger.warning("Could not determine housekeeping reference intensity");
                 return rawResults; // Return original results if normalization fails
             }
             
@@ -1003,7 +1115,7 @@ public class GelAnalysisTools {
             return normalizedResults;
             
         } catch (Exception e) {
-            System.err.println("Error applying PCR normalization: " + e.getMessage());
+            logger.log(Level.SEVERE, "Error applying PCR normalization", e);
             return rawResults; // Return original results if normalization fails
         }
     }
@@ -1055,7 +1167,7 @@ public class GelAnalysisTools {
             }
             
         } catch (Exception e) {
-            System.err.println("Error getting housekeeping reference: " + e.getMessage());
+            logger.log(Level.SEVERE, "Error getting housekeeping reference", e);
             return -1;
         }
     }
@@ -1857,15 +1969,14 @@ public class GelAnalysisTools {
     public JSONObject createLabeledReference(JSONObject args) {
         try {
             // Apply comprehensive handle protection
-            HandleGuard.HandleValidationResult protection = handleGuard.protectToolCall(args, "create_labeled_reference");
-            
-            if (!protection.isValid()) {
-                JSONObject errorResponse = protection.createErrorResponse();
-                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
-                return errorResponse;
+            JSONObject validationError = handleGuard.validateHandle(args, "create_labeled_reference");
+            if (validationError != null) {
+                validationError.put("memory_refresh", recovery.generateMemoryRefresh());
+                return validationError;
             }
             
-            SessionStore.ImageRecord img = store.getImage(protection.imageHandle);
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
             boolean includeIntensities = args.optBoolean("include_intensities", false);
             
             // Create comprehensive overlay with all available analysis data
@@ -1873,7 +1984,7 @@ public class GelAnalysisTools {
             int height = img.image.getHeight();
             
             // Add lanes if available
-            List<String> analyses = store.getAnalysesForImage(protection.imageHandle);
+            List<String> analyses = store.getAnalysesForImage(imageHandle);
             List<Lane> lanes = null;
             List<List<Band>> allBands = null;
             
@@ -1960,7 +2071,7 @@ public class GelAnalysisTools {
                     OverlayExporter.exportOverlayPNG(img.image, overlayOutputPath.toFile());
                     overlayPath = overlayOutputPath.toString();
                 } catch (IOException e) {
-                    System.err.println("Failed to export overlay PNG: " + e.getMessage());
+                    logger.log(Level.WARNING, "Failed to export overlay PNG", e);
                 }
             }
             
@@ -2006,15 +2117,14 @@ public class GelAnalysisTools {
     public JSONObject exportForNotebook(JSONObject args) {
         try {
             // Apply comprehensive handle protection
-            HandleGuard.HandleValidationResult protection = handleGuard.protectToolCall(args, "export_for_notebook");
-            
-            if (!protection.isValid()) {
-                JSONObject errorResponse = protection.createErrorResponse();
-                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
-                return errorResponse;
+            JSONObject validationError = handleGuard.validateHandle(args, "export_for_notebook");
+            if (validationError != null) {
+                validationError.put("memory_refresh", recovery.generateMemoryRefresh());
+                return validationError;
             }
             
-            SessionStore.ImageRecord img = store.getImage(protection.imageHandle);
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
             String filename = args.optString("filename", "gel_labeled_" + System.currentTimeMillis() + ".png");
             String outputDir = args.optString("output_directory", System.getProperty("user.home") + "/Downloads");
             boolean includeIntensities = args.optBoolean("include_intensities", false);
@@ -2023,7 +2133,7 @@ public class GelAnalysisTools {
             Path outputPath = Path.of(outputDir, filename);
             
             // Create labeled overlay optimized for notebooks
-            Overlay notebookOverlay = createExportOverlay(protection.imageHandle, includeIntensities, false);
+            Overlay notebookOverlay = createExportOverlay(imageHandle, includeIntensities, false);
             
             // Scale for notebook display
             ImagePlus exportImage = img.image.duplicate();
@@ -2066,15 +2176,14 @@ public class GelAnalysisTools {
     public JSONObject exportForPresentation(JSONObject args) {
         try {
             // Apply comprehensive handle protection
-            HandleGuard.HandleValidationResult protection = handleGuard.protectToolCall(args, "export_for_presentation");
-            
-            if (!protection.isValid()) {
-                JSONObject errorResponse = protection.createErrorResponse();
-                errorResponse.put("memory_refresh", recovery.generateMemoryRefresh());
-                return errorResponse;
+            JSONObject validationError = handleGuard.validateHandle(args, "export_for_presentation");
+            if (validationError != null) {
+                validationError.put("memory_refresh", recovery.generateMemoryRefresh());
+                return validationError;
             }
             
-            SessionStore.ImageRecord img = store.getImage(protection.imageHandle);
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord img = store.getImage(imageHandle);
             String title = args.optString("title", "Gel Electrophoresis Analysis");
             String filename = args.optString("filename", "gel_presentation_" + System.currentTimeMillis() + ".png");
             String outputDir = args.optString("output_directory", System.getProperty("user.home") + "/Downloads");
@@ -2082,7 +2191,7 @@ public class GelAnalysisTools {
             Path outputPath = Path.of(outputDir, filename);
             
             // Create presentation overlay
-            Overlay presentationOverlay = createPresentationOverlay(protection.imageHandle, title);
+            Overlay presentationOverlay = createPresentationOverlay(imageHandle, title);
             
             ImagePlus exportImage = img.image.duplicate();
             exportImage.setOverlay(presentationOverlay);
@@ -3546,149 +3655,259 @@ public class GelAnalysisTools {
      */
     public JSONObject compareTreatments(JSONObject args) {
         try {
-            // args: control_lanes[], treated_lanes[], mw_window[lo,hi]
-            ToolSchemaValidator.require(args, "control_lanes");
-            ToolSchemaValidator.require(args, "treated_lanes");
-            ToolSchemaValidator.require(args, "mw_window");
-            
-            String imageHandle = args.getString("image_handle");
-            SessionStore.ImageRecord rec = store.getImage(imageHandle);
-            if (rec == null) {
-                throw new IllegalArgumentException("Image not found: " + imageHandle);
-            }
-
-            // Get calibration model - required for treatment comparison
-            List<String> analyses = store.getAnalysesForImage(imageHandle);
-            CalibrationModel cal = null;
-            List<Lane> lanes = null;
-            List<List<Band>> allBands = null;
-            
-            for (String analysisHandle : analyses) {
-                SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
-                if ("calibration".equals(analysis.type)) {
-                    cal = (CalibrationModel) analysis.data;
-                } else if ("lanes".equals(analysis.type)) {
-                    @SuppressWarnings("unchecked")
-                    List<Lane> tempLanes = (List<Lane>) analysis.data;
-                    lanes = tempLanes;
-                } else if ("bands".equals(analysis.type)) {
-                    @SuppressWarnings("unchecked")
-                    List<List<Band>> tempBands = (List<List<Band>>) analysis.data;
-                    allBands = tempBands;
-                }
-            }
-
-            if (cal == null) {
-                throw new IllegalStateException("MW calibration required for treatment comparison. Run calibrate_molecular_weight first.");
-            }
-            if (lanes == null || allBands == null) {
-                throw new IllegalStateException("Lane and band detection required. Run detect_lanes and detect_bands first.");
-            }
-
-            // Parse control and treated lanes
-            JSONArray controlLanesJson = args.getJSONArray("control_lanes");
-            JSONArray treatedLanesJson = args.getJSONArray("treated_lanes");
-            JSONArray mwWindowJson = args.getJSONArray("mw_window");
-            
-            List<Integer> controlLanes = new ArrayList<>();
-            List<Integer> treatedLanes = new ArrayList<>();
-            
-            for (int i = 0; i < controlLanesJson.length(); i++) {
-                int laneIndex1 = controlLanesJson.getInt(i);
-                if (laneIndex1 >= 1 && laneIndex1 <= lanes.size()) {
-                    controlLanes.add(laneIndex1 - 1); // Convert to 0-based
-                }
-            }
-            
-            for (int i = 0; i < treatedLanesJson.length(); i++) {
-                int laneIndex1 = treatedLanesJson.getInt(i);
-                if (laneIndex1 >= 1 && laneIndex1 <= lanes.size()) {
-                    treatedLanes.add(laneIndex1 - 1); // Convert to 0-based
-                }
-            }
-            
-            double mwLo = mwWindowJson.getNumber(0).doubleValue();
-            double mwHi = mwWindowJson.getNumber(1).doubleValue();
-
-            JSONArray pairs = new JSONArray();
-
-            for (int k = 0; k < Math.min(controlLanes.size(), treatedLanes.size()); k++) {
-                int cLaneIdx = controlLanes.get(k);
-                int tLaneIdx = treatedLanes.get(k);
-                
-                if (cLaneIdx >= allBands.size() || tLaneIdx >= allBands.size()) continue;
-                
-                Lane cLane = lanes.get(cLaneIdx);
-                Lane tLane = lanes.get(tLaneIdx);
-                
-                List<Band> cBands = allBands.get(cLaneIdx);
-                List<Band> tBands = allBands.get(tLaneIdx);
-
-                // Create profiles for alignment
-                float[] pc = createSimpleProfile(rec.image, cLane);
-                float[] pt = createSimpleProfile(rec.image, tLane);
-                int delta = Profiles.alignByXcorr(pc, pt, 4);
-
-                // Collect bands within MW window
-                List<Band> cb = new ArrayList<>();
-                List<Band> tb = new ArrayList<>();
-                
-                for (Band b : cBands) { 
-                    double mw = Calibrator.assignMw(cal, b.y()); 
-                    if (mw >= mwLo && mw <= mwHi) cb.add(b); 
-                }
-                for (Band b : tBands) { 
-                    double mw = Calibrator.assignMw(cal, b.y() + delta); 
-                    if (mw >= mwLo && mw <= mwHi) tb.add(b); 
-                }
-
-                // Naive matching: for each control band, find closest treated by MW
-                for (Band bC : cb) {
-                    double mwC = Calibrator.assignMw(cal, bC.y());
-                    Band best = null; 
-                    double bestDm = 1e9;
-                    
-                    for (Band bT : tb) {
-                        double mwT = Calibrator.assignMw(cal, bT.y() + delta);
-                        double dm = Math.abs(mwC - mwT);
-                        if (dm < bestDm) { 
-                            bestDm = dm; 
-                            best = bT; 
-                        }
-                    }
-                    if (best == null) continue;
-
-                    double mwT = Calibrator.assignMw(cal, best.y() + delta);
-                    double dMw = mwT - mwC;
-
-                    // Sharpness change using Quant.sharpnessScore
-                    int iC = Math.max(0, Math.min(pc.length - 1, (int)Math.round(bC.y())));
-                    int iT = Math.max(0, Math.min(pt.length - 1, (int)Math.round(best.y() + delta)));
-                    double sC = Quant.sharpnessScore(pc, iC);
-                    double sT = Quant.sharpnessScore(pt, iT);
-
-                    pairs.put(new JSONObject()
-                        .put("control_lane", cLaneIdx + 1) // Convert back to 1-based
-                        .put("treated_lane", tLaneIdx + 1) // Convert back to 1-based
-                        .put("mw_control", mwC)
-                        .put("mw_treated", mwT)
-                        .put("delta_mw", dMw)
-                        .put("sharpness_control", sC)
-                        .put("sharpness_treated", sT)
-                        .put("delta_sharpness", sT - sC)
-                        .put("area_control", bC.area())
-                        .put("area_treated", best.area())
-                        .put("area_ratio", best.area() / Math.max(1e-9, bC.area())));
-                }
-            }
-
-            return ok("compare_treatments", new JSONObject()
-                .put("mw_window", new JSONArray().put(mwLo).put(mwHi))
-                .put("analysis", String.format("Treatment comparison for %.1f-%.1f kDa window", mwLo, mwHi))
-                .put("pairs", pairs));
-
+            TreatmentComparisonParams params = validateTreatmentComparisonParams(args);
+            AnalysisData analysisData = retrieveRequiredAnalysisData(params.imageHandle);
+            TreatmentComparisonResult result = performTreatmentComparison(analysisData, params);
+            return formatTreatmentComparisonResponse(result);
         } catch (Exception e) {
             return recovery.createRecoveryResponse("compare_treatments", e);
+        }
+    }
+
+    // Supporting classes for treatment comparison refactoring
+    private static class TreatmentComparisonParams {
+        final String imageHandle;
+        final List<Integer> controlLanes;
+        final List<Integer> treatedLanes;
+        final double mwLo;
+        final double mwHi;
+
+        TreatmentComparisonParams(String imageHandle, JSONArray controlLanesJson, JSONArray treatedLanesJson, 
+                                JSONArray mwWindowJson) {
+            this.imageHandle = imageHandle;
+            this.mwLo = mwWindowJson.getNumber(0).doubleValue();
+            this.mwHi = mwWindowJson.getNumber(1).doubleValue();
+
+            this.controlLanes = new ArrayList<>();
+            for (int i = 0; i < controlLanesJson.length(); i++) {
+                int laneIndex1 = controlLanesJson.getInt(i);
+                if (laneIndex1 >= 1) {
+                    this.controlLanes.add(laneIndex1 - 1); // Convert to 0-based
+                }
+            }
+
+            this.treatedLanes = new ArrayList<>();
+            for (int i = 0; i < treatedLanesJson.length(); i++) {
+                int laneIndex1 = treatedLanesJson.getInt(i);
+                if (laneIndex1 >= 1) {
+                    this.treatedLanes.add(laneIndex1 - 1); // Convert to 0-based
+                }
+            }
+        }
+    }
+
+    private static class TreatmentComparisonResult {
+        final double mwLo;
+        final double mwHi;
+        final JSONArray pairs;
+
+        TreatmentComparisonResult(double mwLo, double mwHi, JSONArray pairs) {
+            this.mwLo = mwLo;
+            this.mwHi = mwHi;
+            this.pairs = pairs;
+        }
+    }
+
+    private TreatmentComparisonParams validateTreatmentComparisonParams(JSONObject args) {
+        ToolSchemaValidator.require(args, "control_lanes");
+        ToolSchemaValidator.require(args, "treated_lanes");
+        ToolSchemaValidator.require(args, "mw_window");
+
+        String imageHandle = args.getString("image_handle");
+        SessionStore.ImageRecord rec = store.getImage(imageHandle);
+        if (rec == null) {
+            throw new IllegalArgumentException("Image not found: " + imageHandle);
+        }
+
+        JSONArray controlLanesJson = args.getJSONArray("control_lanes");
+        JSONArray treatedLanesJson = args.getJSONArray("treated_lanes");
+        JSONArray mwWindowJson = args.getJSONArray("mw_window");
+
+        return new TreatmentComparisonParams(imageHandle, controlLanesJson, treatedLanesJson, mwWindowJson);
+    }
+
+    private TreatmentComparisonResult performTreatmentComparison(AnalysisData data, TreatmentComparisonParams params) {
+        SessionStore.ImageRecord rec = store.getImage(params.imageHandle);
+        JSONArray pairs = new JSONArray();
+
+        for (int k = 0; k < Math.min(params.controlLanes.size(), params.treatedLanes.size()); k++) {
+            int cLaneIdx = params.controlLanes.get(k);
+            int tLaneIdx = params.treatedLanes.get(k);
+            
+            if (cLaneIdx >= data.allBands.size() || tLaneIdx >= data.allBands.size()) continue;
+            
+            Lane cLane = data.lanes.get(cLaneIdx);
+            Lane tLane = data.lanes.get(tLaneIdx);
+            List<Band> cBands = data.allBands.get(cLaneIdx);
+            List<Band> tBands = data.allBands.get(tLaneIdx);
+
+            // Analyze lane pair
+            JSONArray lanePairs = analyzeLanePair(rec, data.calibration, cLane, tLane, 
+                                               cBands, tBands, cLaneIdx, tLaneIdx, 
+                                               params.mwLo, params.mwHi);
+            for (int i = 0; i < lanePairs.length(); i++) {
+                pairs.put(lanePairs.get(i));
+            }
+        }
+
+        return new TreatmentComparisonResult(params.mwLo, params.mwHi, pairs);
+    }
+
+    private JSONArray analyzeLanePair(SessionStore.ImageRecord rec, CalibrationModel cal,
+                                     Lane cLane, Lane tLane, List<Band> cBands, List<Band> tBands,
+                                     int cLaneIdx, int tLaneIdx, double mwLo, double mwHi) {
+        // Create profiles for alignment
+        float[] pc = createSimpleProfile(rec.image, cLane);
+        float[] pt = createSimpleProfile(rec.image, tLane);
+        int delta = Profiles.alignByXcorr(pc, pt, 4);
+
+        // Collect bands within MW window
+        List<Band> cb = collectBandsInMWWindow(cBands, cal, mwLo, mwHi, 0);
+        List<Band> tb = collectBandsInMWWindow(tBands, cal, mwLo, mwHi, delta);
+
+        return matchAndAnalyzeBands(cb, tb, cal, pc, pt, delta, cLaneIdx, tLaneIdx);
+    }
+
+    private List<Band> collectBandsInMWWindow(List<Band> bands, CalibrationModel cal, 
+                                            double mwLo, double mwHi, int deltaY) {
+        List<Band> filtered = new ArrayList<>();
+        for (Band b : bands) {
+            double mw = Calibrator.assignMw(cal, b.y() + deltaY);
+            if (mw >= mwLo && mw <= mwHi) {
+                filtered.add(b);
+            }
+        }
+        return filtered;
+    }
+
+    private JSONArray matchAndAnalyzeBands(List<Band> controlBands, List<Band> treatedBands,
+                                         CalibrationModel cal, float[] pcProfile, float[] ptProfile,
+                                         int delta, int cLaneIdx, int tLaneIdx) {
+        JSONArray pairs = new JSONArray();
+        
+        for (Band bC : controlBands) {
+            double mwC = Calibrator.assignMw(cal, bC.y());
+            Band bestMatch = findBestMWMatch(treatedBands, cal, mwC, delta);
+            
+            if (bestMatch != null) {
+                JSONObject pair = createBandComparisonPair(bC, bestMatch, cal, pcProfile, ptProfile,
+                                                         delta, cLaneIdx, tLaneIdx);
+                pairs.put(pair);
+            }
+        }
+        
+        return pairs;
+    }
+
+    private Band findBestMWMatch(List<Band> bands, CalibrationModel cal, double targetMw, int delta) {
+        Band best = null;
+        double bestDiff = Double.MAX_VALUE;
+        
+        for (Band b : bands) {
+            double mw = Calibrator.assignMw(cal, b.y() + delta);
+            double diff = Math.abs(targetMw - mw);
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                best = b;
+            }
+        }
+        
+        return best;
+    }
+
+    private JSONObject createBandComparisonPair(Band controlBand, Band treatedBand, CalibrationModel cal,
+                                              float[] pcProfile, float[] ptProfile, int delta,
+                                              int cLaneIdx, int tLaneIdx) {
+        double mwC = Calibrator.assignMw(cal, controlBand.y());
+        double mwT = Calibrator.assignMw(cal, treatedBand.y() + delta);
+        
+        // Calculate sharpness scores
+        int iC = Math.max(0, Math.min(pcProfile.length - 1, (int)Math.round(controlBand.y())));
+        int iT = Math.max(0, Math.min(ptProfile.length - 1, (int)Math.round(treatedBand.y() + delta)));
+        double sC = Quant.sharpnessScore(pcProfile, iC);
+        double sT = Quant.sharpnessScore(ptProfile, iT);
+
+        return new JSONObject()
+            .put("control_lane", cLaneIdx + 1)
+            .put("treated_lane", tLaneIdx + 1)
+            .put("mw_control", mwC)
+            .put("mw_treated", mwT)
+            .put("delta_mw", mwT - mwC)
+            .put("sharpness_control", sC)
+            .put("sharpness_treated", sT)
+            .put("delta_sharpness", sT - sC)
+            .put("area_control", controlBand.area())
+            .put("area_treated", treatedBand.area())
+            .put("area_ratio", treatedBand.area() / Math.max(1e-9, controlBand.area()));
+    }
+
+    private JSONObject formatTreatmentComparisonResponse(TreatmentComparisonResult result) {
+        return ok("compare_treatments", new JSONObject()
+            .put("mw_window", new JSONArray().put(result.mwLo).put(result.mwHi))
+            .put("analysis", String.format("Treatment comparison for %.1f-%.1f kDa window", 
+                result.mwLo, result.mwHi))
+            .put("pairs", result.pairs));
+    }
+
+    // Supporting classes for digestKinetics refactoring
+    private static class DigestKineticsParams {
+        final String imageHandle;
+        final List<Integer> targetLanes;
+        final List<Double> times;
+        final double parentMw;
+        final double windowPct;
+        
+        DigestKineticsParams(String imageHandle, JSONArray lanesJson, JSONArray timesJson, 
+                           double parentMw, double windowPct) {
+            this.imageHandle = imageHandle;
+            this.parentMw = parentMw;
+            this.windowPct = windowPct;
+            
+            this.targetLanes = new ArrayList<>();
+            for (int i = 0; i < lanesJson.length(); i++) {
+                int laneIndex1 = lanesJson.getInt(i);
+                if (laneIndex1 >= 1) {
+                    this.targetLanes.add(laneIndex1 - 1); // Convert to 0-based
+                }
+            }
+            
+            this.times = new ArrayList<>();
+            for (int i = 0; i < timesJson.length(); i++) {
+                this.times.add(timesJson.getNumber(i).doubleValue());
+            }
+        }
+    }
+    
+    private static class AnalysisData {
+        final CalibrationModel calibration;
+        final List<Lane> lanes;
+        final List<List<Band>> allBands;
+        
+        AnalysisData(CalibrationModel calibration, List<Lane> lanes, List<List<Band>> allBands) {
+            this.calibration = calibration;
+            this.lanes = lanes;
+            this.allBands = allBands;
+        }
+    }
+    
+    private static class DigestKineticsResult {
+        final double parentMw;
+        final double windowPct;
+        final double kPerMin;
+        final double tHalfMin;
+        final double rSquared;
+        final JSONArray timeSeries;
+        final JSONArray fragments;
+        
+        DigestKineticsResult(double parentMw, double windowPct, double kPerMin, 
+                           double tHalfMin, double rSquared, JSONArray timeSeries, JSONArray fragments) {
+            this.parentMw = parentMw;
+            this.windowPct = windowPct;
+            this.kPerMin = kPerMin;
+            this.tHalfMin = tHalfMin;
+            this.rSquared = rSquared;
+            this.timeSeries = timeSeries;
+            this.fragments = fragments;
         }
     }
 
@@ -3698,178 +3917,212 @@ public class GelAnalysisTools {
      */
     public JSONObject digestKinetics(JSONObject args) {
         try {
-            // args: lanes [2..N], times_min [...], parent_mw_kda, window_pct(=15)
-            ToolSchemaValidator.require(args, "lanes");
-            ToolSchemaValidator.require(args, "times_min");
-            ToolSchemaValidator.require(args, "parent_mw_kda");
-            
-            String imageHandle = args.getString("image_handle");
-            SessionStore.ImageRecord rec = store.getImage(imageHandle);
-            if (rec == null) {
-                throw new IllegalArgumentException("Image not found: " + imageHandle);
-            }
-
-            // Get required analysis data
-            List<String> analyses = store.getAnalysesForImage(imageHandle);
-            CalibrationModel cal = null;
-            List<Lane> lanes = null;
-            List<List<Band>> allBands = null;
-            
-            for (String analysisHandle : analyses) {
-                SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
-                if ("calibration".equals(analysis.type)) {
-                    cal = (CalibrationModel) analysis.data;
-                } else if ("lanes".equals(analysis.type)) {
-                    @SuppressWarnings("unchecked")
-                    List<Lane> tempLanes = (List<Lane>) analysis.data;
-                    lanes = tempLanes;
-                } else if ("bands".equals(analysis.type)) {
-                    @SuppressWarnings("unchecked")
-                    List<List<Band>> tempBands = (List<List<Band>>) analysis.data;
-                    allBands = tempBands;
-                }
-            }
-
-            if (cal == null) {
-                throw new IllegalStateException("MW calibration required for digest kinetics. Run calibrate_molecular_weight first.");
-            }
-            if (lanes == null || allBands == null) {
-                throw new IllegalStateException("Lane and band detection required. Run detect_lanes and detect_bands first.");
-            }
-
-            // Parse parameters
-            JSONArray lanesJson = args.getJSONArray("lanes");
-            JSONArray timesJson = args.getJSONArray("times_min");
-            double parentMw = args.getNumber("parent_mw_kda").doubleValue();
-            double windowPct = args.has("window_pct") ? args.getNumber("window_pct").doubleValue() : 15.0;
-
-            if (timesJson.length() != lanesJson.length()) {
-                throw new IllegalArgumentException("times_min length must equal number of lanes");
-            }
-
-            // Convert lanes to 0-based indices
-            List<Integer> targetLanes = new ArrayList<>();
-            for (int i = 0; i < lanesJson.length(); i++) {
-                int laneIndex1 = lanesJson.getInt(i);
-                if (laneIndex1 >= 1 && laneIndex1 <= lanes.size()) {
-                    targetLanes.add(laneIndex1 - 1); // Convert to 0-based
-                }
-            }
-
-            // Parent decay analysis: fit ln(I) = ln(I0) - k*t
-            List<Double> t = new ArrayList<>();
-            List<Double> y = new ArrayList<>();
-            JSONArray series = new JSONArray();
-
-            for (int i = 0; i < targetLanes.size(); i++) {
-                int laneIdx = targetLanes.get(i);
-                if (laneIdx >= allBands.size()) continue;
-                
-                double ti = timesJson.getNumber(i).doubleValue();
-                List<Band> bandsInLane = allBands.get(laneIdx);
-                Band parent = Peaks.closestByMw(bandsInLane, cal, parentMw, windowPct);
-                double area = (parent == null) ? 0.0 : Math.max(1e-9, parent.area());
-                
-                t.add(ti); 
-                y.add(Math.log(area));
-                series.put(new JSONObject()
-                    .put("t_min", ti)
-                    .put("lane", laneIdx + 1) // Convert back to 1-based
-                    .put("parent_area", area)
-                    .put("parent_present", parent != null));
-            }
-
-            // OLS fit y = a + b*t; k = -b; t_half = ln(2)/k
-            double sx = 0, sy = 0, sxx = 0, sxy = 0;
-            int n = t.size();
-            for (int i = 0; i < n; i++) { 
-                sx += t.get(i); 
-                sy += y.get(i); 
-            }
-            double tx = sx / n, ty = sy / n;
-            for (int i = 0; i < n; i++) { 
-                double dx = t.get(i) - tx, dy = y.get(i) - ty; 
-                sxx += dx * dx; 
-                sxy += dx * dy; 
-            }
-            double b = (sxx > 0) ? sxy / sxx : 0.0; 
-            double k = -b;
-            double tHalf = (k > 0) ? (Math.log(2.0) / k) : Double.POSITIVE_INFINITY;
-            double r2 = 0.0;
-            if (sxx > 0) {
-                double syy = 0;
-                for (int i = 0; i < n; i++) {
-                    double dy = y.get(i) - ty;
-                    syy += dy * dy;
-                }
-                r2 = (syy > 0) ? (sxy * sxy) / (sxx * syy) : 0.0;
-            }
-
-            // Fragment emergence analysis
-            JSONArray fragments = new JSONArray();
-            
-            // Collect candidate fragments across all time points
-            Map<String, List<Double>> fragmentAreasByMw = new HashMap<>();
-            Map<String, Double> fragmentMws = new HashMap<>();
-            
-            for (int i = 0; i < targetLanes.size(); i++) {
-                int laneIdx = targetLanes.get(i);
-                if (laneIdx >= allBands.size()) continue;
-                
-                List<Band> bandsInLane = allBands.get(laneIdx);
-                for (Band band : bandsInLane) {
-                    double mw = Calibrator.assignMw(cal, band.y());
-                    if (Double.isNaN(mw) || mw >= parentMw * 0.98) continue; // Skip parent and higher MW
-                    
-                    // Use MW as key (rounded to 0.1 kDa for grouping similar fragments)
-                    String mwKey = String.format("%.1f", mw);
-                    fragmentAreasByMw.computeIfAbsent(mwKey, key -> new ArrayList<>()).add(Math.max(0.0, band.area()));
-                    fragmentMws.putIfAbsent(mwKey, mw);
-                }
-            }
-            
-            // Analyze fragments that appear in all time points and show increasing trend
-            for (Map.Entry<String, List<Double>> entry : fragmentAreasByMw.entrySet()) {
-                List<Double> areas = entry.getValue();
-                if (areas.size() != n) continue; // Require presence in all time points
-                
-                // Calculate slope: cov(t, area) / var(t)
-                double sx2 = 0, sy2 = 0, sxx2 = 0, sxy2 = 0;
-                for (int i = 0; i < n; i++) { 
-                    sx2 += t.get(i); 
-                    sy2 += areas.get(i); 
-                }
-                double tx2 = sx2 / n, ty2 = sy2 / n;
-                for (int i = 0; i < n; i++) { 
-                    double dx = t.get(i) - tx2, dy = areas.get(i) - ty2; 
-                    sxx2 += dx * dx; 
-                    sxy2 += dx * dy; 
-                }
-                double slope = (sxx2 > 0) ? sxy2 / sxx2 : 0.0;
-                
-                if (slope > 0.1) { // Only include fragments with meaningful increase
-                    fragments.put(new JSONObject()
-                        .put("mw_kda", fragmentMws.get(entry.getKey()))
-                        .put("slope_area_per_min", slope)
-                        .put("initial_area", areas.get(0))
-                        .put("final_area", areas.get(areas.size() - 1)));
-                }
-            }
-
-            return ok("digest_kinetics", new JSONObject()
-                .put("parent_mw_kda", parentMw)
-                .put("window_pct", windowPct)
-                .put("k_per_min", k)
-                .put("t_half_min", tHalf)
-                .put("r_squared", r2)
-                .put("analysis", String.format("Digest kinetics for %.1f kDa parent protein (k=%.4f/min, t½=%.1f min)", 
-                    parentMw, k, tHalf))
-                .put("time_series", series)
-                .put("fragments", fragments));
-
+            DigestKineticsParams params = validateDigestKineticsParams(args);
+            AnalysisData analysisData = retrieveRequiredAnalysisData(params.imageHandle);
+            DigestKineticsResult result = performDigestKineticsAnalysis(analysisData, params);
+            return formatDigestKineticsResponse(result);
         } catch (Exception e) {
             return recovery.createRecoveryResponse("digest_kinetics", e);
         }
+    }
+
+    private DigestKineticsParams validateDigestKineticsParams(JSONObject args) {
+        ToolSchemaValidator.require(args, "lanes");
+        ToolSchemaValidator.require(args, "times_min");
+        ToolSchemaValidator.require(args, "parent_mw_kda");
+        
+        String imageHandle = args.getString("image_handle");
+        SessionStore.ImageRecord rec = store.getImage(imageHandle);
+        if (rec == null) {
+            throw new IllegalArgumentException("Image not found: " + imageHandle);
+        }
+
+        JSONArray lanesJson = args.getJSONArray("lanes");
+        JSONArray timesJson = args.getJSONArray("times_min");
+        double parentMw = args.getNumber("parent_mw_kda").doubleValue();
+        double windowPct = args.has("window_pct") ? args.getNumber("window_pct").doubleValue() : 15.0;
+
+        if (timesJson.length() != lanesJson.length()) {
+            throw new IllegalArgumentException("times_min length must equal number of lanes");
+        }
+
+        return new DigestKineticsParams(imageHandle, lanesJson, timesJson, parentMw, windowPct);
+    }
+
+    private AnalysisData retrieveRequiredAnalysisData(String imageHandle) {
+        List<String> analyses = store.getAnalysesForImage(imageHandle);
+        CalibrationModel cal = null;
+        List<Lane> lanes = null;
+        List<List<Band>> allBands = null;
+        
+        for (String analysisHandle : analyses) {
+            SessionStore.AnalysisRecord analysis = store.getAnalysis(analysisHandle);
+            if ("calibration".equals(analysis.type)) {
+                cal = (CalibrationModel) analysis.data;
+            } else if ("lanes".equals(analysis.type)) {
+                @SuppressWarnings("unchecked")
+                List<Lane> tempLanes = (List<Lane>) analysis.data;
+                lanes = tempLanes;
+            } else if ("bands".equals(analysis.type)) {
+                @SuppressWarnings("unchecked")
+                List<List<Band>> tempBands = (List<List<Band>>) analysis.data;
+                allBands = tempBands;
+            }
+        }
+
+        if (cal == null) {
+            throw new IllegalStateException("MW calibration required for digest kinetics. Run calibrate_molecular_weight first.");
+        }
+        if (lanes == null || allBands == null) {
+            throw new IllegalStateException("Lane and band detection required. Run detect_lanes and detect_bands first.");
+        }
+
+        return new AnalysisData(cal, lanes, allBands);
+    }
+
+    private DigestKineticsResult performDigestKineticsAnalysis(AnalysisData data, DigestKineticsParams params) {
+        // Perform parent decay analysis
+        JSONArray series = new JSONArray();
+        List<Double> t = new ArrayList<>();
+        List<Double> y = new ArrayList<>();
+        
+        for (int i = 0; i < params.targetLanes.size(); i++) {
+            int laneIdx = params.targetLanes.get(i);
+            if (laneIdx >= data.allBands.size()) continue;
+            
+            double ti = params.times.get(i);
+            List<Band> bandsInLane = data.allBands.get(laneIdx);
+            Band parent = Peaks.closestByMw(bandsInLane, data.calibration, params.parentMw, params.windowPct);
+            double area = (parent == null) ? 0.0 : Math.max(1e-9, parent.area());
+            
+            t.add(ti);
+            y.add(Math.log(area));
+            series.put(new JSONObject()
+                .put("t_min", ti)
+                .put("lane", laneIdx + 1)
+                .put("parent_area", area)
+                .put("parent_present", parent != null));
+        }
+        
+        // Calculate kinetics parameters using OLS
+        double[] kineticsParams = calculateKineticsParameters(t, y);
+        double kPerMin = kineticsParams[0];
+        double tHalfMin = kineticsParams[1];
+        double rSquared = kineticsParams[2];
+        
+        // Analyze fragment emergence
+        JSONArray fragments = analyzeFragmentEmergence(data, params, t);
+        
+        return new DigestKineticsResult(params.parentMw, params.windowPct, kPerMin, 
+                                      tHalfMin, rSquared, series, fragments);
+    }
+
+    private double[] calculateKineticsParameters(List<Double> t, List<Double> y) {
+        int n = t.size();
+        if (n < 2) return new double[]{0.0, Double.POSITIVE_INFINITY, 0.0};
+        
+        // OLS fit y = a + b*t; k = -b; t_half = ln(2)/k
+        double sx = 0, sy = 0, sxx = 0, sxy = 0;
+        for (int i = 0; i < n; i++) {
+            sx += t.get(i);
+            sy += y.get(i);
+        }
+        double tx = sx / n, ty = sy / n;
+        for (int i = 0; i < n; i++) {
+            double dx = t.get(i) - tx, dy = y.get(i) - ty;
+            sxx += dx * dx;
+            sxy += dx * dy;
+        }
+        
+        double b = (sxx > 0) ? sxy / sxx : 0.0;
+        double k = -b;
+        double tHalf = (k > 0) ? (Math.log(2.0) / k) : Double.POSITIVE_INFINITY;
+        
+        // Calculate R²
+        double r2 = 0.0;
+        if (sxx > 0) {
+            double syy = 0;
+            for (int i = 0; i < n; i++) {
+                double dy = y.get(i) - ty;
+                syy += dy * dy;
+            }
+            r2 = (syy > 0) ? (sxy * sxy) / (sxx * syy) : 0.0;
+        }
+        
+        return new double[]{k, tHalf, r2};
+    }
+
+    private JSONArray analyzeFragmentEmergence(AnalysisData data, DigestKineticsParams params, List<Double> t) {
+        JSONArray fragments = new JSONArray();
+        Map<String, List<Double>> fragmentAreasByMw = new HashMap<>();
+        Map<String, Double> fragmentMws = new HashMap<>();
+        
+        // Collect fragments across time points
+        for (int i = 0; i < params.targetLanes.size(); i++) {
+            int laneIdx = params.targetLanes.get(i);
+            if (laneIdx >= data.allBands.size()) continue;
+            
+            List<Band> bandsInLane = data.allBands.get(laneIdx);
+            for (Band band : bandsInLane) {
+                double mw = Calibrator.assignMw(data.calibration, band.y());
+                if (Double.isNaN(mw) || mw >= params.parentMw * 0.98) continue;
+                
+                String mwKey = String.format("%.1f", mw);
+                fragmentAreasByMw.computeIfAbsent(mwKey, key -> new ArrayList<>())
+                    .add(Math.max(0.0, band.area()));
+                fragmentMws.putIfAbsent(mwKey, mw);
+            }
+        }
+        
+        // Analyze increasing fragments
+        int n = t.size();
+        for (Map.Entry<String, List<Double>> entry : fragmentAreasByMw.entrySet()) {
+            List<Double> areas = entry.getValue();
+            if (areas.size() != n) continue;
+            
+            double slope = calculateSlope(t, areas);
+            if (slope > 0.1) {
+                fragments.put(new JSONObject()
+                    .put("mw_kda", fragmentMws.get(entry.getKey()))
+                    .put("slope_area_per_min", slope)
+                    .put("initial_area", areas.get(0))
+                    .put("final_area", areas.get(areas.size() - 1)));
+            }
+        }
+        
+        return fragments;
+    }
+
+    private double calculateSlope(List<Double> x, List<Double> y) {
+        int n = x.size();
+        if (n < 2) return 0.0;
+        
+        double sx = 0, sy = 0, sxx = 0, sxy = 0;
+        for (int i = 0; i < n; i++) {
+            sx += x.get(i);
+            sy += y.get(i);
+        }
+        double mx = sx / n, my = sy / n;
+        for (int i = 0; i < n; i++) {
+            double dx = x.get(i) - mx, dy = y.get(i) - my;
+            sxx += dx * dx;
+            sxy += dx * dy;
+        }
+        
+        return (sxx > 0) ? sxy / sxx : 0.0;
+    }
+
+    private JSONObject formatDigestKineticsResponse(DigestKineticsResult result) {
+        return ok("digest_kinetics", new JSONObject()
+            .put("parent_mw_kda", result.parentMw)
+            .put("window_pct", result.windowPct)
+            .put("k_per_min", result.kPerMin)
+            .put("t_half_min", result.tHalfMin)
+            .put("r_squared", result.rSquared)
+            .put("analysis", String.format("Digest kinetics for %.1f kDa parent protein (k=%.4f/min, t½=%.1f min)",
+                result.parentMw, result.kPerMin, result.tHalfMin))
+            .put("time_series", result.timeSeries)
+            .put("fragments", result.fragments));
     }
     
     /**
