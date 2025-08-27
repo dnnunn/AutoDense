@@ -3,102 +3,121 @@ package com.betterdairy.autodense.tools;
 import org.json.JSONObject;
 import com.betterdairy.autodense.session.SessionStore;
 import com.betterdairy.autodense.session.SessionRecovery;
+import com.betterdairy.autodense.util.ErrorHandler;
+import com.betterdairy.autodense.session.SessionLogger;
 
 /**
- * Utility class for preventing Gemini from losing image handles
- * Implements server-side guards and prompt guidance
+ * Utility class for handle validation with standardized error responses
+ * NO AUTO-INJECTION: Fail-fast approach for data integrity
  */
 public class HandleGuard {
     
     private final SessionStore store;
     private final SessionRecovery recovery;
+    private final SessionLogger logger;
+    
+    // Standardized error codes for API responses
+    private static final String ERROR_MISSING_HANDLE = "MISSING_HANDLE";
+    private static final String ERROR_INVALID_HANDLE = "INVALID_HANDLE";
+    private static final String ERROR_HANDLE_NOT_FOUND = "HANDLE_NOT_FOUND";
     
     public HandleGuard(SessionStore store, SessionRecovery recovery) {
         this.store = store;
         this.recovery = recovery;
+        this.logger = null; // Will be injected when available
+    }
+    
+    public HandleGuard(SessionStore store, SessionRecovery recovery, SessionLogger logger) {
+        this.store = store;
+        this.recovery = recovery;
+        this.logger = logger;
     }
     
     /**
-     * Apply comprehensive handle protection for a tool call
-     * 1. Auto-inject missing handles from session
-     * 2. Validate handles with recovery
-     * 3. Add guidance to prevent future handle loss
+     * Validate handle with standardized error responses - NO AUTO-INJECTION
+     * Returns standardized error JSON or null if valid
      */
-    public HandleValidationResult protectToolCall(JSONObject args, String toolName) {
-        // Step 1: Server-side handle injection guard
-        String imageHandle = ensureImageHandle(args, toolName);
-        
-        // Step 2: Enhanced validation with guidance
-        JSONObject validation = validateWithGuidance(imageHandle, "image", toolName);
-        
-        return new HandleValidationResult(imageHandle, validation);
-    }
-    
-    /**
-     * Auto-inject missing image_handle from current session
-     */
-    private String ensureImageHandle(JSONObject args, String toolName) {
+    public JSONObject validateHandle(JSONObject args, String toolName) {
         String imageHandle = args.optString("image_handle", "");
         
-        // If no handle provided, try to inject current image handle
-        if (imageHandle.isEmpty() && store.hasCurrentImage()) {
-            imageHandle = store.getCurrentImage().handle;
-            System.err.println("WARNING: " + toolName + " missing image_handle - auto-injected: " + imageHandle);
-            args.put("image_handle", imageHandle); // Update args for consistency
+        // FAIL FAST: Missing handle
+        if (imageHandle.isEmpty()) {
+            logToSession(toolName, "Missing image_handle parameter", "VALIDATION_ERROR");
+            return createStandardizedError(ERROR_MISSING_HANDLE, 
+                "Missing required parameter: image_handle", "image_handle");
         }
         
-        return imageHandle;
-    }
-    
-    /**
-     * Enhanced validation with prompt guidance for Gemini
-     */
-    private JSONObject validateWithGuidance(String handle, String type, String toolName) {
-        JSONObject validation = recovery.validateHandle(handle, type);
-        
-        if (!validation.getBoolean("valid")) {
-            // Add guidance for Gemini to prevent future handle loss
-            validation.put("prompt_guidance", 
-                "CRITICAL: Always include the image_handle parameter in ALL subsequent tool calls. " +
-                "Use image_handle='" + (store.hasCurrentImage() ? store.getCurrentImage().handle : "img_xxx") + 
-                "' for all operations on this image. Never omit this parameter.");
+        // FAIL FAST: Invalid handle format
+        if (!isValidHandleFormat(imageHandle)) {
+            logToSession(toolName, "Invalid handle format: " + imageHandle, "VALIDATION_ERROR");
+            return createStandardizedError(ERROR_INVALID_HANDLE,
+                "Invalid handle format. Expected: img_XXXXXX", "image_handle");
         }
         
-        return validation;
+        // FAIL FAST: Handle not found in session
+        if (store.getImage(imageHandle) == null) {
+            logToSession(toolName, "Handle not found in session: " + imageHandle, "VALIDATION_ERROR");
+            return createStandardizedError(ERROR_HANDLE_NOT_FOUND,
+                "Image handle not found in session", "image_handle");
+        }
+        
+        // Success - handle is valid
+        logToSession(toolName, "Handle validation successful: " + imageHandle, "VALIDATION_SUCCESS");
+        return null;
     }
     
     /**
-     * Add handle persistence guidance to successful responses
+     * Create standardized error response - NO INTERNAL GUIDANCE
      */
-    public JSONObject addPersistenceGuidance(JSONObject response, String imageHandle) {
-        response.put("handle_guidance", 
-            "REMEMBER: Use image_handle='" + imageHandle + "' for all subsequent tool calls on this image");
-        return response;
+    private JSONObject createStandardizedError(String errorCode, String message, String parameter) {
+        JSONObject error = new JSONObject();
+        error.put("ok", false);
+        error.put("error_code", errorCode);
+        error.put("error_message", message);
+        error.put("error_parameter", parameter);
+        error.put("timestamp", System.currentTimeMillis());
+        return error;
     }
     
     /**
-     * Result container for handle validation
+     * Validate handle format (img_XXXXXX pattern)
      */
+    private boolean isValidHandleFormat(String handle) {
+        return handle != null && handle.matches("^img_[a-zA-Z0-9]{6}$");
+    }
+    
+    /**
+     * Log to session if logger available, otherwise system err
+     */
+    private void logToSession(String toolName, String message, String level) {
+        String logMessage = String.format("[%s] %s: %s", level, toolName, message);
+        // Always use system logging for now (SessionLogger integration can be added later)
+        System.err.println("HandleGuard: " + logMessage);
+    }
+    
+    /**
+     * Simplified validation result - error JSONObject or null if valid
+     * NO MORE COMPLEX RESULT CONTAINERS - keep it simple and standardized
+     */
+    @Deprecated
     public static class HandleValidationResult {
         public final String imageHandle;
         public final JSONObject validation;
         
+        @Deprecated
         public HandleValidationResult(String imageHandle, JSONObject validation) {
             this.imageHandle = imageHandle;
             this.validation = validation;
         }
         
+        @Deprecated
         public boolean isValid() {
-            return validation.getBoolean("valid");
+            return validation == null || validation.optBoolean("ok", false);
         }
         
+        @Deprecated
         public JSONObject createErrorResponse() {
-            JSONObject errorResponse = new JSONObject();
-            errorResponse.put("error", true);
-            errorResponse.put("error_type", "invalid_handle");
-            errorResponse.put("message", validation.getString("message"));
-            errorResponse.put("validation", validation);
-            return errorResponse;
+            return validation; // Validation is already standardized error or null
         }
     }
 }

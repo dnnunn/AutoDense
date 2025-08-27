@@ -100,23 +100,33 @@ public class GelAnalysisTools {
     }
     
     /**
-     * Enforce handle discipline - ensure image_handle is present or inject last active
-     * Returns error JSONObject if handle cannot be resolved, null if successful
+     * Enforce handle discipline - FAIL FAST if image_handle is missing
+     * Returns error JSONObject if handle is missing, null if successful
+     * 
+     * CRITICAL: No silent injection - explicit handles required for data integrity
      */
     private JSONObject enforceHandleDiscipline(JSONObject args) {
-        // Before dispatch
-        if (!args.has("image_handle") || args.isNull("image_handle")) {
-            var last = store.lastActiveImageHandle();
-            if (last != null) {
-                args.put("image_handle", last);
-                // Note: SessionLogger not directly accessible here, would need to be passed in
-                // sessionLogger.warn("tool_call", "Injected missing image_handle=" + last);
-                System.out.println("DEBUG: Injected missing image_handle=" + last);
-            } else {
-                return fail(ERROR_MISSING_REQUIRED_FIELD, "image_handle is required", "image_handle");
-            }
+        // FAIL FAST: Require explicit image_handle parameter
+        if (!args.has("image_handle") || args.isNull("image_handle") || 
+            args.getString("image_handle").trim().isEmpty()) {
+            
+            return fail(ERROR_MISSING_REQUIRED_FIELD, 
+                "Explicit image_handle parameter is required. " +
+                "Silent injection disabled to prevent stale image operations. " +
+                "Include image_handle from open_image result in ALL tool calls.",
+                "image_handle");
         }
-        return null; // Success
+        
+        // Validate handle exists in session
+        String handle = args.getString("image_handle");
+        if (store.getImage(handle) == null) {
+            return fail(ERROR_IMAGE_NOT_FOUND, 
+                "Image handle '" + handle + "' not found in session. " +
+                "Ensure you use the exact handle returned by open_image.",
+                "image_handle");
+        }
+        
+        return null; // Success - explicit handle present and valid
     }
     
     /**

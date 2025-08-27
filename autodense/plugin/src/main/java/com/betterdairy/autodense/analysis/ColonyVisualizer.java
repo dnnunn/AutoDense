@@ -37,8 +37,16 @@ public final class ColonyVisualizer {
      * @param pxPerMM Pixels per millimeter for size scaling
      * @param showLabels Whether to show a legend
      * @return Overlay with colored colony dots
+     * @deprecated Use OverlayRenderer.createClassificationOverlay() instead
      */
+    @Deprecated
     public static Overlay createClassificationOverlay(List<MutableColony> colonies, double pxPerMM, boolean showLabels) {
+        // RUNTIME DEPRECATION WARNING
+        System.err.println("WARNING: ColonyVisualizer.createClassificationOverlay() is deprecated. " +
+                         "Migrate to OverlayRenderer when colony methods are available. " +
+                         "This method will be removed in the next release.");
+        
+        // FALLBACK: Use current implementation until OverlayRenderer supports colonies
         Overlay overlay = new Overlay();
         
         // Draw colony dots
@@ -183,9 +191,16 @@ public final class ColonyVisualizer {
      * @param minRadius Minimum dot radius in pixels
      * @param maxRadius Maximum dot radius in pixels
      * @return Overlay with size-scaled dots
+     * @deprecated Migrate to OverlayRenderer when available
      */
+    @Deprecated
     public static Overlay createSizeProportionalOverlay(List<MutableColony> colonies, double pxPerMM, 
                                                         double minRadius, double maxRadius) {
+        // RUNTIME DEPRECATION WARNING
+        System.err.println("WARNING: ColonyVisualizer.createSizeProportionalOverlay() is deprecated. " +
+                         "Migrate to OverlayRenderer when colony methods are available.");
+        
+        // FALLBACK: Use current implementation
         Overlay overlay = new Overlay();
         
         // Find size range for scaling
@@ -219,8 +234,15 @@ public final class ColonyVisualizer {
     
     /**
      * Apply overlay to image
+     * @deprecated Migrate to OverlayRenderer when available
      */
+    @Deprecated
     public static void applyOverlay(ImagePlus image, List<MutableColony> colonies, double pxPerMM, boolean showLegend) {
+        // RUNTIME DEPRECATION WARNING
+        System.err.println("WARNING: ColonyVisualizer.applyOverlay() is deprecated. " +
+                         "Migrate to OverlayRenderer when colony methods are available.");
+        
+        // FALLBACK: Use current implementation
         Overlay overlay = createClassificationOverlay(colonies, pxPerMM, showLegend);
         image.setOverlay(overlay);
         image.updateAndDraw();

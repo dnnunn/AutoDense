@@ -27,7 +27,7 @@ public final class ColonyAnalysisTools {
     private final SessionStorageMigrator.CompatibilityLayer compatibility;
     
     /**
-     * Validated storage operation wrapper
+     * Validated storage operation wrapper - ENFORCES standardized keys
      */
     private String putAnalysisWithValidation(String storageKey, Object data, String imageHandle) {
         // Basic validation
@@ -38,9 +38,12 @@ public final class ColonyAnalysisTools {
             throw new IllegalArgumentException("Image handle cannot be null or empty");
         }
         
-        // Validate key format (warn if not standardized, but don't fail)
+        // FAIL FAST: Reject non-standardized keys to ensure data consistency
         if (!SessionAnalysisKeys.isStandardizedKey(storageKey)) {
-            System.err.println("WARNING: Using non-standardized storage key: " + storageKey);
+            throw new IllegalArgumentException(
+                "Non-standardized storage key rejected: '" + storageKey + "'. " +
+                "Use SessionAnalysisKeys factory methods to generate standardized keys. " +
+                "This enforces data consistency and prevents session data corruption.");
         }
         
         return store.putAnalysis(storageKey, data, imageHandle);
@@ -90,13 +93,14 @@ public final class ColonyAnalysisTools {
      */
     public JSONObject detectPlate(JSONObject args) {
         try {
-            // Apply comprehensive handle protection
-            HandleGuard.HandleValidationResult validation = handleGuard.protectToolCall(args, "detect_plate");
-            if (!validation.isValid()) {
-                return validation.createErrorResponse();
+            // FAIL FAST handle validation - no auto-injection
+            JSONObject handleError = handleGuard.validateHandle(args, "detect_plate");
+            if (handleError != null) {
+                return handleError; // Standardized error response
             }
             
-            SessionStore.ImageRecord rec = store.getImage(validation.imageHandle);
+            String imageHandle = args.getString("image_handle");
+            SessionStore.ImageRecord rec = store.getImage(imageHandle);
             if (rec == null) {
                 return error("detect_plate", "Image not found after validation", "image_handle");
             }
@@ -108,8 +112,8 @@ public final class ColonyAnalysisTools {
             PlateDetector.Result result = PlateDetector.detect(rec.image, plateParams.thresholdMethod());
                 
             // Store plate data in session using standardized key
-            String plateStorageKey = SessionAnalysisKeys.PlateKeys.detection(validation.imageHandle);
-            String plateHandle = putAnalysisWithValidation(plateStorageKey, result, validation.imageHandle);
+            String plateStorageKey = SessionAnalysisKeys.PlateKeys.detection(imageHandle);
+            String plateHandle = putAnalysisWithValidation(plateStorageKey, result, imageHandle);
             
             // Calculate pixels per mm
             double pxPerMM = result.pxPerMM(plateParams.dishDiameterMM());
@@ -130,7 +134,7 @@ public final class ColonyAnalysisTools {
                 .put("was_deskewed", result.wasDeskewed())
                 .put("illumination_corrected", result.illuminationCorrected()));
             
-            return handleGuard.addPersistenceGuidance(response, validation.imageHandle);
+            return response; // No more guidance injection - clean standardized responses
                 
         } catch (Exception e) {
             return error("detect_plate", e.getMessage(), "processing");

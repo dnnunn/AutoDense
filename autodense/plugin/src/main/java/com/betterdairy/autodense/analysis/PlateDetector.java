@@ -106,38 +106,13 @@ public final class PlateDetector {
             AffineTransform deskewTransform = null;
             ImagePlus processedImage = working;
             
-            // Step 4: Deskew if ellipse is too eccentric
+            // Step 4: DISABLED - Deskew feature not properly implemented
             if (needsDeskew) {
-                deskewTransform = createDeskewTransform(centerX, centerY, angle);
-                processedImage = applyDeskewTransform(working, deskewTransform);
-                
-                // Re-detect on deskewed image to get corrected measurements
-                IJ.setAutoThreshold(processedImage, thresholdMethod + " dark");
-                IJ.run(processedImage, "Fill Holes", "");
-                IJ.run(processedImage, "Set Measurements...", "area centroid fit");
-                IJ.run(processedImage, "Analyze Particles...", "size=1000-Infinity show=Nothing display clear");
-                
-                ResultsTable newRt = ResultsTable.getResultsTable();
-                if (newRt != null && newRt.getCounter() > 0) {
-                    // Update measurements from deskewed image
-                    int newBest = 0;
-                    double newMaxArea = 0;
-                    for (int i = 0; i < newRt.getCounter(); i++) {
-                        double area = newRt.getValue("Area", i);
-                        if (area > newMaxArea) {
-                            newMaxArea = area;
-                            newBest = i;
-                        }
-                    }
-                    
-                    centerX = newRt.getValue("X", newBest);
-                    centerY = newRt.getValue("Y", newBest);
-                    majorAxis = newRt.getValue("Major", newBest);
-                    minorAxis = newRt.getValue("Minor", newBest);
-                    angle = newRt.getValue("Angle", newBest);
-                    axisRatio = minorAxis / majorAxis;
-                    maxArea = newMaxArea;
-                }
+                throw new UnsupportedOperationException(
+                    "Plate deskewing is disabled due to incomplete implementation. " +
+                    "The affine transform stub causes inaccurate measurements. " +
+                    "Axis ratio: " + String.format("%.3f", axisRatio) + " (threshold: 0.95). " +
+                    "Use images with minimal perspective distortion or implement proper affine transforms.");
             }
             
             // Step 5: Create final ROI
@@ -164,50 +139,26 @@ public final class PlateDetector {
     }
     
     /**
-     * Create affine transform to deskew elliptical plate to circular
+     * DISABLED: Create affine transform to deskew elliptical plate to circular
+     * @deprecated Incomplete implementation causes measurement errors
      */
+    @Deprecated
     private static AffineTransform createDeskewTransform(double centerX, double centerY, double angleRad) {
-        AffineTransform transform = new AffineTransform();
-        
-        // Translate to origin
-        transform.translate(-centerX, -centerY);
-        
-        // Rotate to align major axis with horizontal
-        transform.rotate(-Math.toRadians(angleRad));
-        
-        // Scale to make circular (stretch minor axis to match major)
-        // This corrects for perspective distortion
-        double scaleY = 1.0 / 0.95; // Assuming target ratio of 0.95
-        transform.scale(1.0, scaleY);
-        
-        // Rotate back
-        transform.rotate(Math.toRadians(angleRad));
-        
-        // Translate back
-        transform.translate(centerX, centerY);
-        
-        return transform;
+        throw new UnsupportedOperationException(
+            "createDeskewTransform is disabled due to incomplete implementation. " +
+            "The current transform logic does not properly handle perspective correction.");
     }
     
     /**
-     * Apply deskew transform to image
+     * DISABLED: Apply deskew transform to image
+     * @deprecated Stub implementation returns original image, causing measurement errors
      */
+    @Deprecated
     private static ImagePlus applyDeskewTransform(ImagePlus image, AffineTransform transform) {
-        ImagePlus deskewed = image.duplicate();
-        deskewed.setTitle(image.getTitle() + "_deskewed");
-        
-        ImageProcessor proc = deskewed.getProcessor();
-        
-        // Apply affine transformation
-        // Note: This is a simplified implementation
-        // A full implementation would use ImageJ's affine transformation plugins
-        proc.setInterpolate(true);
-        
-        // For now, return the original image
-        // In a full implementation, you'd use:
-        // IJ.run(deskewed, "Transform...", "matrix=" + matrixString);
-        
-        return deskewed;
+        throw new UnsupportedOperationException(
+            "applyDeskewTransform is disabled due to stub implementation. " +
+            "The method was returning the original image unchanged, " +
+            "causing inaccurate plate measurements. Implement proper ImageJ affine transforms.");
     }
     
     /**
