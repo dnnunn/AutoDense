@@ -120,4 +120,23 @@ public class HandleGuard {
             return validation; // Validation is already standardized error or null
         }
     }
+    
+    /**
+     * Protect tool calls from invalid handles - temporary bridge method
+     * @deprecated Use validateHandle instead for consistent error handling
+     */
+    @Deprecated
+    public JSONObject protectToolCall(JSONObject args, String toolName) {
+        return validateHandle(args, toolName);
+    }
+    
+    /**
+     * Add persistence guidance - no-op for now
+     * @deprecated This method is deprecated and does nothing
+     */
+    @Deprecated
+    public JSONObject addPersistenceGuidance(JSONObject response, String guidance) {
+        // No-op - persistence guidance not implemented
+        return response;
+    }
 }
