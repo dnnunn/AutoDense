@@ -272,7 +272,7 @@ public final class ImagePreprocessor {
         ImagePlus result = imp.duplicate();
         
         // Auto threshold
-        IJ.run(result, "Auto Threshold", "method=" + thresholdMethod + " white");
+        IJ.run(result, "Auto Threshold...", "method=" + thresholdMethod + " white");
         IJ.run(result, "Convert to Mask", "");
         
         // Apply morphological operations

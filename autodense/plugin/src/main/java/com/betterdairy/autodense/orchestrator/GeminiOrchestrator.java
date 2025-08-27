@@ -1119,13 +1119,13 @@ public class GeminiOrchestrator {
             case "imagej.sds.quantify_lanes":
                 return executeImageJTool("detect_lanes", inputs);
             case "imagej.assay.detect_colonies":
-                return assayOps.detectColonies(inputs);
+                return assayOps.detectColonies(injectImageHandle(inputs));
             case "imagej.assay.measure_colonies":
-                return assayOps.measureColonies(inputs);
+                return assayOps.measureColonies(injectImageHandle(inputs));
             case "imagej.assay.annotate":
-                return assayOps.annotate(inputs);
+                return assayOps.annotate(injectImageHandle(inputs));
             case "imagej.assay.export":
-                return assayOps.export(inputs);
+                return assayOps.export(injectImageHandle(inputs));
             case "imagej.assay.run_macro":
                 return assayOps.runMacro(inputs);
             case "imagej.overlay.annotate":
@@ -1139,6 +1139,17 @@ public class GeminiOrchestrator {
             default:
                 throw new RuntimeException("Unknown tool: " + toolId);
         }
+    }
+    
+    /**
+     * Inject the current image handle into tool inputs if not already present
+     */
+    private JSONObject injectImageHandle(JSONObject inputs) {
+        JSONObject augmentedInputs = new JSONObject(inputs.toString()); // Deep copy
+        if (currentImageHandle != null && !augmentedInputs.has("image_handle")) {
+            augmentedInputs.put("image_handle", currentImageHandle);
+        }
+        return augmentedInputs;
     }
     
     private JSONObject createRegistryResponse() {

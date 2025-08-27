@@ -360,11 +360,8 @@ public class AssayOps {
             // Step 1: White-balance using plate blank region (or automatic gray-world)
             ImagePlus balanced = whiteBalance(imp);
             
-            // Step 2: Convert to CIELAB (preferred) or HSV  
-            ImagePlus labImage = convertToCIELAB(balanced);
-            
-            // Step 3: Compute blue_index = max(0, -(b*) / 100)
-            ij.process.FloatProcessor blueIndex = computeBlueIndex(labImage);
+            // Step 2: Compute blue_index using canonical CIELAB helper
+            ij.process.FloatProcessor blueIndex = computeBlueIndex(balanced);
             
             // Step 4: Adaptive threshold T = median(blue_index) + k * MAD (k≈2.5)
             float threshold = computeAdaptiveThreshold(blueIndex, 2.5f);
@@ -376,14 +373,14 @@ public class AssayOps {
             
             // Step 6: Analyze particles -> ROIs
             ij.measure.ResultsTable rt = new ij.measure.ResultsTable();
-            ij.plugin.frame.RoiManager rm = new ij.plugin.frame.RoiManager(true);
+            ij.plugin.frame.RoiManager rm = new ij.plugin.frame.RoiManager(false);
             
             ij.plugin.filter.ParticleAnalyzer pa = new ij.plugin.filter.ParticleAnalyzer(
                 ij.plugin.filter.ParticleAnalyzer.ADD_TO_MANAGER,
                 ij.measure.Measurements.AREA + ij.measure.Measurements.CIRCULARITY + ij.measure.Measurements.MEAN,
                 rt, minSize, maxSize, 0.3, 1.0);
             
-            pa.setRoiManager(rm);
+            ij.plugin.filter.ParticleAnalyzer.setRoiManager(rm);
             pa.analyze(new ImagePlus("mask", mask));
             
             // Step 7: Compute BI per ROI and create colony objects with annotations
@@ -458,35 +455,33 @@ public class AssayOps {
     // =============== BLUE DETECTION HELPER METHODS ===============
     
     private ImagePlus whiteBalance(ImagePlus imp) {
-        // White balance using gray-world assumption or plate blank region
+        // Use basic contrast normalization instead of threshold
         ImagePlus balanced = imp.duplicate();
-        IJ.run(balanced, "Auto Threshold", "method=Default white");
+        IJ.run(balanced, "Enhance Contrast", "saturated=0.35");
         return balanced;
     }
     
-    private ImagePlus convertToCIELAB(ImagePlus imp) {
-        // Convert to CIELAB color space (preferred for blue detection)
-        ImagePlus lab = imp.duplicate();
-        IJ.run(lab, "Lab Stack", "");
-        return lab;
-    }
-    
-    private ij.process.FloatProcessor computeBlueIndex(ImagePlus labImage) {
-        // For each pixel, compute blue_index = max(0, -(b*) / 100)
-        ij.ImageStack stack = labImage.getStack();
-        ij.process.ImageProcessor bStar = stack.getProcessor(3); // b* channel
+    private ij.process.FloatProcessor computeBlueIndex(ImagePlus imp) {
+        // Use canonical BlueIndex helper for consistent CIELAB calculation
+        int width = imp.getWidth();
+        int height = imp.getHeight();
+        ij.process.FloatProcessor blueIndexProcessor = new ij.process.FloatProcessor(width, height);
         
-        int width = bStar.getWidth();
-        int height = bStar.getHeight();
-        ij.process.FloatProcessor blueIndex = new ij.process.FloatProcessor(width, height);
-        
-        for (int i = 0; i < width * height; i++) {
-            float bValue = bStar.getf(i);
-            float bi = Math.max(0, -bValue / 100.0f);
-            blueIndex.setf(i, bi);
+        // Convert RGB image to blue index using canonical helper
+        ij.process.ImageProcessor ip = imp.getProcessor();
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int rgb = ip.getPixel(x, y);
+                int r = (rgb >> 16) & 0xFF;
+                int g = (rgb >> 8) & 0xFF;
+                int b = rgb & 0xFF;
+                
+                double blueIndex = com.betterdairy.autodense.analysis.BlueIndex.blueIndex(r, g, b);
+                blueIndexProcessor.setf(x, y, (float) blueIndex);
+            }
         }
         
-        return blueIndex;
+        return blueIndexProcessor;
     }
     
     /**

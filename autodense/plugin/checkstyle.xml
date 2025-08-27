@@ -1,0 +1,16 @@
+<!DOCTYPE module PUBLIC "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+ "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<module name="Checker">
+  <module name="TreeWalker">
+    <module name="IllegalRegexp">
+      <property name="format" value="(setPixels|putPixel|draw\(|fill\(|Flatten)"/>
+      <property name="message" value="Use Overlay/ROI for annotations; never paint into pixel data."/>
+      <property name="ignoreComments" value="true"/>
+    </module>
+    <module name="IllegalRegexp">
+      <property name="format" value="(new\s+ColorConverter|HSB|HSV(?!.*toLab))"/>
+      <property name="message" value="Converge on CIELAB blueIndex(); remove HSV-based duplicates."/>
+      <property name="ignoreComments" value="true"/>
+    </module>
+  </module>
+</module>

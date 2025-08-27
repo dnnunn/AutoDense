@@ -1,6 +1,7 @@
 package com.betterdairy.autodense.analysis;
 
 import com.betterdairy.autodense.session.SessionStore;
+import ij.IJ;
 import ij.ImagePlus;
 import ij.process.ImageProcessor;
 import org.json.JSONObject;
@@ -1467,15 +1468,50 @@ public class PlateAlignment {
             return new TransformEstimate(new AffineTransform(), 0.0, Double.MAX_VALUE, 0);
         }
         
-        // Simple least-squares estimation (in practice would use RANSAC)
-        // For now, use the first 3 matches to estimate transformation
-        AffineTransform transform = calculateAffineTransform(matches.subList(0, Math.min(3, matches.size())));
+        // RANSAC parameters
+        int maxIterations = Math.min(1000, matches.size() * 10);
+        double distanceThreshold = 5.0; // pixels
+        int minConsensusSize = Math.max(3, matches.size() / 3);
         
-        // Calculate RMSE and confidence
-        double rmse = calculateRMSE(matches, transform);
-        double confidence = Math.max(0.0, 1.0 - (rmse / 50.0)); // Normalize RMSE to confidence
+        AffineTransform bestTransform = new AffineTransform();
+        int bestConsensusSize = 0;
+        double bestRMSE = Double.MAX_VALUE;
         
-        return new TransformEstimate(transform, confidence, rmse, matches.size());
+        for (int iter = 0; iter < maxIterations; iter++) {
+            // Randomly select 3 matches for hypothesis
+            Collections.shuffle(matches);
+            List<FeatureMatch> sample = matches.subList(0, Math.min(3, matches.size()));
+            
+            AffineTransform candidateTransform = calculateAffineTransform(sample);
+            
+            // Count inliers
+            List<FeatureMatch> inliers = new ArrayList<>();
+            for (FeatureMatch match : matches) {
+                Point2D transformed = candidateTransform.transform(match.refPoint, null);
+                double error = transformed.distance(match.targetPoint);
+                if (error < distanceThreshold) {
+                    inliers.add(match);
+                }
+            }
+            
+            // Check if this is the best consensus so far
+            if (inliers.size() > bestConsensusSize) {
+                bestConsensusSize = inliers.size();
+                bestTransform = candidateTransform;
+                bestRMSE = calculateRMSE(inliers, candidateTransform);
+                
+                // Early termination if we have enough inliers
+                if (bestConsensusSize >= minConsensusSize) {
+                    break;
+                }
+            }
+        }
+        
+        // Calculate final confidence based on consensus size and RMSE
+        double consensusRatio = (double) bestConsensusSize / matches.size();
+        double confidence = Math.max(0.0, consensusRatio * (1.0 - Math.min(1.0, bestRMSE / 50.0)));
+        
+        return new TransformEstimate(bestTransform, confidence, bestRMSE, bestConsensusSize);
     }
     
     private static AffineTransform calculateAffineTransform(List<FeatureMatch> matches) {
@@ -1522,33 +1558,24 @@ public class PlateAlignment {
     
     /**
      * Apply transformation to align target image to reference coordinate system
+     * Uses ImageJ's built-in transformations instead of manual pixel operations
      */
     public static ImagePlus applyAlignment(ImagePlus target, AffineTransform transform) {
-        ImageProcessor ip = target.getProcessor();
-        ImageProcessor aligned = ip.createProcessor(ip.getWidth(), ip.getHeight());
-        
-        // Apply inverse transformation to map pixels from aligned space to original space
         try {
-            AffineTransform inverse = transform.createInverse();
+            // Create transformed image using ImageJ's affine transformation
+            ImagePlus alignedImage = target.duplicate();
+            alignedImage.setTitle(target.getTitle() + "_aligned");
             
-            for (int y = 0; y < aligned.getHeight(); y++) {
-                for (int x = 0; x < aligned.getWidth(); x++) {
-                    Point2D srcPoint = inverse.transform(new Point2D.Double(x, y), null);
-                    int srcX = (int) Math.round(srcPoint.getX());
-                    int srcY = (int) Math.round(srcPoint.getY());
-                    
-                    if (srcX >= 0 && srcX < ip.getWidth() && srcY >= 0 && srcY < ip.getHeight()) {
-                        aligned.putPixel(x, y, ip.getPixel(srcX, srcY));
-                    }
-                }
-            }
+            // Apply transformation using ImageJ's built-in method
+            IJ.run(alignedImage, "Transform...", 
+                String.format("matrix=[%.6f %.6f %.6f %.6f %.6f %.6f] interpolation=Bilinear",
+                    transform.getScaleX(), transform.getShearX(), transform.getTranslateX(),
+                    transform.getShearY(), transform.getScaleY(), transform.getTranslateY()));
+            
+            return alignedImage;
         } catch (Exception e) {
             // If transformation fails, return original image
             return target;
         }
-        
-        ImagePlus alignedImage = new ImagePlus(target.getTitle() + "_aligned", aligned);
-        alignedImage.setCalibration(target.getCalibration());
-        return alignedImage;
     }
 }

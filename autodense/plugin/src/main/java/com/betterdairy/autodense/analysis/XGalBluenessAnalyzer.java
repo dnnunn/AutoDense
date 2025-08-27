@@ -242,19 +242,9 @@ public class XGalBluenessAnalyzer {
         // In a full implementation, this would receive the actual image and coordinates
         
         try {
-            // For now, estimate blueness using CIELAB principles
-            // Convert RGB to approximate CIELAB b* equivalent
-            double r = colorData.avgRed / 255.0;
-            double g = colorData.avgGreen / 255.0; 
-            double b = colorData.avgBlue / 255.0;
-            
-            // Simplified CIELAB b* approximation: negative b* indicates blue
-            // This approximates the full CIELAB conversion for backwards compatibility
-            // Actual implementation should use AssayOps.computeCIELABBlueIndex with image data
-            double bStarApprox = (b - (r + g) / 2.0) * 200.0 - 100.0; // approximate b* range
-            double blueIndex = Math.max(0.0, -bStarApprox / 100.0);
-            
-            return Math.max(0.0, Math.min(1.0, blueIndex));
+            // Use consolidated CIELAB blue index helper
+            double blueIndex = BlueIndex.blueIndex((int)colorData.avgRed, (int)colorData.avgGreen, (int)colorData.avgBlue);
+            return blueIndex;
             
         } catch (Exception e) {
             // Fallback to RGB analysis if CIELAB approximation fails

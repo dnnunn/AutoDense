@@ -183,6 +183,10 @@
               <transformers>
                 <!-- Preserve META-INF/services for ServiceLoader (critical for ImageIO) -->
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                <!-- Preserve SciJava plugin annotations -->
+                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                  <resource>META-INF/json/org.scijava.plugin.Plugin</resource>
+                </transformer>
                 <!-- Preserve manifest -->
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>com.betterdairy.autodense.plugin.EnhancedImageJLauncher</mainClass>
@@ -190,6 +194,29 @@
               </transformers>
             </configuration>
           </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+        <version>3.3.1</version>
+        <configuration>
+          <configLocation>checkstyle.xml</configLocation>
+          <failOnViolation>true</failOnViolation>
+        </configuration>
+        <executions>
+          <execution>
+            <phase>verify</phase>
+            <goals><goal>check</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>com.github.spotbugs</groupId>
+        <artifactId>spotbugs-maven-plugin</artifactId>
+        <version>4.8.6.5</version>
+        <executions>
+          <execution><phase>verify</phase><goals><goal>spotbugs</goal></goals></execution>
         </executions>
       </plugin>
     </plugins>

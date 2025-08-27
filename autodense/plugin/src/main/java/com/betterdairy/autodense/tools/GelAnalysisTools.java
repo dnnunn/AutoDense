@@ -7,6 +7,7 @@ import com.betterdairy.autodense.analysis.AssistModels.AssistBand;
 import com.betterdairy.autodense.model.Models.*;
 import com.betterdairy.autodense.plugin.ToolSchemaValidator;
 import com.betterdairy.autodense.img.IJUtils;
+import autodense.util.OverlayExporter;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Overlay;
@@ -646,12 +647,8 @@ public class GelAnalysisTools {
             quality = clamp(quality, 50, 100); // 50-100% quality
             args.put("quality", quality);
             
-            // Duplicate image with overlay
+            // Duplicate base image (no overlay burning)
             ImagePlus dup = img.image.duplicate();
-            if (img.currentOverlay != null) {
-                dup.setOverlay(img.currentOverlay);
-                dup = dup.flatten(); // Burn overlay into image
-            }
             
             // Scale if needed
             if (dup.getWidth() > maxWidth) {
@@ -662,36 +659,96 @@ public class GelAnalysisTools {
                 dup.setProcessor(proc);
             }
             
-            // Save overlay atomically to avoid half-rendered files
-            String filename = "gel_overlay_" + System.currentTimeMillis() + ".png";
+            // Save base image
+            String baseFilename = "gel_base_" + System.currentTimeMillis() + ".png";
+            Path baseOutputPath = tempDir.resolve(baseFilename);
+            Path baseTempPath = baseOutputPath.resolveSibling(baseOutputPath.getFileName() + ".tmp");
+            
+            // Save overlay as separate transparent PNG if it exists
+            String overlayFilename = "gel_overlay_" + System.currentTimeMillis() + ".png";
+            Path overlayOutputPath = tempDir.resolve(overlayFilename);
+            Path overlayTempPath = overlayOutputPath.resolveSibling(overlayOutputPath.getFileName() + ".tmp");
+            
+            // For backward compatibility, we'll still create a flattened version but log it as deprecated
+            String filename = "gel_combined_" + System.currentTimeMillis() + ".png";  
             Path outputPath = tempDir.resolve(filename);
             Path tempPath = outputPath.resolveSibling(outputPath.getFileName() + ".tmp");
             
             try {
-                // Convert ImagePlus to BufferedImage
-                BufferedImage bufferedImage = dup.getBufferedImage();
+                // Save base image (scaled gel without overlay)
+                BufferedImage baseBufferedImage = dup.getBufferedImage();
+                ImageIO.write(baseBufferedImage, "PNG", baseTempPath.toFile());
+                Files.move(baseTempPath, baseOutputPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
                 
-                // Write to temporary file first
-                ImageIO.write(bufferedImage, "PNG", tempPath.toFile());
+                // Save overlay as transparent PNG if it exists
+                String overlayPath = null;
+                if (img.currentOverlay != null) {
+                    // Scale overlay to match resized image
+                    ImagePlus overlayImg = img.image.duplicate();
+                    overlayImg.setOverlay(img.currentOverlay);
+                    if (overlayImg.getWidth() > maxWidth) {
+                        double scale = maxWidth / (double)overlayImg.getWidth();
+                        int newHeight = (int)(overlayImg.getHeight() * scale);
+                        // Scale overlay ROIs
+                        Overlay scaledOverlay = new Overlay();
+                        for (Roi roi : img.currentOverlay.toArray()) {
+                            Roi scaledRoi = (Roi) roi.clone();
+                            scaledRoi.setLocation(
+                                (int)(roi.getBounds().x * scale),
+                                (int)(roi.getBounds().y * scale)
+                            );
+                            // Scale stroke width too
+                            scaledRoi.setStrokeWidth((float)(roi.getStrokeWidth() * scale));
+                            scaledOverlay.add(scaledRoi);
+                        }
+                        overlayImg = IJ.createImage("overlay", overlayImg.getType(), maxWidth, newHeight, 1);
+                        overlayImg.setOverlay(scaledOverlay);
+                    }
+                    
+                    OverlayExporter.exportOverlayPNG(overlayImg, overlayTempPath.toFile());
+                    Files.move(overlayTempPath, overlayOutputPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                    overlayPath = overlayOutputPath.toString();
+                }
                 
-                // Atomic move to final location
+                // Create combined image for backward compatibility (DEPRECATED)
+                ImagePlus combined = dup.duplicate();
+                if (img.currentOverlay != null) {
+                    combined.setOverlay(img.currentOverlay);
+                    combined = combined.flatten(); // Still flatten for compatibility but mark deprecated
+                }
+                BufferedImage combinedBuffered = combined.getBufferedImage();
+                ImageIO.write(combinedBuffered, "PNG", tempPath.toFile());
                 Files.move(tempPath, outputPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
                 
             } catch (IOException e) {
-                // Fallback to FileSaver if atomic write fails
-                try { Files.deleteIfExists(tempPath); } catch (IOException ignored) {}
-                FileSaver fs = new FileSaver(dup);
+                // Fallback to original flattening approach if atomic write fails  
+                try { 
+                    Files.deleteIfExists(tempPath); 
+                    Files.deleteIfExists(baseTempPath);
+                    Files.deleteIfExists(overlayTempPath);
+                } catch (IOException ignored) {}
+                
+                // Original fallback behavior
+                ImagePlus fallbackImg = img.image.duplicate();
+                if (img.currentOverlay != null) {
+                    fallbackImg.setOverlay(img.currentOverlay);
+                    fallbackImg = fallbackImg.flatten();
+                }
+                FileSaver fs = new FileSaver(fallbackImg);
                 fs.saveAsPng(outputPath.toString());
             }
             
-            // Build standardized success response
+            // Build standardized success response with separate file paths
             JSONObject data = new JSONObject()
-                .put("png_path", outputPath.toString())
+                .put("combined_png_path", outputPath.toString()) // DEPRECATED: flattened image
+                .put("base_image_path", baseOutputPath.toString()) // Clean gel image
+                .put("overlay_path", img.currentOverlay != null ? overlayOutputPath.toString() : null) // Transparent overlay PNG
                 .put("width", dup.getWidth())
                 .put("height", dup.getHeight())
                 .put("image_handle", img.handle)
-                .put("usage_note", "This PNG shows labeled lanes/bands for visual reference only. Use original image data for all measurements.")
+                .put("usage_note", "Use base_image_path + overlay_path for modern workflows. combined_png_path is deprecated.")
                 .put("visual_elements", "Lane labels: L1, L2, L3... Band labels: B1, B2, B3... (first 3 bands per lane)")
+                .put("export_format", "separate_layers") // Modern approach: base + overlay
                 .put("parameters_used", new JSONObject()
                     .put("max_width", maxWidth)
                     .put("quality", quality));
@@ -1853,11 +1910,31 @@ public class GelAnalysisTools {
             img.image.setOverlay(referenceOverlay);
             img.image.updateAndDraw();
             
-            // Save labeled reference image
+            // Save reference image and overlay separately (modern approach)
+            ImagePlus baseImage = img.image.duplicate();
+            String baseFilename = "reference_base_" + System.currentTimeMillis() + ".png";
+            Path baseOutputPath = tempDir.resolve(baseFilename);
+            FileSaver baseFs = new FileSaver(baseImage);
+            baseFs.saveAsPng(baseOutputPath.toString());
+            
+            // Save overlay as transparent PNG
+            String overlayFilename = "reference_overlay_" + System.currentTimeMillis() + ".png";
+            Path overlayOutputPath = tempDir.resolve(overlayFilename);
+            String overlayPath = null;
+            if (referenceOverlay != null) {
+                try {
+                    OverlayExporter.exportOverlayPNG(img.image, overlayOutputPath.toFile());
+                    overlayPath = overlayOutputPath.toString();
+                } catch (IOException e) {
+                    System.err.println("Failed to export overlay PNG: " + e.getMessage());
+                }
+            }
+            
+            // For backward compatibility, also save flattened version (DEPRECATED)
             ImagePlus labeledImage = img.image.duplicate();
             if (referenceOverlay != null) {
                 labeledImage.setOverlay(referenceOverlay);
-                labeledImage = labeledImage.flatten(); // Burn overlay into image
+                labeledImage = labeledImage.flatten(); // Still flatten for compatibility but mark deprecated
             }
             
             String filename = "labeled_reference_" + System.currentTimeMillis() + ".png";
@@ -1872,9 +1949,12 @@ public class GelAnalysisTools {
             store.setLastActiveImageHandle(img.handle);
             
             return new JSONObject()
-                .put("reference_png", outputPath.toString())
+                .put("reference_png", outputPath.toString()) // DEPRECATED: flattened
+                .put("base_image_path", baseOutputPath.toString()) // Clean gel image  
+                .put("overlay_path", overlayPath) // Transparent overlay PNG
                 .put("overlay_handle", overlayHandle)
                 .put("image_handle", img.handle)
+                .put("export_format", "separate_layers") // Modern approach: base + overlay
                 .put("reference_purpose", "Visual communication tool with comprehensive labels for lanes and bands")
                 .put("measurement_warning", "CRITICAL: Use original image data for all measurements, not this labeled PNG")
                 .put("lane_count", lanes != null ? lanes.size() : 0)

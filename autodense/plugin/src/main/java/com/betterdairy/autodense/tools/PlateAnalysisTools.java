@@ -115,9 +115,14 @@ public class PlateAnalysisTools {
                 IJ.run(workingImage, "8-bit", "");
             }
             
-            // Step 3: Auto threshold (Triangle method)
-            IJ.setAutoThreshold(workingImage, thresholdMethod + " dark");
-            IJ.run(workingImage, "Convert to Mask", "");
+            // Step 3: Local threshold instead of global
+            try {
+                IJ.run(workingImage, "Auto Local Threshold", "method=" + thresholdMethod + " radius=25 parameter_1=0 parameter_2=0 white");
+            } catch (Exception e) {
+                // Fallback to regular threshold if Auto Local Threshold not available
+                IJ.setAutoThreshold(workingImage, thresholdMethod + " dark");
+                IJ.run(workingImage, "Convert to Mask", "");
+            }
             
             // Step 4: Fill holes
             IJ.run(workingImage, "Fill Holes", "");
