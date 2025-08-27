@@ -536,7 +536,10 @@ def run(
         (run_dir / f"{pv_name}.json").write_text(json.dumps(res.raw or {}, indent=2))
         rprint(f"[bold cyan]{pv_name}[/] ✓ saved -> {run_dir / (pv_name + '.md')}")
 
-    asyncio.run(asyncio.gather(*[hit(p) for p in providers]))
+    async def run_all_providers():
+        await asyncio.gather(*[hit(p) for p in providers])
+    
+    asyncio.run(run_all_providers())
 
     # 5) Consolidation
     console.rule("Consolidating audits")

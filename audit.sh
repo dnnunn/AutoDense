@@ -67,7 +67,7 @@ while getopts ":c:p:r:i:a:m:nh" opt; do
 done
 
 have_cmd git    || die "git not found"
-have_cmd python || die "python not found"
+have_cmd python3 || die "python3 not found"
 [ -f "$API_CONFIG_FILE" ] || die "missing $API_CONFIG_FILE"
 [ -d "$ROOT_DIR/.git" ] || die "ROOT_DIR is not a git repo: $ROOT_DIR"
 
@@ -118,14 +118,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORCH="$SCRIPT_DIR/audit_orchestrator.py"
 [ -f "$ORCH" ] || die "cannot find audit_orchestrator.py alongside audit.sh"
 
+# Setup virtual environment and dependencies
+VENV_DIR="$SCRIPT_DIR/.audit_venv"
+if [ ! -d "$VENV_DIR" ]; then
+  echo "Creating virtual environment for audit..."
+  python3 -m venv "$VENV_DIR" || die "failed to create virtual environment"
+fi
+
+# Activate virtual environment
+source "$VENV_DIR/bin/activate" || die "failed to activate virtual environment"
+
 # Ensure deps (quiet best-effort)
-if ! python - <<'PY' >/dev/null 2>&1
+if ! python3 - <<'PY' >/dev/null 2>&1
 import importlib, sys
 mods = ["httpx","typer","pydantic","yaml","rich"]
 sys.exit(0 if all(importlib.util.find_spec(m) for m in mods) else 1)
 PY
 then
-  echo "Installing Python deps…"
+  echo "Installing Python deps in virtual environment..."
   pip install -q httpx typer pydantic pyyaml tiktoken rich || die "pip install failed"
 fi
 
@@ -133,11 +143,11 @@ fi
 read -r -a PROVIDER_ARR <<< "$PROVIDERS"
 
 set -x
-python "$ORCH" run \
+python3 "$ORCH" run \
   --providers "${PROVIDER_ARR[@]}" \
   --consensus "$CONSENSUS" \
   --root "$ROOT_DIR" \
   --issues-file "$ISSUES_FILE"
 set +x
 
-python "$ORCH" latest || true
+python3 "$ORCH" latest || true

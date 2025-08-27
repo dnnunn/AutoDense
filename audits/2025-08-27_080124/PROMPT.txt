@@ -1,0 +1,56 @@
+You are a senior code auditor. Perform a surgical, unsentimental audit of the repository "AutoDense".
+
+Goals:
+1) Identify correctness bugs, race conditions, deadlocks, resource leaks, brittle IO, and silent failure paths.
+2) Flag design smells (tight coupling, leaky abstractions, invalid invariants, unclear boundaries, weak error semantics).
+3) Security posture: input validation, authz/authn gaps, secrets handling, SSRF/SQLi/XSS/serialization pitfalls.
+4) Performance: big‑O hotspots, N+1, needless copies, synchronous I/O in hot paths, missing streaming/backpressure.
+5) Tooling: tests, coverage, lint/typing, CI, docs, reproducibility, containerization, release hygiene.
+6) Prioritize the top 10 concrete, actionable fixes with code‑level pointers and diffs.
+
+Context from maintainer (free‑text, may be messy):
+
+
+Repo README excerpt (if any):
+
+
+Recent git activity (latest ~30 commits):
+57f4fa2 2025-08-27 07:38:37 +0100 dnnunn feat: add colony analysis debugging improvements and new helper classes
+30aed56 2025-08-27 06:10:39 +0100 dnnunn fix: simplify CI workflow to focus on build verification instead of tests
+5ab96bf 2025-08-27 06:03:49 +0100 dnnunn fix: correct CI workflow for project structure and missing test data
+fd4cc70 2025-08-26 22:49:33 +0100 dnnunn fix: surgical fixes for SDS_PAGE_DENSITOMETRY preset parameter routing and robustness
+0829671 2025-08-26 22:19:41 +0100 dnnunn docs: verify 10 additional documents, reaching 47.4% verification rate
+59a84e4 2025-08-26 22:12:59 +0100 dnnunn docs: verify 12 additional documents, reaching 29.8% verification rate
+202978f 2025-08-26 22:05:01 +0100 dnnunn feat: comprehensive document catalog system with session maintenance
+c0041b6 2025-08-26 21:42:24 +0100 dnnunn docs: comprehensive documentation cleanup infrastructure and core file fixes
+9d51030 2025-08-26 21:18:59 +0100 dnnunn cleanup
+1319e90 2025-08-26 21:05:10 +0100 dnnunn Update CLAUDE.md
+b369de0 2025-08-26 21:01:27 +0100 dnnunn commands
+53c046d 2025-08-26 20:48:02 +0100 dnnunn document moves
+196e8c6 2025-08-26 18:15:46 +0100 dnnunn feat: comprehensive orchestration fixes and debug logging
+733311f 2025-08-26 17:50:18 +0100 dnnunn security: remove exposed API key from debugging documentation
+289190a 2025-08-26 17:42:51 +0100 dnnunn feat: implement API key validation to prevent placeholder usage
+d049a8d 2025-08-26 17:31:16 +0100 dnnunn feat: implement branch safety protocol to prevent accidental branch switches
+1a96650 2025-08-26 17:26:17 +0100 dnnunn fix: use consistent OverlayRenderer fonts in PlateAnalysisTools
+278239f 2025-08-26 17:24:57 +0100 dnnunn docs: add linter enforcement note to CLAUDE.md
+58664fd 2025-08-26 17:24:35 +0100 dnnunn feat: restore essential functional improvements from previous session
+e092b5f 2025-08-26 17:16:19 +0100 dnnunn feat: expose enhanced SDS tools to Gemini with standardized parameter names
+1b5369d 2025-08-26 17:12:43 +0100 dnnunn feat: implement color-based prestained ladder detection for protein markers
+bc679ad 2025-08-26 17:09:40 +0100 dnnunn feat: enhance SDS-PAGE integration with lane-wise quantile baseline modeling
+6a0c181 2025-08-26 16:56:57 +0100 dnnunn SDS + Agarose presets, overlay stack finalize, CI goldens, ladder calibration
+1385837 2025-08-26 07:28:40 +0100 dnnunn feat: implement web-based overlay visualization system
+4cedbd7 2025-08-26 07:16:34 +0100 dnnunn feat: implement contract-based orchestration with unified AssayOps
+9454c1e 2025-08-25 23:15:52 +0100 dnnunn docs: comprehensive session summary and debugging checklist
+54dfce9 2025-08-25 22:56:19 +0100 dnnunn feat: restore handle-based architecture and complete tool orchestration
+4cf995a 2025-08-23 12:01:56 +0100 dnnunn 12.01
+c60c6c0 2025-08-22 21:44:06 +0100 dnnunn Colony counting
+4ac1f18 2025-08-22 08:43:13 +0100 dnnunn Delete pom.xml
+
+Deliverables:
+- "Executive Summary" (bullets) — what hurts and why it matters.
+- "Findings" — numbered, each with: Severity (High/Med/Low), File:Line refs, Repro steps, Minimal fix, Ideal fix.
+- "Fast Wins" — fixes that produce immediate UX or stability gains in < 2 hours.
+- "Safety Nets" — tests/linters/CI you recommend, with exact commands/config snippets.
+- "Risk Register" — risks + blast radius if ignored for 3 months.
+
+Be terse, specific, and cite exact files and lines when possible.
