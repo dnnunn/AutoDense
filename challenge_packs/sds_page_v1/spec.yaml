@@ -1,0 +1,19 @@
+task: sds_page
+qc:
+  ladder_r2_min: 0.995
+  band_stability_jitter_min: 0.70
+acceptance:
+  must_improve: ["ladder_r2", "band_stability_jitter"]
+  must_not_regress: []
+budget:
+  max_attempts: 4
+runner:
+  run_cmd: "python -m autodense_autotune.java_bridge sds_page --input {input} --config configs/sds.yaml --outdir {outdir}"
+search:
+  param_grids:
+    - file: "configs/sds.yaml"
+      path: "detection.min_width"
+      values: [10, 12, 14]
+    - file: "configs/sds.yaml"
+      path: "detection.prominence"
+      values: [0.25, 0.30, 0.35]

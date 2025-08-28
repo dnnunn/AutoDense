@@ -1,0 +1,1205 @@
+{
+  "files": [
+    {
+      "path": "audit_orchestrator_multi_llm_codebase_auditor_python_cli.py",
+      "size": 28366
+    },
+    {
+      "path": "audit.txt",
+      "size": 209
+    },
+    {
+      "path": "cspell.json",
+      "size": 270
+    },
+    {
+      "path": "Architecture.md",
+      "size": 3491
+    },
+    {
+      "path": "audit_orchestrator.py",
+      "size": 29173
+    },
+    {
+      "path": "llm-debug-toolkit-v1.0.tar.gz",
+      "size": 23761
+    },
+    {
+      "path": "AUDIT_MECHANISM_FIX_SUMMARY.md",
+      "size": 3699
+    },
+    {
+      "path": "docs_inventory.csv",
+      "size": 9288
+    },
+    {
+      "path": "api-config.properties",
+      "size": 452
+    },
+    {
+      "path": "AutoDense_final_consolidated_docs_tests_2025-08-27.tar.gz",
+      "size": 24080771
+    },
+    {
+      "path": "package_only.py",
+      "size": 3077
+    },
+    {
+      "path": "INTERNAL_AUDIT_COLONY_COUNTING.md",
+      "size": 4825
+    },
+    {
+      "path": "llm-audit-toolkit-v1.0.tar.gz",
+      "size": 18582
+    },
+    {
+      "path": "audit.sh",
+      "size": 5201
+    },
+    {
+      "path": "test_canonical_helpers.java",
+      "size": 1264
+    },
+    {
+      "path": "CLAUDE.md",
+      "size": 5997
+    },
+    {
+      "path": "autodense_prompts_bundle_2025-08-27.tar.gz",
+      "size": 1762
+    },
+    {
+      "path": "markdownlint.config.json",
+      "size": 157
+    },
+    {
+      "path": "Makefile",
+      "size": 849
+    },
+    {
+      "path": ".gitignore",
+      "size": 68
+    },
+    {
+      "path": "SessionSummaries/Session_summary_August_20_2025.md",
+      "size": 5940
+    },
+    {
+      "path": "SessionSummaries/Session_summary_August_28_2025.md",
+      "size": 7568
+    },
+    {
+      "path": "SessionSummaries/Session_summary_August_27_2025.md",
+      "size": 15744
+    },
+    {
+      "path": "SessionSummaries/Session_summary_August_25_2025.md",
+      "size": 9622
+    },
+    {
+      "path": "NextSteps/NextSteps_August_28_2025.md",
+      "size": 8867
+    },
+    {
+      "path": "NextSteps/NextSteps_August_27_2025_Evening.md",
+      "size": 4925
+    },
+    {
+      "path": "NextSteps/NextSteps_August_27_2025.md",
+      "size": 8763
+    },
+    {
+      "path": "NextSteps/ERROR_HANDLING_REFACTORING_GUIDE.md",
+      "size": 7625
+    },
+    {
+      "path": "NextSteps/INPUT_VALIDATION_SECURITY_GUIDE.md",
+      "size": 8424
+    },
+    {
+      "path": "autodense/pom.xml",
+      "size": 980
+    },
+    {
+      "path": "autodense/README.md",
+      "size": 2822
+    },
+    {
+      "path": "autodense/fix_linter.sh",
+      "size": 2090
+    },
+    {
+      "path": "autodense/TestHandlePersistence.java",
+      "size": 2975
+    },
+    {
+      "path": "autodense/screenshots/Screenshot 2025-08-22 at 12.29.37.png",
+      "size": 36842
+    },
+    {
+      "path": "autodense/plugin/pom.xml",
+      "size": 10684
+    },
+    {
+      "path": "autodense/plugin/TODO.md",
+      "size": 1990
+    },
+    {
+      "path": "autodense/plugin/checkstyle.xml",
+      "size": 3320
+    },
+    {
+      "path": "autodense/plugin/src/main/resources/scientific_vocabulary.json",
+      "size": 6079
+    },
+    {
+      "path": "autodense/plugin/src/main/resources/standards.json",
+      "size": 9988
+    },
+    {
+      "path": "autodense/plugin/src/main/resources/config/protein_marker_colors.json",
+      "size": 632
+    },
+    {
+      "path": "autodense/plugin/src/main/resources/config/ladder_sets.json",
+      "size": 212
+    },
+    {
+      "path": "autodense/plugin/src/main/resources/config/protein_ladders.json",
+      "size": 191
+    },
+    {
+      "path": "autodense/plugin/src/main/resources/config/presets.json",
+      "size": 626
+    },
+    {
+      "path": "autodense/plugin/src/main/resources/web/index.html",
+      "size": 9750
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/AssayOps.java.backup2",
+      "size": 33933
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/PlateAnalysisTools.java",
+      "size": 58724
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/AssayOps.java.bak",
+      "size": 33913
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/CanonicalTools.java",
+      "size": 14363
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/AssayOps.java.bak2",
+      "size": 33913
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/GelAnalysisTools.java",
+      "size": 201588
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/ColonyAnalysisTools.java",
+      "size": 40742
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/AssayOps.java",
+      "size": 33940
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/HandleGuard.java",
+      "size": 5465
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/AssayOps.java.backup",
+      "size": 33913
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/GelAnalysisToolsNew.java",
+      "size": 11700
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/ColonyAnalysisTools.java.backup",
+      "size": 36921
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/BandDetectionTools.java",
+      "size": 14723
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/GelSpecializedAnalysis.java",
+      "size": 11312
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/BaseGelTool.java",
+      "size": 5634
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/LaneDetectionTools.java",
+      "size": 12165
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/GelQuantificationTools.java",
+      "size": 13011
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/GelExportTools.java",
+      "size": 15410
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/capabilities/AnalysisCapabilityRegistry.java",
+      "size": 22425
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyNormalizer.java",
+      "size": 13380
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/Binner.java",
+      "size": 7169
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/Deltas.java",
+      "size": 243
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyVisualizer.java",
+      "size": 10737
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/WorkflowManager.java",
+      "size": 11121
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ImageProcessingBugFixesTest.java",
+      "size": 13590
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PlateAlignment.java",
+      "size": 66261
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/BandDetector.java",
+      "size": 17030
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PlateDetector.java",
+      "size": 7384
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ResourceAwareImagePreprocessor.java",
+      "size": 7978
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/StreamlinedColonyClassifier.java",
+      "size": 20365
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PlateAnalysisDefaults.java",
+      "size": 19498
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AssistModels.java",
+      "size": 3754
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PetriColonyMask.java",
+      "size": 5547
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyOverlay.java",
+      "size": 7592
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyTracker.java",
+      "size": 15121
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyBinner.java",
+      "size": 5682
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyAssistModels.java",
+      "size": 11586
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyAnalysisParams.java",
+      "size": 12742
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/Peaks.java",
+      "size": 4918
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AnnulusBackground.java",
+      "size": 5745
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyClassifier.java",
+      "size": 46687
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/Calibrator.java",
+      "size": 10796
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/BandQuantification.java",
+      "size": 7346
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/LaneComparator.java",
+      "size": 19715
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/LaneDetector.java",
+      "size": 18639
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/XGalBluenessAnalyzer.java",
+      "size": 19515
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/MolecularWeightStandards.java",
+      "size": 12120
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/Normalizer.java",
+      "size": 250
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/TimeSeriesColonyTracker.java",
+      "size": 22345
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/BufferPool.java",
+      "size": 4451
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/StreamlinedColonyTools.java",
+      "size": 18110
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ImagePreprocessor.java",
+      "size": 16930
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AssistBandTool.java",
+      "size": 14998
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/Profiles.java",
+      "size": 3050
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AsyncImageProcessor.java",
+      "size": 7712
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/BlueIndex.java",
+      "size": 5843
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/Quant.java",
+      "size": 15218
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/OverlayRenderer.java",
+      "size": 34355
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/RobustColonyDetector.java",
+      "size": 11923
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/RobustPlateDetector.java",
+      "size": 9527
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/Presets.java",
+      "size": 8114
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AssistColonyTool.java",
+      "size": 18975
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/UnifiedColonyDetector.java",
+      "size": 14803
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/WorkflowRecorder.java",
+      "size": 12280
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/MutableColony.java",
+      "size": 2806
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyDetector.java",
+      "size": 5594
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ParameterConverter.java",
+      "size": 10576
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/FijiBandDetector.java",
+      "size": 4897
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ExceptionPatterns.java",
+      "size": 5820
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ResourceLeakDetector.java",
+      "size": 12328
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ToolNameStandardizer.java",
+      "size": 10627
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ProductionPerformanceMonitor.java",
+      "size": 12571
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ErrorHandler.java",
+      "size": 16227
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ImageJResourceManager.java",
+      "size": 1938
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ResourceManager.java",
+      "size": 7810
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/CommonValidation.java",
+      "size": 9276
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ErrorHandlingGuidelines.md",
+      "size": 12456
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/GeminiApiClient.java",
+      "size": 15900
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/ActionExecutor.java",
+      "size": 1888
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/GelContext.java",
+      "size": 999
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/OpenAnalyzeCommand.java",
+      "size": 836
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/AutoDenseWebServer.java",
+      "size": 11126
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/ToolSchemaValidator.java",
+      "size": 1000
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/ClasspathAudit.java",
+      "size": 9973
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/EnhancedImageJLauncher.java",
+      "size": 16838
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/GelUI.java",
+      "size": 109497
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/img/LaneWiseBackground.java",
+      "size": 2809
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/img/IJUtils.java",
+      "size": 1314
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/imageio/ImageIOServiceRegistry.java",
+      "size": 6768
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/imageio/ColorChannelProcessor.java",
+      "size": 15589
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/imageio/FormatNormalizer.java",
+      "size": 14874
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/workflow/BioRadFormat.java",
+      "size": 10568
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/workflow/GelFormatDetector.java",
+      "size": 14010
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/workflow/WorkflowPresetManager.java",
+      "size": 11084
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/workflow/ExportDialogManager.java",
+      "size": 10856
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/workflow/WorkflowPreset.java",
+      "size": 22966
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/workflow/NuPAGEFormat.java",
+      "size": 11576
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/model/Models.java",
+      "size": 4112
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/registry/CapabilityRegistry.java",
+      "size": 27877
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/export/ExcelExporter.java",
+      "size": 1982
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/performance/PerformanceOptimizer.java",
+      "size": 17211
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/LaneComparisonDemo.java",
+      "size": 611
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/IsoformProfilingDemo.java",
+      "size": 11520
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/ProteaseDigestKineticsDemo.java",
+      "size": 17433
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/DephosphorylationShiftDemo.java",
+      "size": 17551
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/README.md",
+      "size": 1604
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/ColonyAnalysisDemo.java",
+      "size": 611
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/HcpCompositionDemo.java",
+      "size": 12639
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/PurificationTrackerDemo.java",
+      "size": 6160
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/integration/IntegrationDemo.java",
+      "size": 605
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/gelanalysis/PCRNormalizationDemo.java",
+      "size": 635
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/gelanalysis/CoreDetectorDemo.java",
+      "size": 611
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/gelanalysis/BandAssistDemo.java",
+      "size": 599
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/gelanalysis/FunctionalApiDemo.java",
+      "size": 617
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/gelanalysis/StandardCurveDemo.java",
+      "size": 617
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/colonyanalysis/ColonyAssistDemo.java",
+      "size": 614
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/colonyanalysis/ColonyClassifierDemo.java",
+      "size": 638
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/colonyanalysis/PlateAnalysisDefaultsDemo.java",
+      "size": 668
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/colonyanalysis/ColonyNormalizerDemo.java",
+      "size": 638
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/performance/ResponseShapeDemo.java",
+      "size": 617
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/performance/SyntheticGelTest.java",
+      "size": 10526
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/orchestrator/GeminiOrchestrator.java",
+      "size": 86916
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/validation/ParameterValidator.java",
+      "size": 11917
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/validation/ToolResult.java",
+      "size": 9749
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/validation/ValidationPatterns.java",
+      "size": 8950
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/validation/SecureToolValidator.java",
+      "size": 12073
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/validation/InputValidator.java",
+      "size": 18963
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/SessionStore.java",
+      "size": 21605
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/SessionAnalysisKeys.java",
+      "size": 12831
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/ThreadSafeSessionStore.java",
+      "size": 21677
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/SessionStorageMigrator.java",
+      "size": 11466
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/ThreadSafetyValidationTest.java",
+      "size": 8372
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/SessionLogger.java",
+      "size": 26889
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/ConcurrentAccessTester.java",
+      "size": 29402
+    },
+    {
+      "path": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/SessionRecovery.java",
+      "size": 13168
+    },
+    {
+      "path": "autodense/plugin/src/main/java/autodense/sds/SdsOps.java",
+      "size": 10490
+    },
+    {
+      "path": "autodense/plugin/src/main/java/autodense/sds/SdsCalib.java",
+      "size": 14881
+    },
+    {
+      "path": "autodense/plugin/src/main/java/autodense/util/Csv.java",
+      "size": 1899
+    },
+    {
+      "path": "autodense/plugin/src/main/java/autodense/util/OverlayExporter.java",
+      "size": 1440
+    },
+    {
+      "path": "autodense/plugin/src/main/java/autodense/color/HsvOps.java",
+      "size": 647
+    },
+    {
+      "path": "autodense/plugin/src/main/java/autodense/agarose/AgaroseOps.java",
+      "size": 3166
+    },
+    {
+      "path": "autodense/plugin/src/main/java/autodense/agarose/LadderSets.java",
+      "size": 723
+    },
+    {
+      "path": "autodense/plugin/src/test/java/com/betterdairy/autodense/tools/ColonyAnalysisToolsTest.java",
+      "size": 11389
+    },
+    {
+      "path": "autodense/plugin/src/test/java/com/betterdairy/autodense/tools/GelAnalysisToolsTest.java",
+      "size": 10075
+    },
+    {
+      "path": "autodense/plugin/src/test/java/com/betterdairy/autodense/util/ResourceLeakTest.java",
+      "size": 9618
+    },
+    {
+      "path": "autodense/plugin/src/test/java/com/betterdairy/autodense/performance/PerformanceBenchmark.java",
+      "size": 10815
+    },
+    {
+      "path": "autodense/plugin/src/test/java/com/betterdairy/autodense/logging/SessionLoggingExample.java",
+      "size": 7667
+    },
+    {
+      "path": "autodense/plugin/src/test/java/com/betterdairy/autodense/orchestrator/GeminiOrchestratorTest.java",
+      "size": 9043
+    },
+    {
+      "path": "autodense/plugin/src/test/java/com/betterdairy/autodense/session/SessionStoreTest.java",
+      "size": 14595
+    },
+    {
+      "path": "autodense/plugin/META-INF/json/org.scijava.plugin.Plugin",
+      "size": 187
+    },
+    {
+      "path": "autodense/samples/IMG_9715-2.jpg",
+      "size": 1629992
+    },
+    {
+      "path": "autodense/samples/IMG_2940.jpg",
+      "size": 3457886
+    },
+    {
+      "path": "autodense/samples/Acquisition 7.Tif",
+      "size": 10157162
+    },
+    {
+      "path": "autodense/samples/IMG_9716-2.jpg",
+      "size": 1145814
+    },
+    {
+      "path": "autodense/samples/IMG_2937.jpg",
+      "size": 3589454
+    },
+    {
+      "path": "autodense/samples/IMG_9715.jpg",
+      "size": 1218114
+    },
+    {
+      "path": "autodense/samples/IMG_2939.jpg",
+      "size": 3343663
+    },
+    {
+      "path": "autodense/samples/IMG_2938.jpg",
+      "size": 3341749
+    },
+    {
+      "path": "autodense/samples/IMG_9716.jpg",
+      "size": 1225460
+    },
+    {
+      "path": "autodense/samples/Acquisition 8.Tif",
+      "size": 10157162
+    },
+    {
+      "path": "autodense/packaging/scripts/package_app.sh",
+      "size": 298
+    },
+    {
+      "path": "autodense/packaging/scripts/sign_and_notarize.sh",
+      "size": 701
+    },
+    {
+      "path": "autodense/packaging/scripts/build_llama_universal.sh",
+      "size": 809
+    },
+    {
+      "path": "autodense/packaging/scripts/build_and_package.sh",
+      "size": 5313
+    },
+    {
+      "path": "autodense/packaging/resources/icons/autodense.icns",
+      "size": 69
+    },
+    {
+      "path": "autodense/packaging/resources/Fiji.app/Contents/CodeResources",
+      "size": 1801
+    },
+    {
+      "path": "autodense/packaging/resources/Fiji.app/Contents/Info.plist",
+      "size": 1344
+    },
+    {
+      "path": "autodense/packaging/resources/Fiji.app/Contents/_CodeSignature/CodeResources",
+      "size": 4462
+    },
+    {
+      "path": "autodense/packaging/resources/Fiji.app/Contents/MacOS/fiji-macos-x64",
+      "size": 45280
+    },
+    {
+      "path": "autodense/packaging/resources/Fiji.app/Contents/MacOS/jaunch-macos-x64",
+      "size": 1628608
+    },
+    {
+      "path": "autodense/packaging/resources/Fiji.app/Contents/MacOS/fiji-macos",
+      "size": 156272
+    },
+    {
+      "path": "autodense/packaging/resources/Fiji.app/Contents/MacOS/jaunch-macos",
+      "size": 3258736
+    },
+    {
+      "path": "autodense/packaging/resources/Fiji.app/Contents/MacOS/fiji-macos-arm64",
+      "size": 90752
+    },
+    {
+      "path": "autodense/packaging/resources/Fiji.app/Contents/MacOS/jaunch-macos-arm64",
+      "size": 1603968
+    },
+    {
+      "path": "autodense/packaging/resources/Fiji.app/Contents/Resources/Fiji.icns",
+      "size": 135487
+    },
+    {
+      "path": "autodense/packaging/resources/Fiji.app/Contents/Resources/bin/llama-server",
+      "size": 4874816
+    },
+    {
+      "path": "autodense/packaging/resources/AutoDense.app/Contents/Resources/java/verify_classpath.sh",
+      "size": 646
+    },
+    {
+      "path": "server/registry.json",
+      "size": 3393
+    },
+    {
+      "path": "docs/test_sharpness_smear.md",
+      "size": 3105
+    },
+    {
+      "path": "docs/STREAMLINED_COLONY_ANALYSIS_SYSTEM.md",
+      "size": 14072
+    },
+    {
+      "path": "docs/PROJECT_STATUS.md",
+      "size": 6913
+    },
+    {
+      "path": "docs/CORE_DETECTOR_IMPLEMENTATION.md",
+      "size": 6867
+    },
+    {
+      "path": "docs/DEBUGGING_CHECKLIST.md",
+      "size": 7277
+    },
+    {
+      "path": "docs/PLATE_ANALYSIS_DEFAULTS.md",
+      "size": 13692
+    },
+    {
+      "path": "docs/New plan.md",
+      "size": 15196
+    },
+    {
+      "path": "docs/API_REFERENCE.md",
+      "size": 13046
+    },
+    {
+      "path": "docs/STATUSLOG.md",
+      "size": 570
+    },
+    {
+      "path": "docs/CHANGELOG.md",
+      "size": 23982
+    },
+    {
+      "path": "docs/CLAUDEKIT_REFERENCE.md",
+      "size": 7115
+    },
+    {
+      "path": "docs/robust_plate_registration_summary.md",
+      "size": 8498
+    },
+    {
+      "path": "docs/COMBINED_AUDIT_ACTION_PLAN.md",
+      "size": 7964
+    },
+    {
+      "path": "docs/perspective_robustness_analysis.md",
+      "size": 8292
+    },
+    {
+      "path": "docs/HANDLE_PERSISTENCE_STRATEGY.md",
+      "size": 6937
+    },
+    {
+      "path": "docs/DEMO_SYSTEM.md",
+      "size": 7902
+    },
+    {
+      "path": "docs/COLONY_EXPORT_SYSTEM.md",
+      "size": 8455
+    },
+    {
+      "path": "docs/MIGRATION.md",
+      "size": 7686
+    },
+    {
+      "path": "docs/FRONTEND_ENHANCEMENTS.md",
+      "size": 7547
+    },
+    {
+      "path": "docs/More Fiji imports.md",
+      "size": 20667
+    },
+    {
+      "path": "docs/README.md",
+      "size": 4249
+    },
+    {
+      "path": "docs/TOOL_VALIDATION_SYSTEM.md",
+      "size": 8045
+    },
+    {
+      "path": "docs/NEW_DOC_TEMPLATE.md",
+      "size": 435
+    },
+    {
+      "path": "docs/ARCHITECTURAL_DEBT.md",
+      "size": 3607
+    },
+    {
+      "path": "docs/xgal_improvements_summary.md",
+      "size": 5285
+    },
+    {
+      "path": "docs/DOCUMENT_CATALOG.md",
+      "size": 11980
+    },
+    {
+      "path": "docs/FUNCTIONAL_ARCHITECTURE_INTEGRATION.md",
+      "size": 6319
+    },
+    {
+      "path": "docs/SuccessLog.md",
+      "size": 570
+    },
+    {
+      "path": "docs/BandAssist.md",
+      "size": 22367
+    },
+    {
+      "path": "docs/ProteinQuantificationWorkflowIdea.md",
+      "size": 15606
+    },
+    {
+      "path": "docs/Bundle and Ship.md",
+      "size": 17106
+    },
+    {
+      "path": "docs/RELEASE_NOTES.md",
+      "size": 15080
+    },
+    {
+      "path": "docs/FIJI_ANALYSIS_INTEGRATION.md",
+      "size": 11061
+    },
+    {
+      "path": "docs/DOCUMENTATION.md",
+      "size": 21418
+    },
+    {
+      "path": "docs/WorkflowPresets.md",
+      "size": 48415
+    },
+    {
+      "path": "docs/COLONY_NORMALIZATION.md",
+      "size": 10802
+    },
+    {
+      "path": "docs/DEPENDENCY_STRATEGY.md",
+      "size": 8435
+    },
+    {
+      "path": "docs/PERFORMANCE_OPTIMIZATIONS.md",
+      "size": 10767
+    },
+    {
+      "path": "docs/EXPORT_SYSTEM.md",
+      "size": 8686
+    },
+    {
+      "path": "docs/COLONY_CLASSIFIER_IMPLEMENTATION.md",
+      "size": 7845
+    },
+    {
+      "path": "docs/VISUAL_MARKUP_STRATEGY.md",
+      "size": 7075
+    },
+    {
+      "path": "docs/Instructions.md",
+      "size": 20291
+    },
+    {
+      "path": "docs/IMPLEMENTATION_PLAN.md",
+      "size": 19040
+    },
+    {
+      "path": "docs/CANONICAL_TOOLS_SUMMARY.md",
+      "size": 7201
+    },
+    {
+      "path": "docs/COLONY_IDENTIFICATION_ASSIST.md",
+      "size": 16803
+    },
+    {
+      "path": "docs/DEPRECATED_TEMPLATE.md",
+      "size": 699
+    },
+    {
+      "path": "llm-debug-toolkit/requirements.txt",
+      "size": 366
+    },
+    {
+      "path": "llm-debug-toolkit/debug.sh",
+      "size": 10761
+    },
+    {
+      "path": "llm-debug-toolkit/debug_orchestrator.py",
+      "size": 35265
+    },
+    {
+      "path": "llm-debug-toolkit/README.md",
+      "size": 11389
+    },
+    {
+      "path": "llm-debug-toolkit/PACKAGE.md",
+      "size": 12837
+    },
+    {
+      "path": "llm-debug-toolkit/api-config.properties.example",
+      "size": 879
+    },
+    {
+      "path": "scripts/golden_xgal.ijm",
+      "size": 426
+    },
+    {
+      "path": "scripts/docs_tombstone_check.py",
+      "size": 3076
+    },
+    {
+      "path": "scripts/md_check.sh",
+      "size": 1417
+    },
+    {
+      "path": "scripts/docs_inventory.py",
+      "size": 1114
+    },
+    {
+      "path": "scripts/docs_meta_check.py",
+      "size": 3944
+    },
+    {
+      "path": "scripts/run_preset_sds_autodetect.json",
+      "size": 1281
+    },
+    {
+      "path": "scripts/run_preset_sds.json",
+      "size": 838
+    },
+    {
+      "path": "scripts/docs_links.py",
+      "size": 692
+    },
+    {
+      "path": "scripts/docs_similar.py",
+      "size": 939
+    },
+    {
+      "path": "scripts/install-githooks.sh",
+      "size": 119
+    },
+    {
+      "path": "scripts/golden_sds.ijm",
+      "size": 403
+    },
+    {
+      "path": "scripts/verify_golden.py",
+      "size": 2031
+    },
+    {
+      "path": "scripts/run_preset_agarose.json",
+      "size": 861
+    },
+    {
+      "path": "scripts/deprecate_doc.sh",
+      "size": 960
+    },
+    {
+      "path": "llm-audit-toolkit/audit_orchestrator.py",
+      "size": 28731
+    },
+    {
+      "path": "llm-audit-toolkit/requirements.txt",
+      "size": 366
+    },
+    {
+      "path": "llm-audit-toolkit/README.md",
+      "size": 8171
+    },
+    {
+      "path": "llm-audit-toolkit/api-config.properties",
+      "size": 452
+    },
+    {
+      "path": "llm-audit-toolkit/PACKAGE.md",
+      "size": 8415
+    },
+    {
+      "path": "llm-audit-toolkit/audit.sh",
+      "size": 8347
+    },
+    {
+      "path": "llm-audit-toolkit/api-config.properties.example",
+      "size": 879
+    },
+    {
+      "path": "ChatGPT/Cleanup.md",
+      "size": 30902
+    },
+    {
+      "path": "ChatGPT/What to fix (surgical and minimal).md",
+      "size": 15044
+    },
+    {
+      "path": "Issues/Issues_August_28_2025.md",
+      "size": 10657
+    },
+    {
+      "path": "Issues/Issues_August_27_2025_Evening.md",
+      "size": 7681
+    },
+    {
+      "path": "Issues/Issues_August_27_2025.md",
+      "size": 10106
+    }
+  ],
+  "count": 300
+}

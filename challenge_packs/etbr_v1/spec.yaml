@@ -1,0 +1,24 @@
+task: etbr_agarose
+qc:
+  lane_count_tolerance: 1
+  ladder_linear_r2_min: 0.995
+  background_snr_min: 5.0
+  smearing_index_max: 0.35
+acceptance:
+  must_improve: ["ladder_linear_r2","background_snr"]
+  must_not_regress: ["smearing_index"]
+budget:
+  max_attempts: 4
+runner:
+  run_cmd: "python -m autodense_autotune.java_bridge etbr_agarose --input {input} --config configs/etbr.yaml --outdir {outdir}"
+search:
+  param_grids:
+    - file: "configs/etbr.yaml"
+      path: "lane.min_width"
+      values: [10, 12, 14]
+    - file: "configs/etbr.yaml"
+      path: "band.prominence"
+      values: [0.20, 0.25, 0.30]
+    - file: "configs/etbr.yaml"
+      path: "pre.denoise_strength"
+      values: [0.0, 0.25, 0.5]

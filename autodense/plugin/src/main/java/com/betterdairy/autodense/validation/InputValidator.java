@@ -39,11 +39,11 @@ public final class InputValidator {
         ".csv", ".xlsx", ".png", ".jpg", ".pdf", ".json"
     );
     
-    // Handle format validation
+    // Handle format validation (updated to support UUID-based handles)
     private static final Pattern VALID_HANDLE_PATTERN = Pattern.compile("^[a-zA-Z0-9_-]+$");
-    private static final Pattern VALID_IMAGE_HANDLE_PATTERN = Pattern.compile("^img_[0-9]+$");
-    private static final Pattern VALID_OVERLAY_HANDLE_PATTERN = Pattern.compile("^ov_[0-9]+$");
-    private static final Pattern VALID_ANALYSIS_HANDLE_PATTERN = Pattern.compile("^analysis_[0-9]+$");
+    private static final Pattern VALID_IMAGE_HANDLE_PATTERN = Pattern.compile("^img_[0-9a-f]+$");
+    private static final Pattern VALID_OVERLAY_HANDLE_PATTERN = Pattern.compile("^ov_[0-9a-f]+$");
+    private static final Pattern VALID_ANALYSIS_HANDLE_PATTERN = Pattern.compile("^analysis_[0-9a-f]+$");
     
     // Parameter constraints
     private static final int MAX_STRING_LENGTH = 1000;
@@ -304,7 +304,7 @@ public final class InputValidator {
         
         String trimmed = handle.trim();
         if (!VALID_IMAGE_HANDLE_PATTERN.matcher(trimmed).matches()) {
-            throw new ValidationException("Invalid image handle format. Expected 'img_[number]', got: " + handle);
+            throw new ValidationException("Invalid image handle format. Expected 'img_[alphanumeric]', got: " + handle);
         }
         
         return trimmed;
@@ -320,7 +320,7 @@ public final class InputValidator {
         
         String trimmed = handle.trim();
         if (!VALID_OVERLAY_HANDLE_PATTERN.matcher(trimmed).matches()) {
-            throw new ValidationException("Invalid overlay handle format. Expected 'ov_[number]', got: " + handle);
+            throw new ValidationException("Invalid overlay handle format. Expected 'ov_[alphanumeric]', got: " + handle);
         }
         
         return trimmed;
@@ -336,7 +336,7 @@ public final class InputValidator {
         
         String trimmed = handle.trim();
         if (!VALID_ANALYSIS_HANDLE_PATTERN.matcher(trimmed).matches()) {
-            throw new ValidationException("Invalid analysis handle format. Expected 'analysis_[number]', got: " + handle);
+            throw new ValidationException("Invalid analysis handle format. Expected 'analysis_[alphanumeric]', got: " + handle);
         }
         
         return trimmed;

@@ -1,0 +1,24 @@
+task: colony_count
+qc:
+  touching_fraction_max: 0.20
+  size_cv_max: 0.30
+  min_colony_count: 10
+  max_colony_count: 2000
+acceptance:
+  must_improve: ["effective_recall"]
+  must_not_regress: ["touching_fraction","size_cv","false_positive_rate"]
+budget:
+  max_attempts: 4
+runner:
+  run_cmd: "python -m autodense_autotune.java_bridge colony_count --input {input} --config configs/colony.yaml --outdir {outdir}"
+search:
+  param_grids:
+    - file: "configs/colony.yaml"
+      path: "segmentation.threshold"
+      values: [0.25, 0.30, 0.35]
+    - file: "configs/colony.yaml"
+      path: "segmentation.min_area"
+      values: [20, 30, 40]
+    - file: "configs/colony.yaml"
+      path: "post.merge_distance_px"
+      values: [3, 5, 7]

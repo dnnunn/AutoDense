@@ -67,9 +67,6 @@ public final class ExceptionPatterns {
             return ErrorHandler.handleImageProcessingError(toolName, e, logger, recovery);
         } else if (e instanceof ArrayIndexOutOfBoundsException) {
             return ErrorHandler.handleImageProcessingError(toolName, e, logger, recovery);
-        } else if (e instanceof OutOfMemoryError) {
-            return ErrorHandler.handleImageProcessingError(toolName, 
-                new RuntimeException("Image too large to process", e), logger, recovery);
         } else {
             return ErrorHandler.handleUnexpectedError(toolName, new RuntimeException(e), logger, recovery);
         }
