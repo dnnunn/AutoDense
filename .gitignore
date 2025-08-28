@@ -27,5 +27,16 @@ logs/
 *.tmp
 *.temp
 
+# Backup files
+*.backup
+*.backup2
+*.bak
+*.bak2
+
+# Archives and packages (except intentional releases)
+*.tar.gz
+*.zip
+*.rar
+
 # Claude Code working directory
 .claude/
