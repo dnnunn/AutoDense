@@ -1,4 +1,5 @@
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/demos/colonyanalysis/ColonyAssistDemo.java
+/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/BaseGelTool.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/ToolSchemaValidator.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/demos/PurificationTrackerDemo.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/BandDetector.java
@@ -37,12 +38,14 @@
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/demos/performance/ResponseShapeDemo.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/autodense/color/HsvOps.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/tools/HandleGuard.java
+/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/BandDetectionTools.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/MolecularWeightStandards.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/GelUI.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/Normalizer.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/util/ImageJResourceManager.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/registry/CapabilityRegistry.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/util/ErrorHandler.java
+/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/GelQuantificationTools.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/GelContext.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/autodense/util/Csv.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/session/SessionRecovery.java
@@ -80,6 +83,7 @@
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/Binner.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ImageProcessingBugFixesTest.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PetriColonyMask.java
+/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/GelExportTools.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyAssistModels.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/workflow/GelFormatDetector.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/session/ConcurrentAccessTester.java
@@ -90,6 +94,7 @@
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/ClasspathAudit.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/demos/gelanalysis/StandardCurveDemo.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyClassifier.java
+/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/LaneDetectionTools.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/demos/gelanalysis/CoreDetectorDemo.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/session/ThreadSafetyValidationTest.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/autodense/agarose/AgaroseOps.java
@@ -102,9 +107,11 @@
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/demos/HcpCompositionDemo.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/demos/ProteaseDigestKineticsDemo.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/demos/colonyanalysis/PlateAnalysisDefaultsDemo.java
+/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/tools/GelAnalysisToolsNew.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyDetector.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/validation/ParameterValidator.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/validation/SecureToolValidator.java
+/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/GelSpecializedAnalysis.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AssistBandTool.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/autodense/util/OverlayExporter.java
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/Presets.java

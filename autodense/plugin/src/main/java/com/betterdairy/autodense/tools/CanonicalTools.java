@@ -1,7 +1,11 @@
 package com.betterdairy.autodense.tools;
 
 import com.betterdairy.autodense.session.SessionStore;
+import com.betterdairy.autodense.session.SessionRecovery;
+import com.betterdairy.autodense.util.ErrorHandler;
 import org.json.JSONObject;
+
+import java.util.logging.Logger;
 
 /**
  * CANONICAL TOOL SURFACE for Gemini AI interaction.
@@ -27,14 +31,18 @@ import org.json.JSONObject;
  */
 public final class CanonicalTools {
     
+    private static final Logger logger = Logger.getLogger(CanonicalTools.class.getName());
+    
     private final GelAnalysisTools gelTools;
     private final AssayOps assayOps;
     private final SessionStore sessionStore;
+    private final SessionRecovery recovery;
     
     public CanonicalTools(GelAnalysisTools gelTools, AssayOps assayOps, SessionStore sessionStore) {
         this.gelTools = gelTools;
         this.assayOps = assayOps;
         this.sessionStore = sessionStore;
+        this.recovery = new SessionRecovery(sessionStore);
     }
     
     // =============================================================================
@@ -115,11 +123,12 @@ public final class CanonicalTools {
                 
             return result;
             
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("analyze_gel", e, logger, recovery);
+        } catch (IllegalStateException e) {
+            return ErrorHandler.handleSessionError("analyze_gel", e, logger, recovery);
         } catch (Exception e) {
-            return new JSONObject()
-                .put("success", false)
-                .put("error", "analyze_gel_failed")
-                .put("message", "Failed to analyze gel: " + e.getMessage());
+            return ErrorHandler.handleUnexpectedError("analyze_gel", e, logger, recovery);
         }
     }
     
@@ -158,11 +167,12 @@ public final class CanonicalTools {
             result.put("workflow", "gel_adjustment");
             return result;
             
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("adjust_gel", e, logger, recovery);
+        } catch (IllegalStateException e) {
+            return ErrorHandler.handleSessionError("adjust_gel", e, logger, recovery);
         } catch (Exception e) {
-            return new JSONObject()
-                .put("success", false)
-                .put("error", "adjust_gel_failed")
-                .put("message", "Failed to adjust gel: " + e.getMessage());
+            return ErrorHandler.handleUnexpectedError("adjust_gel", e, logger, recovery);
         }
     }
     
@@ -179,11 +189,10 @@ public final class CanonicalTools {
             
             return gelTools.exportResults(args);
             
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("export_gel", e, logger, recovery);
         } catch (Exception e) {
-            return new JSONObject()
-                .put("success", false)
-                .put("error", "export_gel_failed")
-                .put("message", "Failed to export gel: " + e.getMessage());
+            return ErrorHandler.handleUnexpectedError("export_gel", e, logger, recovery);
         }
     }
     
@@ -236,11 +245,12 @@ public final class CanonicalTools {
                 
             return result;
             
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("analyze_plate", e, logger, recovery);
+        } catch (IllegalStateException e) {
+            return ErrorHandler.handleSessionError("analyze_plate", e, logger, recovery);
         } catch (Exception e) {
-            return new JSONObject()
-                .put("success", false)
-                .put("error", "analyze_plate_failed")
-                .put("message", "Failed to analyze plate: " + e.getMessage());
+            return ErrorHandler.handleUnexpectedError("analyze_plate", e, logger, recovery);
         }
     }
     
@@ -262,11 +272,12 @@ public final class CanonicalTools {
             result.put("workflow", "plate_adjustment");
             return result;
             
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("adjust_plate", e, logger, recovery);
+        } catch (IllegalStateException e) {
+            return ErrorHandler.handleSessionError("adjust_plate", e, logger, recovery);
         } catch (Exception e) {
-            return new JSONObject()
-                .put("success", false)
-                .put("error", "adjust_plate_failed")
-                .put("message", "Failed to adjust plate: " + e.getMessage());
+            return ErrorHandler.handleUnexpectedError("adjust_plate", e, logger, recovery);
         }
     }
     
@@ -283,11 +294,10 @@ public final class CanonicalTools {
             
             return assayOps.export(args);
             
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("export_plate", e, logger, recovery);
         } catch (Exception e) {
-            return new JSONObject()
-                .put("success", false)
-                .put("error", "export_plate_failed")
-                .put("message", "Failed to export plate: " + e.getMessage());
+            return ErrorHandler.handleUnexpectedError("export_plate", e, logger, recovery);
         }
     }
     

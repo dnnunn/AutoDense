@@ -1,0 +1,808 @@
+package com.betterdairy.autodense.tools;
+
+import com.betterdairy.autodense.session.SessionStore;
+import com.betterdairy.autodense.session.SessionRecovery;
+import com.betterdairy.autodense.model.Models.*;
+import com.betterdairy.autodense.util.ErrorHandler;
+import com.betterdairy.autodense.util.ImageJResourceManager;
+import ij.IJ;
+import ij.ImagePlus;
+import ij.gui.Overlay;
+import ij.gui.Roi;
+import ij.gui.OvalRoi;
+import org.json.JSONObject;
+import org.json.JSONArray;
+
+import java.awt.Color;
+import java.util.List;
+import java.util.ArrayList;
+
+/**
+ * Consolidated assay operations for colony analysis.
+ * Replaces ColonyAnalysisTools and PlateAnalysisTools with unified parameterized interface.
+ * 
+ * Tool primitives:
+ * - imagej.assay.detect_colonies: Detection with stain/plate layout options
+ * - imagej.assay.measure_colonies: Intensity stats, circularity, eccentricity
+ * - imagej.assay.annotate: Labels with id, blue_index, size_bin, row/col
+ * - imagej.assay.export: CSV + overlay PNG output
+ */
+public class AssayOps {
+    
+    private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(AssayOps.class.getName());
+    
+    // Resource cleanup now handled by shared ImageJResourceManager utility
+    
+    
+    private final SessionStore store;
+    private final SessionRecovery recovery;
+    
+    // X-gal baseline macro for quick-test comparison
+    private static final String XGAL_BASELINE_MACRO = """
+        // X-gal Colony Detection Baseline Macro
+        // Expects an open plate image; outputs ROIs + Overlay + results table
+        run("Duplicate...", "title=work");
+        run("Color Space Converter", "from=RGB to=HSV"); // if CIELAB not available
+        Stack.setSlice(2); // Saturation
+        run("Gaussian Blur...", "sigma=1.0");
+        setAutoThreshold("Default dark");
+        run("Convert to Mask");
+        run("Open"); 
+        run("Fill Holes");
+        run("Analyze Particles...", "size=40-Infinity circularity=0.30-1.00 add show=None");
+        run("Set Measurements...", "area mean centroid shape redirect=None decimal=3");
+        selectWindow("Results");
+        """;
+    
+    // Supported stain types
+    public enum StainType {
+        X_GAL("x-gal"),
+        NEUTRAL_RED("neutral-red"),
+        NONE("none");
+        
+        private final String value;
+        StainType(String value) { this.value = value; }
+        public String getValue() { return value; }
+        
+        public static StainType fromString(String value) {
+            for (StainType type : values()) {
+                if (type.value.equals(value)) return type;
+            }
+            return NONE;
+        }
+    }
+    
+    // Supported plate layouts
+    public enum PlateLayout {
+        PLATE_96(96, 8, 12),
+        PLATE_384(384, 16, 24),
+        PETRI(1, 1, 1);
+        
+        private final int wells;
+        private final int rows;
+        private final int cols;
+        
+        PlateLayout(int wells, int rows, int cols) {
+            this.wells = wells;
+            this.rows = rows;
+            this.cols = cols;
+        }
+        
+        public int getWells() { return wells; }
+        public int getRows() { return rows; }
+        public int getCols() { return cols; }
+        
+        public static PlateLayout fromInt(int wells) {
+            switch (wells) {
+                case 96: return PLATE_96;
+                case 384: return PLATE_384;
+                default: return PETRI;
+            }
+        }
+    }
+    
+    public AssayOps(SessionStore sessionStore) {
+        this.store = sessionStore;
+        this.recovery = new SessionRecovery(sessionStore);
+    }
+    
+    /**
+     * imagej.assay.detect_colonies
+     * Unified colony detection with parameterized options
+     */
+    public JSONObject detectColonies(JSONObject params) {
+        try {
+            String imageHandle = params.getString("image_handle");
+            StainType stain = StainType.fromString(params.optString("stain", "none"));
+            PlateLayout layout = PlateLayout.fromInt(params.optInt("plate_layout", 1));
+            double minSize = params.optDouble("min_size", 5.0);
+            double maxSize = params.optDouble("max_size", 1000.0);
+            
+            SessionStore.ImageRecord imgRecord = store.getImage(imageHandle);
+            if (imgRecord == null) {
+                return ErrorHandler.handleValidationError("assay_tool", 
+                    new IllegalArgumentException("Image handle not found: " + imageHandle), 
+                    logger, recovery);
+            }
+            
+            ImagePlus imp = imgRecord.image;
+            
+            // Detection logic based on stain type
+            List<Colony> colonies = performDetection(imp, stain, layout, minSize, maxSize);
+            
+            // Store results in session
+            JSONObject analysisData = new JSONObject()
+                .put("type", "colony_detection")
+                .put("colonies_found", colonies.size())
+                .put("stain_type", stain.getValue())
+                .put("plate_layout", layout.getWells())
+                .put("parameters", params);
+            
+            String storedHandle = store.putAnalysis("colony_detection", analysisData, imageHandle);
+            
+            return new JSONObject()
+                .put("success", true)
+                .put("analysis_handle", storedHandle)
+                .put("colonies_detected", colonies.size())
+                .put("stain_type", stain.getValue())
+                .put("plate_layout", layout.getWells());
+                
+        } catch (Exception e) {
+            return ErrorHandler.handleUnexpectedError("detect_colonies", e, logger, recovery);
+        }
+    }
+    
+    /**
+     * imagej.assay.measure_colonies
+     * Comprehensive colony measurements: intensity stats, circularity, eccentricity
+     */
+    public JSONObject measureColonies(JSONObject params) {
+        try {
+            String imageHandle = params.getString("image_handle");
+            String analysisHandle = params.optString("analysis_handle");
+            
+            SessionStore.ImageRecord imgRecord = store.getImage(imageHandle);
+            if (imgRecord == null) {
+                return ErrorHandler.handleValidationError("assay_tool", 
+                    new IllegalArgumentException("Image handle not found: " + imageHandle), 
+                    logger, recovery);
+            }
+            
+            ImagePlus imp = imgRecord.image;
+            
+            // Get existing colonies or detect new ones
+            List<Colony> colonies = getColoniesFromAnalysis(analysisHandle);
+            if (colonies.isEmpty()) {
+                // Fallback to basic detection
+                colonies = performDetection(imp, StainType.NONE, PlateLayout.PETRI, 5.0, 1000.0);
+            }
+            
+            // Perform measurements
+            JSONArray measurements = new JSONArray();
+            for (int i = 0; i < colonies.size(); i++) {
+                Colony colony = colonies.get(i);
+                JSONObject measurement = measureSingleColony(imp, colony, i);
+                measurements.put(measurement);
+            }
+            
+            return new JSONObject()
+                .put("success", true)
+                .put("measurements", measurements)
+                .put("colonies_measured", colonies.size());
+                
+        } catch (Exception e) {
+            return ErrorHandler.handleUnexpectedError("measure_colonies", e, logger, recovery);
+        }
+    }
+    
+    /**
+     * Annotates colonies with labels showing ID, size classification, and other properties.
+     * Tool ID: imagej.assay.annotate
+     * Uses overlay patterns only - never modifies pixel data directly.
+     * 
+     * @param params JSON object containing annotation parameters:
+     *               - image_handle (String): Handle to the image to annotate
+     *               - labels (JSONArray): Array of label configurations
+     *               - font_size (Integer): Font size for labels (default: 12)
+     *               - label_color (String): Color for labels
+     * @return JSON object with annotation results and overlay handle
+     * @throws IllegalArgumentException if image handle is invalid
+     */
+    public JSONObject annotate(JSONObject params) {
+        try {
+            String imageHandle = params.getString("image_handle");
+            JSONArray annotations = params.optJSONArray("labels");
+            
+            SessionStore.ImageRecord imgRecord = store.getImage(imageHandle);
+            if (imgRecord == null) {
+                return ErrorHandler.handleValidationError("assay_tool", 
+                    new IllegalArgumentException("Image handle not found: " + imageHandle), 
+                    logger, recovery);
+            }
+            
+            ImagePlus imp = imgRecord.image;
+            
+            // Get or create overlay (NEVER modify pixel data)
+            Overlay ov = imp.getOverlay();
+            if (ov == null) {
+                ov = new Overlay();
+            }
+            
+            if (annotations != null) {
+                for (int i = 0; i < annotations.length(); i++) {
+                    JSONObject label = annotations.getJSONObject(i);
+                    addAnnotationROI(ov, label);
+                }
+            }
+            
+            // Apply overlay to image
+            imp.setOverlay(ov);
+            
+            return new JSONObject()
+                .put("success", true)
+                .put("annotations_added", annotations != null ? annotations.length() : 0);
+                
+        } catch (Exception e) {
+            return ErrorHandler.handleUnexpectedError("annotate_colonies", e, logger, recovery);
+        }
+    }
+    
+    /**
+     * imagej.assay.run_macro
+     * Run baseline ImageJ macro for quick-test comparison
+     */
+    public JSONObject runMacro(JSONObject params) {
+        try {
+            String imageHandle = params.getString("image_handle");
+            String macroName = params.optString("macro", "xgal_baseline");
+            
+            SessionStore.ImageRecord imgRecord = store.getImage(imageHandle);
+            if (imgRecord == null) {
+                return ErrorHandler.handleValidationError("assay_tool", 
+                    new IllegalArgumentException("Image handle not found: " + imageHandle), 
+                    logger, recovery);
+            }
+            
+            ImagePlus imp = imgRecord.image;
+            
+            // Run the appropriate macro
+            String macroCode = switch (macroName.toLowerCase()) {
+                case "xgal_baseline" -> XGAL_BASELINE_MACRO;
+                default -> throw new IllegalArgumentException("Unknown macro: " + macroName);
+            };
+            
+            // Execute macro on current image
+            IJ.selectWindow(imp.getTitle());
+            IJ.runMacro(macroCode);
+            
+            // Get results from macro execution
+            ij.plugin.frame.RoiManager roiManager = ij.plugin.frame.RoiManager.getRoiManager();
+            ij.measure.ResultsTable rt = ij.measure.ResultsTable.getResultsTable();
+            
+            int coloniesFound = 0;
+            if (roiManager != null) {
+                coloniesFound = roiManager.getCount();
+            }
+            
+            // Get measurements if available
+            JSONArray measurements = new JSONArray();
+            if (rt != null && rt.getCounter() > 0) {
+                for (int i = 0; i < rt.getCounter(); i++) {
+                    JSONObject measurement = new JSONObject()
+                        .put("area", rt.getValueAsDouble(rt.getColumnIndex("Area"), i))
+                        .put("mean", rt.getValueAsDouble(rt.getColumnIndex("Mean"), i))
+                        .put("x", rt.getValueAsDouble(rt.getColumnIndex("X"), i))
+                        .put("y", rt.getValueAsDouble(rt.getColumnIndex("Y"), i))
+                        .put("circularity", rt.getValueAsDouble(rt.getColumnIndex("Circ."), i));
+                    measurements.put(measurement);
+                }
+            }
+            
+            return new JSONObject()
+                .put("success", true)
+                .put("macro_executed", macroName)
+                .put("colonies_detected", coloniesFound)
+                .put("measurements", measurements)
+                .put("method", "imagej_macro_baseline");
+                
+        } catch (Exception e) {
+            return ErrorHandler.handleUnexpectedError("run_xgal_macro", e, logger, recovery);
+        }
+    }
+    
+    /**
+     * imagej.assay.export
+     * Export CSV data + overlay PNG
+     */
+    public JSONObject export(JSONObject params) {
+        try {
+            String imageHandle = params.getString("image_handle");
+            String analysisHandle = params.optString("analysis_handle");
+            boolean includeOverlay = params.optBoolean("include_overlay", true);
+            boolean includeCsv = params.optBoolean("include_csv", true);
+            
+            SessionStore.ImageRecord imgRecord = store.getImage(imageHandle);
+            if (imgRecord == null) {
+                return ErrorHandler.handleValidationError("assay_tool", 
+                    new IllegalArgumentException("Image handle not found: " + imageHandle), 
+                    logger, recovery);
+            }
+            
+            JSONArray exportPaths = new JSONArray();
+            
+            // Export CSV if requested
+            if (includeCsv) {
+                String csvPath = exportCSVData(imageHandle, analysisHandle);
+                if (csvPath != null) {
+                    exportPaths.put(csvPath);
+                }
+            }
+            
+            // Export overlay PNG if requested
+            if (includeOverlay) {
+                String pngPath = exportOverlayPNG(imgRecord.image);
+                if (pngPath != null) {
+                    exportPaths.put(pngPath);
+                }
+            }
+            
+            return new JSONObject()
+                .put("success", true)
+                .put("exported_files", exportPaths);
+                
+        } catch (Exception e) {
+            return ErrorHandler.handleUnexpectedError("export_colonies", e, logger, recovery);
+        }
+    }
+    
+    // =============== PRIVATE HELPER METHODS ===============
+    
+    private List<Colony> performDetection(ImagePlus imp, StainType stain, PlateLayout layout, double minSize, double maxSize) {
+        List<Colony> colonies = new ArrayList<>();
+        
+        try {
+            if (stain == StainType.X_GAL) {
+                // Robust X-gal blue detection pipeline
+                colonies = detectXGalColonies(imp, minSize, maxSize);
+            } else {
+                // Basic colony detection for neutral-red or no stain
+                colonies = detectBasicColonies(imp, minSize, maxSize);
+            }
+        } catch (IllegalArgumentException e) {
+            logger.log(java.util.logging.Level.WARNING, "Invalid parameters for colony detection", e);
+            throw e;
+        } catch (Exception e) {
+            logger.log(java.util.logging.Level.SEVERE, "Colony detection failed", e);
+            throw e; // Let the public method handle with ErrorHandler
+        }
+        
+        return colonies;
+    }
+    
+    /**
+     * Robust X-gal blue colony detection addressing plate lighting, plastic, and media issues
+     */
+    private List<Colony> detectXGalColonies(ImagePlus imp, double minSize, double maxSize) {
+        List<Colony> colonies = new ArrayList<>();
+        ImagePlus balanced = null;
+        
+        try {
+            // Step 1: White-balance using plate blank region (or automatic gray-world)
+            balanced = whiteBalance(imp);
+            
+            // Step 2: Compute blue_index using canonical CIELAB helper
+            ij.process.FloatProcessor blueIndex = computeBlueIndex(balanced);
+            
+            // Step 4: Adaptive threshold T = median(blue_index) + k * MAD (k≈2.5)
+            float threshold = computeAdaptiveThreshold(blueIndex, 2.5f);
+            
+            // Step 5: Create binary mask and morphological operations
+            ij.process.ImageProcessor mask = createBinaryMask(blueIndex, threshold);
+            morphologicalOpen(mask);  // Remove dust
+            fillHoles(mask);
+            
+            // Step 6: Analyze particles -> ROIs
+            ij.measure.ResultsTable rt = new ij.measure.ResultsTable();
+            ij.plugin.frame.RoiManager rm = new ij.plugin.frame.RoiManager(false);
+            
+            ij.plugin.filter.ParticleAnalyzer pa = new ij.plugin.filter.ParticleAnalyzer(
+                ij.plugin.filter.ParticleAnalyzer.ADD_TO_MANAGER,
+                ij.measure.Measurements.AREA + ij.measure.Measurements.CIRCULARITY + ij.measure.Measurements.MEAN,
+                rt, minSize, maxSize, 0.3, 1.0);
+            
+            ij.plugin.filter.ParticleAnalyzer.setRoiManager(rm);
+            pa.analyze(new ImagePlus("mask", mask));
+            
+            // Step 7: Compute BI per ROI and create colony objects with annotations
+            ij.gui.Overlay ov = new ij.gui.Overlay();
+            
+            for (int i = 0; i < rm.getCount(); i++) {
+                ij.gui.Roi r = rm.getRoi(i);
+                
+                // Compute blue index within ROI from original blueIndex image
+                double bi = meanWithinROI(blueIndex, r);
+                double area = rt.getValue("Area", i);
+                double circularity = rt.getValue("Circ.", i);
+                
+                // Assign size and blue bins
+                String sizeBin = binSize(area);
+                String blueBin = binBlue(bi);
+                
+                // Create colony object with all required fields
+                java.awt.Rectangle bounds = r.getBounds();
+                double centerX = bounds.getCenterX();
+                double centerY = bounds.getCenterY();
+                double diameter = Math.sqrt(4 * area / Math.PI);  // Equivalent diameter
+                double diameterMm = diameter * 0.1;  // Convert to mm (placeholder scale)
+                
+                Colony colony = new Colony(
+                    i,                                    // index
+                    centerX, centerY,                     // x, y coordinates
+                    area,                                 // area
+                    diameter,                             // diameter in pixels
+                    diameterMm,                           // diameter in mm
+                    circularity,                          // circularity
+                    1.0,                                  // solidity (placeholder)
+                    bi,                                   // meanIntensity (using blue index)
+                    blueBin.equals("blue") ? ColonyColor.BLUE : ColonyColor.WHITE,
+                    Math.abs(bi),                         // colorConfidence (using absolute blue index)
+                    sizeBin.equals("large") ? ColonySize.LARGE : 
+                        sizeBin.equals("medium") ? ColonySize.MEDIUM : ColonySize.SMALL,
+                    sizeBin + "_" + blueBin               // binCategory
+                );
+                
+                colonies.add(colony);
+                
+                // Annotate ROI following Overlay + ROI Manager pattern
+                r.setStrokeColor(biToColor(bi));  // Deeper blue → darker stroke
+                r.setStrokeWidth(2);
+                r.setName(String.format("c%03d  BI=%.2f  size=%s", i + 1, bi, sizeBin));
+                ov.add(r);
+            }
+            
+            // Apply overlay to image (never modify pixel data)
+            imp.setOverlay(ov);
+            
+        } catch (IllegalArgumentException e) {
+            logger.log(java.util.logging.Level.WARNING, "Invalid parameters for X-gal detection", e);
+            throw e;
+        } catch (Exception e) {
+            logger.log(java.util.logging.Level.SEVERE, "X-gal detection failed", e);
+            throw e; // Let the public method handle with ErrorHandler
+        } finally {
+            // Ensure proper resource cleanup
+            ImageJResourceManager.safeCleanup(balanced);
+        }
+        
+        return colonies;
+    }
+    
+    /**
+     * Basic colony detection for neutral-red or unstained colonies
+     * TODO: Implement actual detection algorithm for non-X-gal colonies
+     */
+    private List<Colony> detectBasicColonies(ImagePlus imp, double minSize, double maxSize) {
+        throw new UnsupportedOperationException(
+            "Basic colony detection not yet implemented. Use X-gal detection mode instead.");
+    }
+    
+    // =============== BLUE DETECTION HELPER METHODS ===============
+    
+    private ImagePlus whiteBalance(ImagePlus imp) {
+        // Use basic contrast normalization instead of threshold
+        ImagePlus balanced = imp.duplicate();
+        IJ.run(balanced, "Enhance Contrast", "saturated=0.35");
+        return balanced;
+    }
+    
+    private ij.process.FloatProcessor computeBlueIndex(ImagePlus imp) {
+        // PERFORMANCE OPTIMIZATION: Check if image is too large and needs downscaling
+        ImagePlus processingImage = imp;
+        double scaleFactor = 1.0;
+        
+        if (imp.getWidth() * imp.getHeight() > 2_000_000) { // > 2MP threshold
+            logger.info(String.format("Large image detected (%dx%d = %d pixels). Downscaling for performance.", 
+                imp.getWidth(), imp.getHeight(), imp.getWidth() * imp.getHeight()));
+            processingImage = com.betterdairy.autodense.performance.PerformanceOptimizer.DownscaledSampling
+                .createFastProcessingVersion(imp, 1600);
+            scaleFactor = (double) imp.getWidth() / processingImage.getWidth();
+            logger.info(String.format("Downscaled to %dx%d (scale factor: %.2f)", 
+                processingImage.getWidth(), processingImage.getHeight(), scaleFactor));
+        }
+        
+        // Process on potentially downscaled image
+        int width = processingImage.getWidth();
+        int height = processingImage.getHeight();
+        ij.process.FloatProcessor blueIndexProcessor = new ij.process.FloatProcessor(width, height);
+        
+        // Convert RGB image to blue index using canonical helper
+        ij.process.ImageProcessor ip = processingImage.getProcessor();
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int rgb = ip.getPixel(x, y);
+                int r = (rgb >> 16) & 0xFF;
+                int g = (rgb >> 8) & 0xFF;
+                int b = rgb & 0xFF;
+                
+                double blueIndex = com.betterdairy.autodense.analysis.BlueIndex.blueIndex(r, g, b);
+                blueIndexProcessor.setf(x, y, (float) blueIndex);
+            }
+        }
+        
+        // Scale results back to original size if downscaling was applied
+        if (scaleFactor != 1.0) {
+            logger.info(String.format("Scaling blue index result back to original size (%dx%d)", 
+                imp.getWidth(), imp.getHeight()));
+            blueIndexProcessor = (ij.process.FloatProcessor) blueIndexProcessor.resize(imp.getWidth(), imp.getHeight());
+        }
+        
+        // Clean up temporary downscaled image if created
+        if (processingImage != imp) {
+            processingImage.close();
+        }
+        
+        return blueIndexProcessor;
+    }
+    
+    /**
+     * Public API: Compute CIELAB-based blue index for unified blue detection
+     * Used by XGalBluenessAnalyzer to delegate to unified core
+     */
+    public static double computeCIELABBlueIndex(ImagePlus image, int x, int y, int radius) {
+        if (image == null) return 0.0;
+        
+        // Convert to CIELAB if needed
+        ImagePlus labImage = convertImageToCIELAB(image);
+        if (labImage == null) return 0.0;
+        
+        // Extract region around colony
+        ij.process.ImageProcessor processor = labImage.getStack().getProcessor(3); // b* channel
+        
+        // Sample pixels in radius around center point
+        double sumBStar = 0.0;
+        int count = 0;
+        
+        for (int dy = -radius; dy <= radius; dy++) {
+            for (int dx = -radius; dx <= radius; dx++) {
+                int px = x + dx;
+                int py = y + dy;
+                
+                // Check bounds and circular region
+                if (px >= 0 && px < processor.getWidth() && 
+                    py >= 0 && py < processor.getHeight() &&
+                    dx*dx + dy*dy <= radius*radius) {
+                    
+                    sumBStar += processor.getf(px, py);
+                    count++;
+                }
+            }
+        }
+        
+        if (count == 0) return 0.0;
+        
+        double avgBStar = sumBStar / count;
+        // CIELAB blue index: more negative b* = more blue
+        return Math.max(0.0, -avgBStar / 100.0);
+    }
+    
+    /**
+     * Public API: Convert image to CIELAB color space
+     */
+    public static ImagePlus convertImageToCIELAB(ImagePlus imp) {
+        if (imp == null) return null;
+        
+        ImagePlus lab = imp.duplicate();
+        try {
+            ij.IJ.run(lab, "Lab Stack", "");
+            return lab;
+        } catch (Exception e) {
+            lab.flush(); // Cleanup on error
+            // Fallback: return original image if CIELAB conversion fails
+            return imp.duplicate(); // caller responsible for cleanup
+        }
+    }
+    
+    private float computeAdaptiveThreshold(ij.process.FloatProcessor blueIndex, float k) {
+        // T = median(blue_index) + k * MAD (k≈2.5)
+        float[] pixels = (float[]) blueIndex.getPixels();
+        float median = robustMedian(pixels);
+        float mad = computeMAD(pixels, median);
+        return median + k * mad;
+    }
+    
+    private float robustMedian(float[] values) {
+        java.util.Arrays.sort(values.clone());
+        int n = values.length;
+        return n % 2 == 0 ? (values[n/2-1] + values[n/2]) / 2.0f : values[n/2];
+    }
+    
+    private float computeMAD(float[] values, float median) {
+        // Median Absolute Deviation
+        float[] deviations = new float[values.length];
+        for (int i = 0; i < values.length; i++) {
+            deviations[i] = Math.abs(values[i] - median);
+        }
+        return robustMedian(deviations);
+    }
+    
+    private ij.process.ImageProcessor createBinaryMask(ij.process.FloatProcessor blueIndex, float threshold) {
+        ij.process.ImageProcessor mask = blueIndex.duplicate();
+        for (int i = 0; i < mask.getPixelCount(); i++) {
+            mask.setf(i, mask.getf(i) >= threshold ? 255f : 0f);
+        }
+        return mask;
+    }
+    
+    private void morphologicalOpen(ij.process.ImageProcessor mask) {
+        // Morphological opening to remove dust
+        IJ.run(new ImagePlus("mask", mask), "Open", "");
+    }
+    
+    private void fillHoles(ij.process.ImageProcessor mask) {
+        IJ.run(new ImagePlus("mask", mask), "Fill Holes", "");
+    }
+    
+    private double meanWithinROI(ij.process.FloatProcessor image, ij.gui.Roi roi) {
+        // Compute mean blue index within ROI
+        image.setRoi(roi);
+        return image.getStatistics().mean;
+    }
+    
+    private String binSize(double area) {
+        // Assign size bins based on colony area
+        if (area < 50) return "S";
+        else if (area < 200) return "M"; 
+        else if (area < 500) return "L";
+        else return "XL";
+    }
+    
+    private String binBlue(double blueIndex) {
+        // Assign blue intensity bins
+        if (blueIndex < 0.2) return "pale";
+        else if (blueIndex < 0.5) return "moderate";
+        else return "deep";
+    }
+    
+    private Color biToColor(double blueIndex) {
+        // Map blue index to stroke color: deeper blue → darker stroke
+        float hue = 0.58f; // Blue hue
+        float saturation = 1.0f;
+        float brightness = Math.max(0.3f, 1.0f - (float)blueIndex); // Darker for higher BI
+        return Color.getHSBColor(hue, saturation, brightness);
+    }
+    
+    private List<Colony> getColoniesFromAnalysis(String analysisHandle) {
+        if (analysisHandle == null) return new ArrayList<>();
+        
+        SessionStore.AnalysisRecord analysisRecord = store.getAnalysis(analysisHandle);
+        if (analysisRecord == null || analysisRecord.data == null) return new ArrayList<>();
+        
+        // Parse colonies from stored analysis data
+        return new ArrayList<>();
+    }
+    
+    private JSONObject measureSingleColony(ImagePlus imp, Colony colony, int id) {
+        // Comprehensive colony measurements
+        return new JSONObject()
+            .put("id", id)
+            .put("x", colony.x())
+            .put("y", colony.y())
+            .put("area", colony.area())
+            .put("mean_intensity", colony.meanIntensity())
+            .put("circularity", colony.circularity())
+            .put("diameter", colony.diameter())
+            .put("color_class", colony.colorClass().toString())
+            .put("size_class", colony.sizeClass().toString());
+    }
+    
+    private void addAnnotationROI(Overlay ov, JSONObject label) {
+        // Following the exact Overlay + ROI Manager pattern specified
+        int x = label.optInt("x", 0);
+        int y = label.optInt("y", 0);
+        int w = label.optInt("width", 20);
+        int h = label.optInt("height", 20);
+        int id = label.optInt("id", 0);
+        double blueIndex = label.optDouble("blue_index", 0.0);
+        String sizeBin = label.optString("size_bin", "M");
+        String row = label.optString("row", "");
+        String col = label.optString("col", "");
+        
+        // Create ROI following exact pattern from specification
+        Roi roi = new OvalRoi(x - w/2, y - h/2, w, h);
+        roi.setStrokeColor(Color.getHSBColor(0.58f, 1f, 1f)); // blue
+        roi.setStrokeWidth(2);
+        
+        // Format label exactly as specified: "c%03d  BI=%.2f  size=%s"
+        String labelText = String.format("c%03d  BI=%.2f  size=%s", id, blueIndex, sizeBin);
+        if (!row.isEmpty() && !col.isEmpty()) {
+            labelText += String.format("  %s%s", row, col);
+        }
+        roi.setName(labelText);
+        
+        // Add to overlay (never to pixel data)
+        ov.add(roi);
+    }
+    
+    private String exportCSVData(String imageHandle, String analysisHandle) {
+        try {
+            // Export CSV data from stored analysis
+            String csvPath = System.getProperty("java.io.tmpdir") + "/assay_" + System.currentTimeMillis() + ".csv";
+            // Implementation would write CSV data here
+            return csvPath;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+    
+    private String exportOverlayPNG(ImagePlus imp) {
+        try {
+            // Export transparent overlay PNG (following established pattern)
+            String pngPath = System.getProperty("java.io.tmpdir") + "/overlay_" + System.currentTimeMillis() + ".png";
+            
+            int w = imp.getWidth(), h = imp.getHeight();
+            java.awt.image.BufferedImage png = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            java.awt.Graphics2D g = png.createGraphics();
+            g.setComposite(java.awt.AlphaComposite.SrcOver);
+            
+            // Export from Overlay only (never pixel data)
+            Overlay ov = imp.getOverlay();
+            if (ov != null) {
+                for (Roi r : ov.toArray()) {
+                    if (r.getStrokeColor() == null) r.setStrokeColor(Color.CYAN);
+                    if (r.getStrokeWidth() == 0) r.setStrokeWidth(2);
+                    r.drawOverlay(g);
+                }
+            }
+            g.dispose();
+            
+            javax.imageio.ImageIO.write(png, "PNG", new java.io.File(pngPath));
+            return pngPath;
+            
+        } catch (Exception e) {
+            return null;
+        }
+    }
+    
+    /**
+     * Compare Java implementation vs Macro baseline results for validation
+     */
+    public JSONObject compareWithBaseline(JSONObject params) {
+        try {
+            String imageHandle = params.getString("image_handle");
+            
+            // Run Java implementation
+            JSONObject javaResult = detectColonies(new JSONObject()
+                .put("image_handle", imageHandle)
+                .put("stain", "x-gal")
+                .put("min_size", 40.0)
+                .put("max_size", Double.MAX_VALUE));
+            
+            // Run baseline macro
+            JSONObject macroResult = runMacro(new JSONObject()
+                .put("image_handle", imageHandle)
+                .put("macro", "xgal_baseline"));
+            
+            // Compare results
+            int javaCount = javaResult.optInt("colonies_detected", 0);
+            int macroCount = macroResult.optInt("colonies_detected", 0);
+            double agreement = (javaCount == 0 && macroCount == 0) ? 1.0 : 
+                Math.min(javaCount, macroCount) / (double) Math.max(javaCount, macroCount);
+            
+            return new JSONObject()
+                .put("success", true)
+                .put("java_count", javaCount)
+                .put("macro_count", macroCount)
+                .put("agreement_ratio", agreement)
+                .put("java_result", javaResult)
+                .put("macro_result", macroResult)
+                .put("baseline_validation", agreement > 0.8 ? "PASS" : "FAIL")
+                .put("recommendation", agreement > 0.9 ? "Java implementation matches baseline" : 
+                    "Consider investigating differences between Java and macro detection");
+                
+        } catch (Exception e) {
+            return ErrorHandler.handleUnexpectedError("compare_with_baseline", e, logger, recovery);
+        }
+    }
+    
+    // Note: createErrorResponse method is defined above as static utility
+}

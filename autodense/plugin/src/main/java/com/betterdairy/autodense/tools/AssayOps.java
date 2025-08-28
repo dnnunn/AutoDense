@@ -120,7 +120,7 @@ public class AssayOps {
             
             SessionStore.ImageRecord imgRecord = store.getImage(imageHandle);
             if (imgRecord == null) {
-                return ErrorHandler.handleValidationError("assay_tool", 
+                return ErrorHandler.handleValidationError("annotate_colonies", 
                     new IllegalArgumentException("Image handle not found: " + imageHandle), 
                     logger, recovery);
             }
@@ -163,7 +163,7 @@ public class AssayOps {
             
             SessionStore.ImageRecord imgRecord = store.getImage(imageHandle);
             if (imgRecord == null) {
-                return ErrorHandler.handleValidationError("assay_tool", 
+                return ErrorHandler.handleValidationError("measure_colonies", 
                     new IllegalArgumentException("Image handle not found: " + imageHandle), 
                     logger, recovery);
             }
@@ -215,7 +215,7 @@ public class AssayOps {
             
             SessionStore.ImageRecord imgRecord = store.getImage(imageHandle);
             if (imgRecord == null) {
-                return ErrorHandler.handleValidationError("assay_tool", 
+                return ErrorHandler.handleValidationError("annotate_colonies", 
                     new IllegalArgumentException("Image handle not found: " + imageHandle), 
                     logger, recovery);
             }
@@ -258,7 +258,7 @@ public class AssayOps {
             
             SessionStore.ImageRecord imgRecord = store.getImage(imageHandle);
             if (imgRecord == null) {
-                return ErrorHandler.handleValidationError("assay_tool", 
+                return ErrorHandler.handleValidationError("annotate_colonies", 
                     new IllegalArgumentException("Image handle not found: " + imageHandle), 
                     logger, recovery);
             }
@@ -306,7 +306,7 @@ public class AssayOps {
                 .put("method", "imagej_macro_baseline");
                 
         } catch (Exception e) {
-            return ErrorHandler.handleUnexpectedError("run_xgal_macro", e, logger, recovery);
+            return ErrorHandler.handleUnexpectedError("run_macro", e, logger, recovery);
         }
     }
     
@@ -323,7 +323,7 @@ public class AssayOps {
             
             SessionStore.ImageRecord imgRecord = store.getImage(imageHandle);
             if (imgRecord == null) {
-                return ErrorHandler.handleValidationError("assay_tool", 
+                return ErrorHandler.handleValidationError("export_colonies", 
                     new IllegalArgumentException("Image handle not found: " + imageHandle), 
                     logger, recovery);
             }
@@ -496,13 +496,27 @@ public class AssayOps {
     }
     
     private ij.process.FloatProcessor computeBlueIndex(ImagePlus imp) {
-        // Use canonical BlueIndex helper for consistent CIELAB calculation
-        int width = imp.getWidth();
-        int height = imp.getHeight();
+        // PERFORMANCE OPTIMIZATION: Check if image is too large and needs downscaling
+        ImagePlus processingImage = imp;
+        double scaleFactor = 1.0;
+        
+        if (imp.getWidth() * imp.getHeight() > 2_000_000) { // > 2MP threshold
+            logger.info(String.format("Large image detected (%dx%d = %d pixels). Downscaling for performance.", 
+                imp.getWidth(), imp.getHeight(), imp.getWidth() * imp.getHeight()));
+            processingImage = com.betterdairy.autodense.performance.PerformanceOptimizer.DownscaledSampling
+                .createFastProcessingVersion(imp, 1600);
+            scaleFactor = (double) imp.getWidth() / processingImage.getWidth();
+            logger.info(String.format("Downscaled to %dx%d (scale factor: %.2f)", 
+                processingImage.getWidth(), processingImage.getHeight(), scaleFactor));
+        }
+        
+        // Process on potentially downscaled image
+        int width = processingImage.getWidth();
+        int height = processingImage.getHeight();
         ij.process.FloatProcessor blueIndexProcessor = new ij.process.FloatProcessor(width, height);
         
         // Convert RGB image to blue index using canonical helper
-        ij.process.ImageProcessor ip = imp.getProcessor();
+        ij.process.ImageProcessor ip = processingImage.getProcessor();
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 int rgb = ip.getPixel(x, y);
@@ -513,6 +527,18 @@ public class AssayOps {
                 double blueIndex = com.betterdairy.autodense.analysis.BlueIndex.blueIndex(r, g, b);
                 blueIndexProcessor.setf(x, y, (float) blueIndex);
             }
+        }
+        
+        // Scale results back to original size if downscaling was applied
+        if (scaleFactor != 1.0) {
+            logger.info(String.format("Scaling blue index result back to original size (%dx%d)", 
+                imp.getWidth(), imp.getHeight()));
+            blueIndexProcessor = (ij.process.FloatProcessor) blueIndexProcessor.resize(imp.getWidth(), imp.getHeight());
+        }
+        
+        // Clean up temporary downscaled image if created
+        if (processingImage != imp) {
+            processingImage.close();
         }
         
         return blueIndexProcessor;

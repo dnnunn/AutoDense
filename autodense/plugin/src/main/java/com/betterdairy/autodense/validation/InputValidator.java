@@ -2,6 +2,7 @@ package com.betterdairy.autodense.validation;
 
 import org.json.JSONObject;
 import org.json.JSONArray;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.Files;
@@ -215,27 +216,36 @@ public final class InputValidator {
             throw new ValidationException("File path cannot be null or empty");
         }
         
-        // Remove dangerous characters and sequences
-        String sanitized = sanitizePath(path.trim());
-        
         try {
-            Path filePath = Paths.get(sanitized).normalize().toAbsolutePath();
+            // SECURITY FIX: Use canonical path resolution to prevent bypasses
+            Path requestedPath = Paths.get(path.trim());
+            Path canonicalPath = requestedPath.toRealPath(); // Resolves symlinks and normalizes
             
-            // Prevent directory traversal
-            if (containsDirectoryTraversal(path)) {
-                throw new ValidationException("Directory traversal detected in path: " + path);
+            // Define allowed base directories (allowlist approach)
+            Path allowedBase = Paths.get(System.getProperty("user.home"), "Documents");
+            Path homeBase = Paths.get(System.getProperty("user.home"));
+            
+            // SECURITY: Verify the canonical path is within allowed directories
+            if (!canonicalPath.startsWith(allowedBase) && !canonicalPath.startsWith(homeBase)) {
+                throw new ValidationException("Path outside allowed directory: " + path);
             }
             
+            Path filePath = canonicalPath; // Use the secure canonical path
+            
             // Validate file extension for images
-            String extension = getFileExtension(sanitized).toLowerCase();
+            String extension = getFileExtension(canonicalPath.toString()).toLowerCase();
             if (allowRead && !ALLOWED_IMAGE_EXTENSIONS.contains(extension)) {
                 throw new ValidationException("File extension '" + extension + 
                     "' not allowed. Allowed: " + ALLOWED_IMAGE_EXTENSIONS);
             }
             
-            // Check file existence for read operations
-            if (allowRead && !Files.exists(filePath)) {
-                throw new ValidationException("File does not exist: " + sanitized);
+            // Enhanced permission checks for read operations
+            if (allowRead && !Files.isReadable(canonicalPath)) {
+                throw new ValidationException("File not readable: " + path);
+            }
+            
+            if (allowWrite && Files.exists(canonicalPath) && !Files.isWritable(canonicalPath)) {
+                throw new ValidationException("File not writable: " + path);
             }
             
             // Check parent directory exists for write operations
@@ -245,6 +255,10 @@ public final class InputValidator {
             
             return filePath.toString();
             
+        } catch (IOException e) {
+            throw new ValidationException("Invalid file path: " + path + " - " + e.getMessage());
+        } catch (ValidationException e) {
+            throw e; // Re-throw our validation exceptions
         } catch (Exception e) {
             throw new ValidationException("Invalid file path: " + path + " - " + e.getMessage());
         }
