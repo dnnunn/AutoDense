@@ -176,6 +176,34 @@ def build_classpath() -> str:
     logger.debug(f"Built classpath with {len(classpath_parts)} components")
     return final_classpath
 
+def find_imagej_patcher_jar() -> Optional[str]:
+    """Find the ImageJ patcher jar for Java 17+ compatibility"""
+    fiji_dir = discover_fiji_installation()
+    if not fiji_dir:
+        return None
+    
+    fiji_path = Path(fiji_dir)
+    
+    # Look for ij1-patcher jar in Fiji installation
+    potential_jar_dirs = [
+        fiji_path / 'jars',
+        fiji_path / 'Contents' / 'java' / 'jars',
+        fiji_path / 'Contents' / 'Resources' / 'java',
+        fiji_path / 'lib'
+    ]
+    
+    for jar_dir in potential_jar_dirs:
+        if jar_dir.exists():
+            # Look for ij1-patcher jar
+            patcher_jars = list(jar_dir.glob('ij1-patcher*.jar'))
+            if patcher_jars:
+                patcher_jar = str(patcher_jars[0])  # Use first match
+                logger.debug(f"Found ImageJ patcher jar: {patcher_jar}")
+                return patcher_jar
+    
+    logger.warning("ImageJ patcher jar not found - Java 17+ compatibility may be limited")
+    return None
+
 def run_java_analysis(task: str, input_path: str, config_path: str, output_dir: str, 
                       executable_type: str = 'main') -> dict:
     """
@@ -212,13 +240,29 @@ def run_java_analysis(task: str, input_path: str, config_path: str, output_dir: 
     max_heap = os.environ.get('JAVA_MAX_HEAP', '4g')
     java_opts = os.environ.get('JAVA_OPTS', '').split()
     
-    # Construct command based on execution type
-    cmd = [
-        java_exe,
+    # Build JVM options for ImageJ compatibility
+    jvm_options = [
         '-cp', classpath,
         '-Djava.awt.headless=true',
         f'-Xmx{max_heap}',
-        *java_opts,
+        '--add-opens=java.base/java.lang=ALL-UNNAMED',  # Java 17+ module compatibility
+    ]
+    
+    # Add ImageJ patcher javaagent if available
+    patcher_jar = find_imagej_patcher_jar()
+    if patcher_jar:
+        jvm_options.append(f'-javaagent:{patcher_jar}=init')
+        logger.debug("Added ImageJ patcher javaagent for Java 17+ compatibility")
+    else:
+        logger.warning("ImageJ patcher not found - some ImageJ features may not work with Java 17+")
+    
+    # Add any additional Java options from environment
+    jvm_options.extend(java_opts)
+    
+    # Construct command based on execution type
+    cmd = [
+        java_exe,
+        *jvm_options,
         main_class,
         task,
         input_path,

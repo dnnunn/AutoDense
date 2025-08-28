@@ -1,4 +1,24 @@
-# Default SDS-PAGE parameters (starter template)
+# SDS-PAGE parameters following 15-minute triage guide
+pre:
+  invert_polarity: auto   # true|false|auto
+  clip_percentiles: [2.0, 98.0]  # tighter clipping for SDS
+  normalize_intensity: true
+  gaussian_sigma: 1.5
+  background_removal_radius: 30.0  # rolling ball radius for gels
+  enable_deskew: true
+  deskew_angle_threshold: 0.5  # degrees
+  enable_debug_logging: true
+  clahe:
+    enabled: false        # typically not needed for SDS
+    clip_limit: 2.0
+    tile_grid: [8,8]
+
+detect:
+  prominence_frac: 0.12   # slightly higher for SDS
+  min_peak_distance_px: 8
+  rescue_enabled: true
+
+# Legacy parameters (for backward compatibility)
 detection:
   min_width: 12     # pixels
   prominence: 0.30  # 0..1 relative

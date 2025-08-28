@@ -117,10 +117,13 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 | **SessionSummaries/Session_summary_August_20_2025.md** | Development session wrap-up covering UI/UX improvements and AI strategy design | 690 | 2025-08-26 |
 | **SessionSummaries/Session_summary_August_25_2025.md** | Architecture restoration session documenting critical system breakdown and fixes | 1128 | 2025-08-26 |
 | **SessionSummaries/Session_summary_August_27_2025.md** | LLM toolkit development and PMD complexity refactoring sessions with multi-provider audit analysis | 3847 | 2025-08-27 |
+| **SessionSummaries/Session_summary_August_28_2025_CLI_Architecture.md** | YAML-based preprocessing parameter architecture completion for CLI integration and systematic debugging | 1247 | 2025-08-28 |
 | **NextSteps/NextSteps_August_27_2025.md** | Priority tasks for LLM toolkit deployment, colony counting fixes, and consensus audit implementation | 1654 | 2025-08-27 |
 | **NextSteps/NextSteps_August_27_2025_Evening.md** | Focused priority tasks for completing PMD complexity refactoring and error handling standardization | 1456 | 2025-08-27 |
+| **NextSteps/NextSteps_August_28_2025_CLI_Architecture.md** | Priority debugging tasks for systematic YAML-controlled preprocessing parameter testing and root cause analysis | 1521 | 2025-08-28 |
 | **Issues/Issues_August_27_2025.md** | Critical compilation blockers and system issues discovered during toolkit development with priority matrix | 2118 | 2025-08-27 |
 | **Issues/Issues_August_27_2025_Evening.md** | Technical debt and process issues from PMD complexity work including scattered development patterns | 1834 | 2025-08-27 |
+| **Issues/Issues_August_28_2025_CLI_Architecture.md** | Technical debt and unresolved preprocessing rotation issues identified during CLI architecture implementation | 1692 | 2025-08-28 |
 | **ChatGPT/Cleanup.md** | Comprehensive documentation cleanup strategy and quality improvement guidelines | 4306 | 2025-08-26 |
 | **ChatGPT/What to fix (surgical and minimal).md** | Targeted fix list for preset wiring and band detection issues | 1955 | - |
 | **docs/DOCUMENTATION.md** | Comprehensive documentation overview and navigation guide | 2531 | 2025-08-26 |
@@ -138,9 +141,9 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 
 ## 📈 Catalog Statistics
 
-- **Total Documents:** 69 files  
-- **Total Word Count:** ~78,800 words
-- **Verified Documents:** 34 (49.3%)
+- **Total Documents:** 72 files  
+- **Total Word Count:** ~83,260 words
+- **Verified Documents:** 37 (51.4%)
 - **Categories:** 9 major categories
 - **Deprecated/Tombstoned:** 3 documents
 - **Average Document Size:** 1,142 words
@@ -163,4 +166,4 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 
 ---
 
-*Last updated: 2025-08-27 | Maintained via WRAPUP.md session procedures*
+*Last updated: 2025-08-28 | Maintained via WRAPUP.md session procedures*

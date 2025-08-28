@@ -123,19 +123,19 @@ tune-sds-ij:
 	@test -n "$(INPUT)" || (echo "❌ INPUT variable required" && exit 1)
 	@$(MAKE) verify-build
 	@echo "🧬 Running SDS-PAGE optimization with ImageJ backend..."
-	@bash -c "source scripts/test_env.sh && python -m $(AUTOTUNE_MODULE).java_bridge --task sds_page --input \"$(INPUT)\" --outdir /tmp/sds_test --config configs/sds.yaml"
+	@bash -c "source scripts/test_env.sh && python -m $(AUTOTUNE_MODULE).java_bridge sds_page --input \"$(INPUT)\" --outdir output/sds_test --config configs/sds.yaml"
 
 tune-colony-ij:
 	@test -n "$(INPUT)" || (echo "❌ INPUT variable required" && exit 1)
 	@$(MAKE) verify-build
 	@echo "🦠 Running colony counting optimization with ImageJ backend..."
-	@bash -c "source scripts/test_env.sh && python -m $(AUTOTUNE_MODULE).java_bridge --task colony_count --input \"$(INPUT)\" --outdir /tmp/colony_test --config configs/colony.yaml"
+	@bash -c "source scripts/test_env.sh && python -m $(AUTOTUNE_MODULE).java_bridge colony_count --input \"$(INPUT)\" --outdir output/colony_test --config configs/colony.yaml"
 
 tune-etbr-ij:
 	@test -n "$(INPUT)" || (echo "❌ INPUT variable required" && exit 1)
 	@$(MAKE) verify-build
 	@echo "🧬 Running EtBr agarose optimization with ImageJ backend..."
-	@bash -c "source scripts/test_env.sh && python -m $(AUTOTUNE_MODULE).java_bridge --task etbr_agarose --input \"$(INPUT)\" --outdir /tmp/etbr_test --config configs/etbr.yaml"
+	@bash -c "source scripts/test_env.sh && python -m $(AUTOTUNE_MODULE).java_bridge etbr_agarose --input \"$(INPUT)\" --outdir output/etbr_test --config configs/etbr.yaml"
 
 # =============================================================================
 # DEBUGGING AND DIAGNOSTICS

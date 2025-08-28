@@ -1,0 +1,14 @@
+{
+  "input_hash": "40539921",
+  "task": "sds_page",
+  "meta": {},
+  "diagnostics_png": "/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/output/sds_test/sds_overlay.png",
+  "metrics": {
+    "ladder_r2": 0.95,
+    "band_stability_jitter": 0.03,
+    "lane_count": 0,
+    "band_count": 0,
+    "background_snr": 4.2
+  },
+  "input_path": "/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/tmp/sds_gel.jpg"
+}

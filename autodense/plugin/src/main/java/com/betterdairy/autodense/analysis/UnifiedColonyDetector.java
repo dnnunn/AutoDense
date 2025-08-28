@@ -193,6 +193,11 @@ public final class UnifiedColonyDetector {
      * Apply morphological filtering to clean up detection mask
      */
     private static void applyMorphologicalFiltering(ImagePlus maskImage, DetectionParams params) {
+        // Ensure mask is 8-bit grayscale for morphological operations
+        if (maskImage.getType() != ImagePlus.GRAY8) {
+            IJ.run(maskImage, "8-bit", "");
+        }
+        
         // Opening to remove small noise
         IJ.run(maskImage, "Options...", "iterations=1 count=1 black do=Open");
         

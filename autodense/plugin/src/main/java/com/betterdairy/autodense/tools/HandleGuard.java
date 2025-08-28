@@ -80,10 +80,10 @@ public class HandleGuard {
     }
     
     /**
-     * Validate handle format (img_XXXXXX pattern)
+     * Validate handle format (img_XXXXXXXX pattern - 8 chars to match UUID.substring(0,8))
      */
     private boolean isValidHandleFormat(String handle) {
-        return handle != null && handle.matches("^img_[a-zA-Z0-9]{6}$");
+        return handle != null && handle.matches("^img_[a-zA-Z0-9-]{8}$");
     }
     
     /**
