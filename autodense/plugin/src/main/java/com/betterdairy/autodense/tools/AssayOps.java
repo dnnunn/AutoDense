@@ -4,6 +4,7 @@ import com.betterdairy.autodense.session.SessionStore;
 import com.betterdairy.autodense.session.SessionRecovery;
 import com.betterdairy.autodense.model.Models.*;
 import com.betterdairy.autodense.util.ErrorHandler;
+import com.betterdairy.autodense.util.ImageJResourceManager;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Overlay;
@@ -30,20 +31,7 @@ public class AssayOps {
     
     private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(AssayOps.class.getName());
     
-    /**
-     * Resource cleanup utility for ImageJ objects to prevent memory leaks
-     */
-    private static void safeCleanup(ImagePlus... images) {
-        for (ImagePlus img : images) {
-            if (img != null) {
-                try {
-                    img.flush();
-                } catch (Exception e) {
-                    logger.log(java.util.logging.Level.FINE, "Error during ImagePlus cleanup", e);
-                }
-            }
-        }
-    }
+    // Resource cleanup now handled by shared ImageJResourceManager utility
     
     
     private final SessionStore store;
@@ -134,7 +122,7 @@ public class AssayOps {
             if (imgRecord == null) {
                 return ErrorHandler.handleValidationError("assay_tool", 
                     new IllegalArgumentException("Image handle not found: " + imageHandle), 
-                    null, recovery);
+                    logger, recovery);
             }
             
             ImagePlus imp = imgRecord.image;
@@ -177,7 +165,7 @@ public class AssayOps {
             if (imgRecord == null) {
                 return ErrorHandler.handleValidationError("assay_tool", 
                     new IllegalArgumentException("Image handle not found: " + imageHandle), 
-                    null, recovery);
+                    logger, recovery);
             }
             
             ImagePlus imp = imgRecord.image;
@@ -229,7 +217,7 @@ public class AssayOps {
             if (imgRecord == null) {
                 return ErrorHandler.handleValidationError("assay_tool", 
                     new IllegalArgumentException("Image handle not found: " + imageHandle), 
-                    null, recovery);
+                    logger, recovery);
             }
             
             ImagePlus imp = imgRecord.image;
@@ -272,7 +260,7 @@ public class AssayOps {
             if (imgRecord == null) {
                 return ErrorHandler.handleValidationError("assay_tool", 
                     new IllegalArgumentException("Image handle not found: " + imageHandle), 
-                    null, recovery);
+                    logger, recovery);
             }
             
             ImagePlus imp = imgRecord.image;
@@ -337,7 +325,7 @@ public class AssayOps {
             if (imgRecord == null) {
                 return ErrorHandler.handleValidationError("assay_tool", 
                     new IllegalArgumentException("Image handle not found: " + imageHandle), 
-                    null, recovery);
+                    logger, recovery);
             }
             
             JSONArray exportPaths = new JSONArray();
@@ -363,7 +351,7 @@ public class AssayOps {
                 .put("exported_files", exportPaths);
                 
         } catch (Exception e) {
-            return ErrorHandler.handleUnexpectedError("export_colony_data", e, logger, recovery);
+            return ErrorHandler.handleUnexpectedError("export_colonies", e, logger, recovery);
         }
     }
     
@@ -385,7 +373,7 @@ public class AssayOps {
             throw e;
         } catch (Exception e) {
             logger.log(java.util.logging.Level.SEVERE, "Colony detection failed", e);
-            throw new RuntimeException("Colony detection encountered an unexpected error: " + e.getMessage(), e);
+            throw e; // Let the public method handle with ErrorHandler
         }
         
         return colonies;
@@ -480,10 +468,10 @@ public class AssayOps {
             throw e;
         } catch (Exception e) {
             logger.log(java.util.logging.Level.SEVERE, "X-gal detection failed", e);
-            throw new RuntimeException("X-gal colony detection failed: " + e.getMessage(), e);
+            throw e; // Let the public method handle with ErrorHandler
         } finally {
             // Ensure proper resource cleanup
-            safeCleanup(balanced);
+            ImageJResourceManager.safeCleanup(balanced);
         }
         
         return colonies;
@@ -491,14 +479,11 @@ public class AssayOps {
     
     /**
      * Basic colony detection for neutral-red or unstained colonies
+     * TODO: Implement actual detection algorithm for non-X-gal colonies
      */
     private List<Colony> detectBasicColonies(ImagePlus imp, double minSize, double maxSize) {
-        List<Colony> colonies = new ArrayList<>();
-        
-        // Simplified detection for non-X-gal stains
-        // Could be extended with specific algorithms for neutral-red, etc.
-        
-        return colonies;
+        throw new UnsupportedOperationException(
+            "Basic colony detection not yet implemented. Use X-gal detection mode instead.");
     }
     
     // =============== BLUE DETECTION HELPER METHODS ===============
@@ -789,7 +774,7 @@ public class AssayOps {
                     "Consider investigating differences between Java and macro detection");
                 
         } catch (Exception e) {
-            return ErrorHandler.handleUnexpectedError("compare_plate_conditions", e, logger, recovery);
+            return ErrorHandler.handleUnexpectedError("compare_with_baseline", e, logger, recovery);
         }
     }
     

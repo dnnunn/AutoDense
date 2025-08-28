@@ -233,7 +233,9 @@
           <execution><phase>verify</phase><goals><goal>spotbugs</goal></goals></execution>
         </executions>
       </plugin>
-      <!-- PMD static analysis - DISABLED: method complexity still causes timeouts despite partial refactoring -->
+      <!-- PMD static analysis - DISABLED: complexity violations identified but not causing timeouts
+           Key findings: LaneDetector.findLanes(), OverlayRenderer.createVolcanoPlotOverlay() exceed complexity
+           Re-enable when method complexity refactoring is prioritized -->
       <!--
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

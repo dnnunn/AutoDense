@@ -101,6 +101,7 @@ com/betterdairy/autodense/validation/ParameterValidator$PreprocessParams.class
 autodense/util/Csv.class
 com/betterdairy/autodense/analysis/ColonyAssistModels$AssistColony.class
 com/betterdairy/autodense/tools/GelAnalysisTools$TreatmentComparisonParams.class
+com/betterdairy/autodense/util/ImageJResourceManager.class
 com/betterdairy/autodense/util/ResourceManager$GlobalResourceStats.class
 com/betterdairy/autodense/workflow/ExportDialogManager$ExportDialog.class
 com/betterdairy/autodense/analysis/TimeSeriesColonyTracker$ColonyMorphology.class

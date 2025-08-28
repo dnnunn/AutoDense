@@ -3,6 +3,8 @@ package com.betterdairy.autodense.util;
 import org.json.JSONObject;
 import org.json.JSONArray;
 import com.betterdairy.autodense.session.SessionLogger;
+import java.util.logging.Logger;
+import java.util.logging.Level;
 import com.betterdairy.autodense.session.SessionRecovery;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -43,7 +45,19 @@ public final class ErrorHandler {
     public static JSONObject handleFileError(String toolName, Exception e, 
                                            SessionLogger logger, SessionRecovery recovery) {
         logError(toolName, "FILE_ERROR", e, logger);
-        
+        return createFileErrorResponse(toolName, e, recovery);
+    }
+    
+    /**
+     * Handle file I/O related errors (IOException, FileNotFoundException, etc.)
+     */
+    public static JSONObject handleFileError(String toolName, Exception e, 
+                                           Logger logger, SessionRecovery recovery) {
+        logError(toolName, "FILE_ERROR", e, logger);
+        return createFileErrorResponse(toolName, e, recovery);
+    }
+    
+    private static JSONObject createFileErrorResponse(String toolName, Exception e, SessionRecovery recovery) {
         JSONObject response = createBaseErrorResponse(toolName, "FILE_ERROR", e);
         
         // Add specific recovery guidance for file errors
@@ -64,12 +78,6 @@ public final class ErrorHandler {
         
         response.put("recovery_actions", recoveryGuidance);
         
-        // Also delegate to existing recovery system for consistency
-        if (recovery != null) {
-            JSONObject legacyRecovery = recovery.createRecoveryResponse(toolName, e);
-            response.put("legacy_recovery", legacyRecovery);
-        }
-        
         return response;
     }
     
@@ -79,6 +87,19 @@ public final class ErrorHandler {
     public static JSONObject handleValidationError(String toolName, Exception e, 
                                                  SessionLogger logger, SessionRecovery recovery) {
         logError(toolName, "VALIDATION_ERROR", e, logger);
+        return createValidationErrorResponse(toolName, e, recovery);
+    }
+    
+    /**
+     * Handle parameter validation errors (IllegalArgumentException, etc.)
+     */
+    public static JSONObject handleValidationError(String toolName, Exception e, 
+                                                 Logger logger, SessionRecovery recovery) {
+        logError(toolName, "VALIDATION_ERROR", e, logger);
+        return createValidationErrorResponse(toolName, e, recovery);
+    }
+    
+    private static JSONObject createValidationErrorResponse(String toolName, Exception e, SessionRecovery recovery) {
         
         JSONObject response = createBaseErrorResponse(toolName, "VALIDATION_ERROR", e);
         
@@ -101,11 +122,6 @@ public final class ErrorHandler {
         
         response.put("recovery_actions", recoveryGuidance);
         
-        if (recovery != null) {
-            JSONObject legacyRecovery = recovery.createRecoveryResponse(toolName, e);
-            response.put("legacy_recovery", legacyRecovery);
-        }
-        
         return response;
     }
     
@@ -115,6 +131,19 @@ public final class ErrorHandler {
     public static JSONObject handleImageProcessingError(String toolName, Exception e, 
                                                        SessionLogger logger, SessionRecovery recovery) {
         logError(toolName, "IMAGE_PROCESSING_ERROR", e, logger);
+        return createImageProcessingErrorResponse(toolName, e, recovery);
+    }
+    
+    /**
+     * Handle ImageJ/ImagePlus related errors
+     */
+    public static JSONObject handleImageProcessingError(String toolName, Exception e, 
+                                                       Logger logger, SessionRecovery recovery) {
+        logError(toolName, "IMAGE_PROCESSING_ERROR", e, logger);
+        return createImageProcessingErrorResponse(toolName, e, recovery);
+    }
+    
+    private static JSONObject createImageProcessingErrorResponse(String toolName, Exception e, SessionRecovery recovery) {
         
         JSONObject response = createBaseErrorResponse(toolName, "IMAGE_PROCESSING_ERROR", e);
         
@@ -136,11 +165,6 @@ public final class ErrorHandler {
         
         response.put("recovery_actions", recoveryGuidance);
         
-        if (recovery != null) {
-            JSONObject legacyRecovery = recovery.createRecoveryResponse(toolName, e);
-            response.put("legacy_recovery", legacyRecovery);
-        }
-        
         return response;
     }
     
@@ -150,6 +174,19 @@ public final class ErrorHandler {
     public static JSONObject handleSessionError(String toolName, Exception e, 
                                               SessionLogger logger, SessionRecovery recovery) {
         logError(toolName, "SESSION_ERROR", e, logger);
+        return createSessionErrorResponse(toolName, e, recovery);
+    }
+    
+    /**
+     * Handle session storage errors
+     */
+    public static JSONObject handleSessionError(String toolName, Exception e, 
+                                              Logger logger, SessionRecovery recovery) {
+        logError(toolName, "SESSION_ERROR", e, logger);
+        return createSessionErrorResponse(toolName, e, recovery);
+    }
+    
+    private static JSONObject createSessionErrorResponse(String toolName, Exception e, SessionRecovery recovery) {
         
         JSONObject response = createBaseErrorResponse(toolName, "SESSION_ERROR", e);
         
@@ -169,11 +206,6 @@ public final class ErrorHandler {
         
         response.put("recovery_actions", recoveryGuidance);
         
-        if (recovery != null) {
-            JSONObject legacyRecovery = recovery.createRecoveryResponse(toolName, e);
-            response.put("legacy_recovery", legacyRecovery);
-        }
-        
         return response;
     }
     
@@ -181,9 +213,23 @@ public final class ErrorHandler {
      * Handle unexpected runtime errors that weren't caught by specific handlers
      * This should be used as a last resort when specific error types aren't known
      */
-    public static JSONObject handleUnexpectedError(String toolName, RuntimeException e, 
+    public static JSONObject handleUnexpectedError(String toolName, Exception e, 
                                                   SessionLogger logger, SessionRecovery recovery) {
         logError(toolName, "UNEXPECTED_ERROR", e, logger);
+        return createUnexpectedErrorResponse(toolName, e, recovery);
+    }
+    
+    /**
+     * Handle unexpected runtime errors that weren't caught by specific handlers
+     * This should be used as a last resort when specific error types aren't known
+     */
+    public static JSONObject handleUnexpectedError(String toolName, Exception e, 
+                                                  Logger logger, SessionRecovery recovery) {
+        logError(toolName, "UNEXPECTED_ERROR", e, logger);
+        return createUnexpectedErrorResponse(toolName, e, recovery);
+    }
+    
+    private static JSONObject createUnexpectedErrorResponse(String toolName, Exception e, SessionRecovery recovery) {
         
         JSONObject response = createBaseErrorResponse(toolName, "UNEXPECTED_ERROR", e);
         
@@ -194,11 +240,6 @@ public final class ErrorHandler {
         recoveryGuidance.put("report_issue", true);
         
         response.put("recovery_actions", recoveryGuidance);
-        
-        if (recovery != null) {
-            JSONObject legacyRecovery = recovery.createRecoveryResponse(toolName, e);
-            response.put("legacy_recovery", legacyRecovery);
-        }
         
         return response;
     }
@@ -230,34 +271,57 @@ public final class ErrorHandler {
     }
     
     /**
-     * Log error with comprehensive details
+     * Log error with comprehensive details - SessionLogger version
      */
     private static void logError(String toolName, String errorType, Exception e, SessionLogger logger) {
         // Increment error counter for monitoring
-        String key = toolName + "_" + errorType;
-        errorCounts.computeIfAbsent(key, k -> new AtomicLong(0)).incrementAndGet();
+        incrementErrorCounter(toolName, errorType);
         
         if (logger != null) {
-            // Get full stack trace as string
-            StringWriter sw = new StringWriter();
-            PrintWriter pw = new PrintWriter(sw);
-            e.printStackTrace(pw);
-            String fullStackTrace = sw.toString();
-            
-            // Log comprehensive error details
-            JSONObject errorDetails = new JSONObject()
-                .put("tool", toolName)
-                .put("error_type", errorType)
-                .put("error_class", e.getClass().getName())
-                .put("message", e.getMessage())
-                .put("stack_trace", fullStackTrace)
-                .put("thread", Thread.currentThread().getName())
-                .put("timestamp", java.time.Instant.now().toString());
-            
+            JSONObject errorDetails = createErrorDetails(toolName, errorType, e);
             logger.logError("Tool Error: " + toolName, e, errorDetails);
         }
+        logToSystemErr(toolName, errorType, e);
+    }
+    
+    /**
+     * Log error with comprehensive details - java.util.logging.Logger version
+     */
+    private static void logError(String toolName, String errorType, Exception e, Logger logger) {
+        // Increment error counter for monitoring
+        incrementErrorCounter(toolName, errorType);
         
-        // Also log to system error stream for immediate visibility
+        if (logger != null) {
+            JSONObject errorDetails = createErrorDetails(toolName, errorType, e);
+            String logMessage = String.format("Tool Error: %s (%s): %s\nDetails: %s", 
+                toolName, errorType, e.getMessage(), errorDetails.toString(2));
+            logger.log(Level.SEVERE, logMessage, e);
+        }
+        logToSystemErr(toolName, errorType, e);
+    }
+    
+    private static void incrementErrorCounter(String toolName, String errorType) {
+        String key = toolName + "_" + errorType;
+        errorCounts.computeIfAbsent(key, k -> new AtomicLong(0)).incrementAndGet();
+    }
+    
+    private static JSONObject createErrorDetails(String toolName, String errorType, Exception e) {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        e.printStackTrace(pw);
+        String fullStackTrace = sw.toString();
+        
+        return new JSONObject()
+            .put("tool", toolName)
+            .put("error_type", errorType)
+            .put("error_class", e.getClass().getName())
+            .put("message", e.getMessage())
+            .put("stack_trace", fullStackTrace)
+            .put("thread", Thread.currentThread().getName())
+            .put("timestamp", java.time.Instant.now().toString());
+    }
+    
+    private static void logToSystemErr(String toolName, String errorType, Exception e) {
         System.err.println("[ERROR] " + toolName + " (" + errorType + "): " + e.getMessage());
         if (e.getCause() != null) {
             System.err.println("  Caused by: " + e.getCause().getMessage());

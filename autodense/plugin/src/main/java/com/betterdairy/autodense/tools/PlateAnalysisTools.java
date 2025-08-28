@@ -3,6 +3,7 @@ package com.betterdairy.autodense.tools;
 import com.betterdairy.autodense.session.SessionStore;
 import com.betterdairy.autodense.session.SessionRecovery;
 import com.betterdairy.autodense.analysis.OverlayRenderer;
+import com.betterdairy.autodense.util.ErrorHandler;
 // Analysis imports added dynamically as needed
 import com.betterdairy.autodense.model.Models.*;
 import com.betterdairy.autodense.plugin.ToolSchemaValidator;
@@ -26,6 +27,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.logging.Logger;
 
 /**
  * Colony and plate analysis tools for AutoDense.
@@ -35,17 +37,13 @@ public class PlateAnalysisTools {
     
     private final SessionStore store;
     private final SessionRecovery recovery;
+    private final Logger logger;
     
-    // Error constants
-    private static final String ERROR_IMAGE_NOT_FOUND = "image_not_found";
-    private static final String ERROR_ANALYSIS_FAILED = "analysis_failed";
-    private static final String ERROR_INVALID_PARAM = "invalid_parameter";
-    private static final String ERROR_HANDLE_VIOLATION = "handle_violation";
-    
-    
+    // Constructor with logger support for ErrorHandler integration
     public PlateAnalysisTools(SessionStore sessionStore) {
         this.store = sessionStore;
         this.recovery = new SessionRecovery(sessionStore);
+        this.logger = Logger.getLogger(PlateAnalysisTools.class.getName());
     }
     
     // =============== HELPER METHODS ===============
@@ -57,17 +55,13 @@ public class PlateAnalysisTools {
             .put("data", data);
     }
     
-    private JSONObject fail(String errorCode, String message, String field) {
-        return new JSONObject()
-            .put("success", false)
-            .put("error", errorCode)
-            .put("message", message)
-            .put("field", field);
-    }
+    // Removed legacy fail() method - all calls converted to ErrorHandler pattern
     
-    private JSONObject enforceHandleDiscipline(JSONObject args) {
+    private JSONObject enforceHandleDiscipline(JSONObject args, String toolName) {
         if (!args.has("image_handle")) {
-            return fail(ERROR_HANDLE_VIOLATION, "image_handle is required", "image_handle");
+            return ErrorHandler.handleValidationError(toolName,
+                new IllegalArgumentException("image_handle is required"),
+                logger, recovery);
         }
         return null;
     }
@@ -86,13 +80,15 @@ public class PlateAnalysisTools {
     public JSONObject detectPlate(JSONObject args) {
         ToolSchemaValidator.requireImageHandle(args);
         try {
-            JSONObject disciplineError = enforceHandleDiscipline(args);
+            JSONObject disciplineError = enforceHandleDiscipline(args, "detect_plate");
             if (disciplineError != null) return disciplineError;
             
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord img = store.getImage(imageHandle);
             if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+                return ErrorHandler.handleValidationError("detect_plate",
+                    new IllegalArgumentException("Image not found in session: " + imageHandle),
+                    logger, recovery);
             }
             
             // Parameters
@@ -133,7 +129,9 @@ public class PlateAnalysisTools {
             
             ResultsTable rt = ResultsTable.getResultsTable();
             if (rt.getCounter() == 0) {
-                return fail(ERROR_ANALYSIS_FAILED, "No plate found. Check threshold method.", "threshold_method");
+                return ErrorHandler.handleImageProcessingError("detect_plate",
+                    new RuntimeException("No plate found. Check threshold method."),
+                    logger, recovery);
             }
             
             // Get largest particle (plate)
@@ -193,7 +191,7 @@ public class PlateAnalysisTools {
             return ok("detect_plate", data);
             
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("detect_plate", e);
+            return ErrorHandler.handleUnexpectedError("detect_plate", e, logger, recovery);
         }
     }
     
@@ -205,13 +203,15 @@ public class PlateAnalysisTools {
     public JSONObject countColonies(JSONObject args) {
         ToolSchemaValidator.requireImageHandle(args);
         try {
-            JSONObject disciplineError = enforceHandleDiscipline(args);
+            JSONObject disciplineError = enforceHandleDiscipline(args, "count_colonies");
             if (disciplineError != null) return disciplineError;
             
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord img = store.getImage(imageHandle);
             if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+                return ErrorHandler.handleValidationError("count_colonies",
+                    new IllegalArgumentException("Image not found in session: " + imageHandle),
+                    logger, recovery);
             }
             
             // Parameters
@@ -312,7 +312,7 @@ public class PlateAnalysisTools {
             return ok("count_colonies", data);
             
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("count_colonies", e);
+            return ErrorHandler.handleUnexpectedError("count_colonies", e, logger, recovery);
         }
     }
     
@@ -326,13 +326,15 @@ public class PlateAnalysisTools {
     public JSONObject classifyColonies(JSONObject args) {
         ToolSchemaValidator.requireImageHandle(args);
         try {
-            JSONObject disciplineError = enforceHandleDiscipline(args);
+            JSONObject disciplineError = enforceHandleDiscipline(args, "classify_colonies");
             if (disciplineError != null) return disciplineError;
             
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord img = store.getImage(imageHandle);
             if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+                return ErrorHandler.handleValidationError("classify_colonies",
+                    new IllegalArgumentException("Image not found in session: " + imageHandle),
+                    logger, recovery);
             }
             
             String mode = args.optString("mode", "xgal");
@@ -340,7 +342,9 @@ public class PlateAnalysisTools {
             // Get colonies from count_colonies step
             List<Colony> colonies = getColoniesFromSession(imageHandle);
             if (colonies == null || colonies.isEmpty()) {
-                return fail(ERROR_INVALID_PARAM, "No colonies found. Run count_colonies first.", "colonies");
+                return ErrorHandler.handleValidationError("classify_colonies",
+                    new IllegalStateException("No colonies found. Run count_colonies first."),
+                    logger, recovery);
             }
             
             List<ColonyClassification> classifications = new ArrayList<>();
@@ -353,7 +357,9 @@ public class PlateAnalysisTools {
                 int clusters = args.optInt("clusters", 2);
                 classifications = classifyWithKMeans(img.image, colonies, clusters);
             } else {
-                return fail(ERROR_INVALID_PARAM, "Mode must be 'xgal' or 'kmeans'", "mode");
+                return ErrorHandler.handleValidationError("classify_colonies",
+                    new IllegalArgumentException("Mode must be 'xgal' or 'kmeans', got: " + mode),
+                    logger, recovery);
             }
             
             // Create color-coded overlay visualization
@@ -382,7 +388,7 @@ public class PlateAnalysisTools {
             return ok("classify_colonies", data);
             
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("classify_colonies", e);
+            return ErrorHandler.handleUnexpectedError("classify_colonies", e, logger, recovery);
         }
     }
     
@@ -394,7 +400,7 @@ public class PlateAnalysisTools {
     public JSONObject binColonies(JSONObject args) {
         ToolSchemaValidator.requireImageHandle(args);
         try {
-            JSONObject disciplineError = enforceHandleDiscipline(args);
+            JSONObject disciplineError = enforceHandleDiscipline(args, "bin_colonies");
             if (disciplineError != null) return disciplineError;
             
             String imageHandle = args.getString("image_handle");
@@ -414,11 +420,15 @@ public class PlateAnalysisTools {
             List<ColonyClassification> classifications = getClassificationsFromSession(imageHandle);
             
             if (colonies == null || colonies.isEmpty()) {
-                return fail(ERROR_INVALID_PARAM, "No colonies found. Run count_colonies first.", "colonies");
+                return ErrorHandler.handleValidationError("bin_colonies",
+                    new IllegalStateException("No colonies found. Run count_colonies first."),
+                    logger, recovery);
             }
             
             if (classifications == null || classifications.isEmpty()) {
-                return fail(ERROR_INVALID_PARAM, "No classifications found. Run classify_colonies first.", "classifications");
+                return ErrorHandler.handleValidationError("bin_colonies",
+                    new IllegalStateException("No classifications found. Run classify_colonies first."),
+                    logger, recovery);
             }
             
             // Get pixel scale for size conversion
@@ -487,7 +497,7 @@ public class PlateAnalysisTools {
             return ok("bin_colonies", data);
             
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("bin_colonies", e);
+            return ErrorHandler.handleUnexpectedError("bin_colonies", e, logger, recovery);
         }
     }
     
@@ -502,13 +512,15 @@ public class PlateAnalysisTools {
         ToolSchemaValidator.requireImageHandle(args);
         ToolSchemaValidator.requireArray(args, "formats");
         try {
-            JSONObject disciplineError = enforceHandleDiscipline(args);
+            JSONObject disciplineError = enforceHandleDiscipline(args, "export_colonies");
             if (disciplineError != null) return disciplineError;
             
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord img = store.getImage(imageHandle);
             if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+                return ErrorHandler.handleValidationError("export_colonies",
+                    new IllegalArgumentException("Image not found in session: " + imageHandle),
+                    logger, recovery);
             }
             
             JSONArray formats = args.getJSONArray("formats");
@@ -522,7 +534,9 @@ public class PlateAnalysisTools {
             String sourceFilename = img.image.getTitle() != null ? img.image.getTitle() : "unknown";
             
             if (colonies == null || colonies.isEmpty()) {
-                return fail(ERROR_INVALID_PARAM, "No colonies found. Run count_colonies first.", "colonies");
+                return ErrorHandler.handleValidationError("export_colonies",
+                    new IllegalStateException("No colonies found. Run count_colonies first."),
+                    logger, recovery);
             }
             
             // Export formats
@@ -557,41 +571,57 @@ public class PlateAnalysisTools {
             return ok("export_colonies", data);
             
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("export_colonies", e);
+            return ErrorHandler.handleUnexpectedError("export_colonies", e, logger, recovery);
         }
     }
     
     // Legacy colony methods
     public JSONObject detectColonies(JSONObject args) {
-        return fail("not_implemented", "Method will be implemented during extraction", "general");
+        return ErrorHandler.handleValidationError("detect_colonies",
+            new UnsupportedOperationException("Method will be implemented during extraction"),
+            logger, recovery);
     }
     
     public JSONObject countColoniesByColor(JSONObject args) {
-        return fail("not_implemented", "Method will be implemented during extraction", "general");
+        return ErrorHandler.handleValidationError("count_colonies_by_color",
+            new UnsupportedOperationException("Method will be implemented during extraction"),
+            logger, recovery);
     }
     
     public JSONObject measureColonySizes(JSONObject args) {
-        return fail("not_implemented", "Method will be implemented during extraction", "general");
+        return ErrorHandler.handleValidationError("measure_colony_sizes",
+            new UnsupportedOperationException("Method will be implemented during extraction"),
+            logger, recovery);
     }
     
     public JSONObject checkContamination(JSONObject args) {
-        return fail("not_implemented", "Method will be implemented during extraction", "general");
+        return ErrorHandler.handleValidationError("check_contamination",
+            new UnsupportedOperationException("Method will be implemented during extraction"),
+            logger, recovery);
     }
     
     public JSONObject createLabeledReference(JSONObject args) {
-        return fail("not_implemented", "Method will be implemented during extraction", "general");
+        return ErrorHandler.handleValidationError("create_labeled_reference",
+            new UnsupportedOperationException("Method will be implemented during extraction"),
+            logger, recovery);
     }
     
     public JSONObject exportForNotebook(JSONObject args) {
-        return fail("not_implemented", "Method will be implemented during extraction", "general");
+        return ErrorHandler.handleValidationError("export_for_notebook",
+            new UnsupportedOperationException("Method will be implemented during extraction"),
+            logger, recovery);
     }
     
     public JSONObject exportForPresentation(JSONObject args) {
-        return fail("not_implemented", "Method will be implemented during extraction", "general");
+        return ErrorHandler.handleValidationError("export_for_presentation",
+            new UnsupportedOperationException("Method will be implemented during extraction"),
+            logger, recovery);
     }
     
     public JSONObject exportColonyAnalysis(JSONObject args) {
-        return fail("not_implemented", "Method will be implemented during extraction", "general");
+        return ErrorHandler.handleValidationError("export_colony_analysis",
+            new UnsupportedOperationException("Method will be implemented during extraction"),
+            logger, recovery);
     }
     
     // =============== HELPER METHODS FOR STREAMLINED CLASSIFICATION ===============

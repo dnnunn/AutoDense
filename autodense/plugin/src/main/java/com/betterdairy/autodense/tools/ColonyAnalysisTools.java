@@ -70,17 +70,6 @@ public final class ColonyAnalysisTools {
             .put("data", data);
     }
     
-    /**
-     * Error response helper
-     */
-    // TODO: Replace remaining error() calls with ErrorHandler - temporary method for compilation
-    private JSONObject error(String tool, String message, String field) {
-        return new JSONObject()
-            .put("success", false)
-            .put("tool", tool)
-            .put("error", message)
-            .put("field", field);
-    }
     
     /**
      * Convert JSONArray to double array
@@ -108,7 +97,7 @@ public final class ColonyAnalysisTools {
             SessionStore.ImageRecord rec = store.getImage(imageHandle);
             if (rec == null) {
                 return ErrorHandler.handleValidationError("detect_plate", 
-                    new IllegalArgumentException("Image not found after validation"), null, recovery);
+                    new IllegalArgumentException("Image not found after validation"), logger, recovery);
             }
             
             // Standardized parameter extraction
@@ -142,8 +131,12 @@ public final class ColonyAnalysisTools {
             
             return response; // No more guidance injection - clean standardized responses
                 
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("detect_plate", e, logger, recovery);
+        } catch (NullPointerException e) {
+            return ErrorHandler.handleImageProcessingError("detect_plate", e, logger, recovery);
         } catch (Exception e) {
-            return ErrorHandler.handleUnexpectedError("detect_plate", e, null, recovery);
+            return ErrorHandler.handleUnexpectedError("detect_plate", new RuntimeException(e), logger, recovery);
         }
     }
     
@@ -162,7 +155,7 @@ public final class ColonyAnalysisTools {
             SessionStore.ImageRecord rec = store.getImage(imageHandle);
             if (rec == null) {
                 return ErrorHandler.handleValidationError("count_colonies", 
-                    new IllegalArgumentException("Image not found after validation"), null, recovery);
+                    new IllegalArgumentException("Image not found after validation"), logger, recovery);
             }
             
             // Get plate data and calibration
@@ -176,7 +169,8 @@ public final class ColonyAnalysisTools {
             // Validate parameters
             var validation_result = ParameterConverter.Validation.validateColonyParams(detectionParams);
             if (!validation_result.isValid) {
-                return error("count_colonies", validation_result.errorMessage, validation_result.parameterName);
+                return ErrorHandler.handleValidationError("count_colonies", 
+                    new IllegalArgumentException(validation_result.errorMessage + " (parameter: " + validation_result.parameterName + ")"), logger, recovery);
             }
             
             // Create unified detector parameters
@@ -221,8 +215,12 @@ public final class ColonyAnalysisTools {
             
             return handleGuard.addPersistenceGuidance(response, imageHandle);
                 
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("count_colonies", e, logger, recovery);
+        } catch (NullPointerException e) {
+            return ErrorHandler.handleImageProcessingError("count_colonies", e, logger, recovery);
         } catch (Exception e) {
-            return error("count_colonies", e.getMessage(), "processing");
+            return ErrorHandler.handleUnexpectedError("count_colonies", e, logger, recovery);
         }
     }
     
@@ -235,13 +233,15 @@ public final class ColonyAnalysisTools {
             SessionStore.ImageRecord rec = store.getImage(imageHandle);
             
             if (rec == null) {
-                return error("classify_colonies", "Image not found", "image_handle");
+                return ErrorHandler.handleValidationError("classify_colonies", 
+                    new IllegalArgumentException("Image not found"), logger, recovery);
             }
             
             // Get existing colony data
             List<Colony> colonies = getColoniesFromSession(imageHandle);
             if (colonies == null || colonies.isEmpty()) {
-                return error("classify_colonies", "No colonies found. Run count_colonies first.", "colonies");
+                return ErrorHandler.handleSessionError("classify_colonies", 
+                    new IllegalStateException("No colonies found. Run count_colonies first."), logger, recovery);
             }
             
             PlateDetector.Result plate = getPlateFromSession(store, imageHandle);
@@ -305,8 +305,12 @@ public final class ColonyAnalysisTools {
             
             return ok("classify_colonies", result);
                 
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("classify_colonies", e, logger, recovery);
+        } catch (IllegalStateException e) {
+            return ErrorHandler.handleSessionError("classify_colonies", e, logger, recovery);
         } catch (Exception e) {
-            return error("classify_colonies", e.getMessage(), "processing");
+            return ErrorHandler.handleUnexpectedError("classify_colonies", e, logger, recovery);
         }
     }
     
@@ -322,7 +326,8 @@ public final class ColonyAnalysisTools {
             List<Colony> colonies = getColoniesFromSession(imageHandle);
             
             if (colonies == null || colonies.isEmpty()) {
-                return error("bin_colonies", "No colonies found", "colonies");
+                return ErrorHandler.handleSessionError("bin_colonies", 
+                    new IllegalStateException("No colonies found"), logger, recovery);
             }
             
             PlateDetector.Result plate = getPlateFromSession(store, imageHandle);
@@ -347,8 +352,10 @@ public final class ColonyAnalysisTools {
                 .put("bins", new JSONObject(binSummary))
                 .put("size_edges_mm", new JSONArray(edgesMM)));
                 
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("bin_colonies", e, logger, recovery);
         } catch (Exception e) {
-            return error("bin_colonies", e.getMessage(), "processing");
+            return ErrorHandler.handleUnexpectedError("bin_colonies", e, logger, recovery);
         }
     }
     
@@ -361,18 +368,21 @@ public final class ColonyAnalysisTools {
             SessionStore.ImageRecord rec = store.getImage(imageHandle);
             
             if (rec == null) {
-                return error("normalize_colonies", "Image not found", "image_handle");
+                return ErrorHandler.handleValidationError("normalize_colonies", 
+                    new IllegalArgumentException("Image not found"), logger, recovery);
             }
             
             // Get existing colony data
             List<Colony> colonies = getColoniesFromSession(imageHandle);
             if (colonies == null || colonies.isEmpty()) {
-                return error("normalize_colonies", "No colonies found. Run count_colonies first.", "colonies");
+                return ErrorHandler.handleSessionError("normalize_colonies", 
+                    new IllegalStateException("No colonies found. Run count_colonies first."), logger, recovery);
             }
             
             PlateDetector.Result plate = getPlateFromSession(store, imageHandle);
             if (plate == null) {
-                return error("normalize_colonies", "No plate data found. Run detect_plate first.", "plate");
+                return ErrorHandler.handleSessionError("normalize_colonies", 
+                    new IllegalStateException("No plate data found. Run detect_plate first."), logger, recovery);
             }
             
             double pxPerMM = plate.pxPerMM(90.0);
@@ -401,8 +411,10 @@ public final class ColonyAnalysisTools {
                 .put("quadrant_counts", new JSONObject(result.plateStats().quadrantCounts()))
                 .put("portable_thresholds", new JSONObject(portableThresholds)));
                 
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("normalize_colonies", e, logger, recovery);
         } catch (Exception e) {
-            return error("normalize_colonies", e.getMessage(), "processing");
+            return ErrorHandler.handleUnexpectedError("normalize_colonies", e, logger, recovery);
         }
     }
     
@@ -418,17 +430,20 @@ public final class ColonyAnalysisTools {
             SessionStore.ImageRecord rec = store.getImage(imageHandle);
             
             if (rec == null) {
-                return error("export_detailed_features", "Image not found", "image_handle");
+                return ErrorHandler.handleValidationError("export_detailed_features", 
+                    new IllegalArgumentException("Image not found"), logger, recovery);
             }
             
             List<Colony> colonies = getColoniesFromSession(imageHandle);
             if (colonies == null || colonies.isEmpty()) {
-                return error("export_detailed_features", "No colonies found", "colonies");
+                return ErrorHandler.handleSessionError("export_detailed_features", 
+                    new IllegalStateException("No colonies found"), logger, recovery);
             }
             
             PlateDetector.Result plate = getPlateFromSession(store, imageHandle);
             if (plate == null) {
-                return error("export_detailed_features", "No plate data found", "plate");
+                return ErrorHandler.handleSessionError("export_detailed_features", 
+                    new IllegalStateException("No plate data found"), logger, recovery);
             }
             
             double pxPerMM = plate.pxPerMM(90.0);
@@ -487,8 +502,10 @@ public final class ColonyAnalysisTools {
                 .put("size_edges_mm", new JSONArray(sizeEdgesMM))
                 .put("auto_calibrate", autoCalibrate));
                 
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("export_detailed_features", e, logger, recovery);
         } catch (Exception e) {
-            return error("export_detailed_features", e.getMessage(), "processing");
+            return ErrorHandler.handleUnexpectedError("export_detailed_features", new RuntimeException(e), logger, recovery);
         }
     }
     
@@ -501,12 +518,14 @@ public final class ColonyAnalysisTools {
             SessionStore.ImageRecord rec = store.getImage(imageHandle);
             
             if (rec == null) {
-                return error("export_colonies", "Image not found", "image_handle");
+                return ErrorHandler.handleValidationError("export_colonies", 
+                    new IllegalArgumentException("Image not found"), logger, recovery);
             }
             
             List<Colony> colonies = getColoniesFromSession(imageHandle);
             if (colonies == null || colonies.isEmpty()) {
-                return error("export_colonies", "No colonies found", "colonies");
+                return ErrorHandler.handleSessionError("export_colonies", 
+                    new IllegalStateException("No colonies found"), logger, recovery);
             }
             
             // Export using pure function (would need ColonyExporter utility)
@@ -515,8 +534,10 @@ public final class ColonyAnalysisTools {
             return ok("export_colonies", new JSONObject()
                 .put("exports", exportResult));
                 
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("export_colonies", e, logger, recovery);
         } catch (Exception e) {
-            return error("export_colonies", e.getMessage(), "processing");
+            return ErrorHandler.handleUnexpectedError("export_colonies", new RuntimeException(e), logger, recovery);
         }
     }
     
@@ -529,7 +550,8 @@ public final class ColonyAnalysisTools {
             SessionStore.ImageRecord rec = store.getImage(imageHandle);
             
             if (rec == null) {
-                return error("enable_colony_assist", "Image not found", "image_handle");
+                return ErrorHandler.handleValidationError("enable_colony_assist", 
+                    new IllegalArgumentException("Image not found"), logger, recovery);
             }
             
             // Get existing colony and plate data
@@ -540,7 +562,8 @@ public final class ColonyAnalysisTools {
             
             PlateDetector.Result plate = getPlateFromSession(store, imageHandle);
             if (plate == null) {
-                return error("enable_colony_assist", "No plate data found. Run detect_plate first.", "plate");
+                return ErrorHandler.handleSessionError("enable_colony_assist", 
+                    new IllegalStateException("No plate data found. Run detect_plate first."), logger, recovery);
             }
             
             double pxPerMM = plate.pxPerMM(90.0);
@@ -563,8 +586,10 @@ public final class ColonyAnalysisTools {
                     .put("max_colony_size", 60.0)
                     .put("default_class", "OTHER")));
                 
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("enable_colony_assist", e, logger, recovery);
         } catch (Exception e) {
-            return error("enable_colony_assist", e.getMessage(), "processing");
+            return ErrorHandler.handleUnexpectedError("enable_colony_assist", new RuntimeException(e), logger, recovery);
         }
     }
     
@@ -578,7 +603,8 @@ public final class ColonyAnalysisTools {
             // Get assist tool and extract final colonies
             AssistColonyTool assistTool = getAssistToolFromSession(store, imageHandle);
             if (assistTool == null) {
-                return error("disable_colony_assist", "Colony assist not active", "assist_tool");
+                return ErrorHandler.handleSessionError("disable_colony_assist", 
+                    new IllegalStateException("Colony assist not active"), logger, recovery);
             }
             
             // Extract current colonies from assist tool
@@ -604,8 +630,10 @@ public final class ColonyAnalysisTools {
                 .put("colony_assist_disabled", true)
                 .put("final_colonies", finalColonies.size()));
                 
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("disable_colony_assist", e, logger, recovery);
         } catch (Exception e) {
-            return error("disable_colony_assist", e.getMessage(), "processing");
+            return ErrorHandler.handleUnexpectedError("disable_colony_assist", new RuntimeException(e), logger, recovery);
         }
     }
     
@@ -622,7 +650,8 @@ public final class ColonyAnalysisTools {
             // Get assist tool
             AssistColonyTool assistTool = getAssistToolFromSession(store, imageHandle);
             if (assistTool == null) {
-                return error("colony_assist_click", "Colony assist not active", "assist_tool");
+                return ErrorHandler.handleSessionError("colony_assist_click", 
+                    new IllegalStateException("Colony assist not active"), logger, recovery);
             }
             
             // Handle click
@@ -646,8 +675,10 @@ public final class ColonyAnalysisTools {
                 .put("user_deleted", result.userDeleted())
                 .put("message", result.message()));
                 
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("colony_assist_click", e, logger, recovery);
         } catch (Exception e) {
-            return error("colony_assist_click", e.getMessage(), "processing");
+            return ErrorHandler.handleUnexpectedError("colony_assist_click", new RuntimeException(e), logger, recovery);
         }
     }
     
@@ -664,13 +695,15 @@ public final class ColonyAnalysisTools {
             try {
                 targetClass = ColonyColor.valueOf(targetClassStr.toUpperCase());
             } catch (IllegalArgumentException e) {
-                return error("propagate_colony_class", "Invalid colony class: " + targetClassStr, "target_class");
+                return ErrorHandler.handleValidationError("propagate_colony_class", 
+                    new IllegalArgumentException("Invalid colony class: " + targetClassStr), logger, recovery);
             }
             
             // Get assist tool
             AssistColonyTool assistTool = getAssistToolFromSession(store, imageHandle);
             if (assistTool == null) {
-                return error("propagate_colony_class", "Colony assist not active", "assist_tool");
+                return ErrorHandler.handleSessionError("propagate_colony_class", 
+                    new IllegalStateException("Colony assist not active"), logger, recovery);
             }
             
             // Propagate classification
@@ -689,8 +722,10 @@ public final class ColonyAnalysisTools {
                 .put("model_features", result.modelFeatures())
                 .put("message", result.message()));
                 
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("propagate_colony_class", e, logger, recovery);
         } catch (Exception e) {
-            return error("propagate_colony_class", e.getMessage(), "processing");
+            return ErrorHandler.handleUnexpectedError("propagate_colony_class", new RuntimeException(e), logger, recovery);
         }
     }
     
@@ -709,13 +744,15 @@ public final class ColonyAnalysisTools {
             try {
                 newClass = ColonyColor.valueOf(newClassStr.toUpperCase());
             } catch (IllegalArgumentException e) {
-                return error("relabel_colony", "Invalid colony class: " + newClassStr, "new_class");
+                return ErrorHandler.handleValidationError("relabel_colony", 
+                    new IllegalArgumentException("Invalid colony class: " + newClassStr), logger, recovery);
             }
             
             // Get assist tool
             AssistColonyTool assistTool = getAssistToolFromSession(store, imageHandle);
             if (assistTool == null) {
-                return error("relabel_colony", "Colony assist not active", "assist_tool");
+                return ErrorHandler.handleSessionError("relabel_colony", 
+                    new IllegalStateException("Colony assist not active"), logger, recovery);
             }
             
             // Relabel colony
@@ -736,8 +773,10 @@ public final class ColonyAnalysisTools {
                 .put("user_relabeled", result.userRelabeled())
                 .put("message", result.message()));
                 
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("relabel_colony", e, logger, recovery);
         } catch (Exception e) {
-            return error("relabel_colony", e.getMessage(), "processing");
+            return ErrorHandler.handleUnexpectedError("relabel_colony", new RuntimeException(e), logger, recovery);
         }
     }
     

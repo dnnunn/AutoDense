@@ -64,11 +64,31 @@ Include:
 - System limitations or edge cases
 - Suggested investigation approaches
 
+## 🌳 Project Structure Documentation
+
+#### Create/Update Project Structure Document
+Location: `/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/StructureDocs`
+Format: `Structure_Month_Date_Year_(Time of day if more than one for the date).md`
+
+**Process:**
+1. **Check for existing structure document** for current date
+2. **Create new document** if none exists, or **update existing** if multiple sessions same day
+3. **Generate current project tree** using appropriate tools (LS, find, or tree command)
+4. **Include Doc Meta block** with purpose as "Current project structure snapshot"
+5. **Document notable structural changes** since last structure snapshot
+
+**Content should include:**
+- Complete directory tree structure
+- Key file locations and organization
+- Notable additions/removals since last snapshot
+- Brief description of major folders and their purpose
+
 ## ✅ Pre-Commit Checklist
 
 Before ending session, verify:
 - [ ] Document catalog updated with all new/modified files
 - [ ] All new .md files have required Doc Meta blocks
+- [ ] Project structure document created/updated in StructureDocs folder
 - [ ] Session summary captures key accomplishments
 - [ ] Next steps clearly defined with priorities
 - [ ] Issues documented with sufficient detail for follow-up

@@ -9,6 +9,7 @@ import com.betterdairy.autodense.plugin.ToolSchemaValidator;
 import com.betterdairy.autodense.session.SessionRecovery;
 import com.betterdairy.autodense.session.SessionStore;
 import com.betterdairy.autodense.util.ErrorHandler;
+import com.betterdairy.autodense.util.ImageJResourceManager;
 import com.betterdairy.autodense.validation.SecureToolValidator;
 
 // External Libraries
@@ -72,20 +73,7 @@ public class GelAnalysisTools {
     
     private static final Logger logger = Logger.getLogger(GelAnalysisTools.class.getName());
     
-    /**
-     * Resource cleanup utility for ImageJ objects to prevent memory leaks
-     */
-    private static void safeCleanup(ImagePlus... images) {
-        for (ImagePlus img : images) {
-            if (img != null) {
-                try {
-                    img.flush();
-                } catch (Exception e) {
-                    logger.log(Level.FINE, "Error during ImagePlus cleanup", e);
-                }
-            }
-        }
-    }
+    // Resource cleanup now handled by shared ImageJResourceManager utility
     
     private final SessionStore store;
     private final SessionRecovery recovery;
@@ -139,25 +127,9 @@ public class GelAnalysisTools {
         return new JSONObject().put("ok", true).put("tool", tool).put("data", data).put("warnings", new JSONArray());
     }
     
-    /**
-     * Create standardized failure response
-     */
-    private JSONObject fail(String code, String msg, String param) {
-        return new JSONObject().put("ok", false)
-            .put("error", new JSONObject().put("code", code).put("message", msg).put("param", param));
-    }
+    // Removed legacy fail() method - all calls converted to ErrorHandler pattern
     
-    
-    /**
-     * Standard error codes for Gemini self-correction
-     */
-    private static final String ERROR_MISSING_REQUIRED_FIELD = "missing_required_field";
-    @SuppressWarnings("unused")
-    private static final String ERROR_INVALID_PARAM = "invalid_param";
-    private static final String ERROR_IMAGE_NOT_FOUND = "image_not_found";
-    private static final String ERROR_IMAGE_STATE_CONFLICT = "image_state_conflict";
-    private static final String ERROR_IJ_RUNTIME_ERROR = "ij_runtime_error";
-    protected static final String ERROR_ANALYSIS_FAILED = "analysis_failed";
+    // Removed unused error constants - all errors now use ErrorHandler pattern
     
     // DEPRECATED PARAMETER CLAMPING: Use ParameterValidator for new code
     // These methods remain only for backward compatibility in deprecated tools
@@ -180,20 +152,18 @@ public class GelAnalysisTools {
         if (!args.has("image_handle") || args.isNull("image_handle") || 
             args.getString("image_handle").trim().isEmpty()) {
             
-            return fail(ERROR_MISSING_REQUIRED_FIELD, 
-                "Explicit image_handle parameter is required. " +
+            return ErrorHandler.handleValidationError("openimage_validation", 
+                new IllegalArgumentException("Explicit image_handle parameter is required. " +
                 "Silent injection disabled to prevent stale image operations. " +
-                "Include image_handle from open_image result in ALL tool calls.",
-                "image_handle");
+                "Include image_handle from open_image result in ALL tool calls."), logger, recovery);
         }
         
         // Validate handle exists in session
         String handle = args.getString("image_handle");
         if (store.getImage(handle) == null) {
-            return fail(ERROR_IMAGE_NOT_FOUND, 
-                "Image handle '" + handle + "' not found in session. " +
-                "Ensure you use the exact handle returned by open_image.",
-                "image_handle");
+            return ErrorHandler.handleValidationError("openimage_validation", 
+                new IllegalArgumentException("Image handle '" + handle + "' not found in session. " +
+                "Ensure you use the exact handle returned by open_image."), logger, recovery);
         }
         
         return null; // Success - explicit handle present and valid
@@ -232,13 +202,13 @@ public class GelAnalysisTools {
                      "This image handle must be included in every tool call: detect_lanes, detect_bands, quantify_bands, etc.");
                 
         } catch (IllegalArgumentException e) {
-            return ErrorHandler.handleValidationError("open_image", e, null, recovery);
+            return ErrorHandler.handleValidationError("open_image", e, logger, recovery);
         } catch (RuntimeException e) {
             // Handle other runtime errors (file access issues from IJ.openImage, etc.)
             if (e.getMessage() != null && e.getMessage().contains("file")) {
-                return ErrorHandler.handleFileError("open_image", e, null, recovery);
+                return ErrorHandler.handleFileError("open_image", e, logger, recovery);
             }
-            return ErrorHandler.handleUnexpectedError("open_image", e, null, recovery);
+            return ErrorHandler.handleUnexpectedError("open_image", e, logger, recovery);
         }
     }
     
@@ -261,7 +231,9 @@ public class GelAnalysisTools {
             
             SessionStore.ImageRecord originalImg = store.getImage(args.getString("image_handle"));
             if (originalImg == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+                return ErrorHandler.handleValidationError("preprocess", 
+                    new IllegalArgumentException("Image not found in session: " + args.getString("image_handle")), 
+                    logger, recovery);
             }
             
             boolean destructive = args.optBoolean("destructive", false);
@@ -286,7 +258,9 @@ public class GelAnalysisTools {
                             .put(new JSONObject().put("op", "lane_wise_background").put("radius", 60).put("quantile", 0.15));
                     }
                     default -> {
-                        return fail(ERROR_INVALID_PARAM, "Unknown preprocessing mode: " + mode, "mode");
+                        return ErrorHandler.handleValidationError("preprocess", 
+                            new IllegalArgumentException("Unknown preprocessing mode: " + mode), 
+                            logger, recovery);
                     }
                 }
             } else {
@@ -369,8 +343,10 @@ public class GelAnalysisTools {
             
             return ok("preprocess", data);
                 
+        } catch (IllegalArgumentException e) {
+            return ErrorHandler.handleValidationError("preprocess", e, logger, recovery);
         } catch (Exception e) {
-            return fail(ERROR_IJ_RUNTIME_ERROR, "ImageJ preprocessing error: " + e.getMessage(), "preprocessing");
+            return ErrorHandler.handleImageProcessingError("preprocess", e, logger, recovery);
         }
     }
     
@@ -391,7 +367,9 @@ public class GelAnalysisTools {
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord img = store.getImage(imageHandle);
             if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+                return ErrorHandler.handleValidationError("detect_lanes", 
+                    new IllegalArgumentException("Image not found in session: " + imageHandle), 
+                    logger, recovery);
             }
             
             // Clamp and echo parameters for determinism - improved defaults for robustness
@@ -492,13 +470,13 @@ public class GelAnalysisTools {
             return ok("detect_lanes", data);
                 
         } catch (IllegalArgumentException e) {
-            return ErrorHandler.handleValidationError("detect_lanes", e, null, recovery);
+            return ErrorHandler.handleValidationError("detect_lanes", e, logger, recovery);
         } catch (IllegalStateException e) {
-            return ErrorHandler.handleSessionError("detect_lanes", e, null, recovery);
+            return ErrorHandler.handleSessionError("detect_lanes", e, logger, recovery);
         } catch (NullPointerException e) {
-            return ErrorHandler.handleImageProcessingError("detect_lanes", e, null, recovery);
+            return ErrorHandler.handleImageProcessingError("detect_lanes", e, logger, recovery);
         } catch (RuntimeException e) {
-            return ErrorHandler.handleUnexpectedError("detect_lanes", e, null, recovery);
+            return ErrorHandler.handleUnexpectedError("detect_lanes", e, logger, recovery);
         }
     }
     
@@ -519,7 +497,7 @@ public class GelAnalysisTools {
             String overlayHandle = createBandDetectionOverlay(result, params.imageHandle);
             return formatBandDetectionResponse(result, overlayHandle, params);
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("detect_bands", e);
+            return ErrorHandler.handleUnexpectedError("detect_bands", e, logger, recovery);
         }
     }
 
@@ -705,7 +683,9 @@ public class GelAnalysisTools {
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord img = store.getImage(imageHandle);
             if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+                return ErrorHandler.handleValidationError("adjust_lanes", 
+                    new IllegalArgumentException("Image not found in session: " + imageHandle), 
+                    logger, recovery);
             }
             
             // Clamp and echo parameters for determinism
@@ -720,7 +700,8 @@ public class GelAnalysisTools {
             // Get current overlay
             Overlay currentOverlay = img.currentOverlay;
             if (currentOverlay == null) {
-                return fail(ERROR_IMAGE_STATE_CONFLICT, "No lanes detected yet - run detect_lanes first", "overlay");
+                return ErrorHandler.handleValidationError("adjust_lanes", 
+                    new IllegalStateException("No lanes detected yet - run detect_lanes first"), logger, recovery);
             }
             
             // Create new overlay with adjusted positions
@@ -761,7 +742,7 @@ public class GelAnalysisTools {
             return ok("adjust_lanes", data);
                 
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("adjust_lanes", e);
+            return ErrorHandler.handleUnexpectedError("adjust_lanes", e, logger, recovery);
         }
     }
     
@@ -781,7 +762,9 @@ public class GelAnalysisTools {
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord img = store.getImage(imageHandle);
             if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+                return ErrorHandler.handleValidationError("render_overlay_png", 
+                    new IllegalArgumentException("Image not found in session: " + imageHandle), 
+                    logger, recovery);
             }
             
             // Clamp and echo parameters for determinism
@@ -902,7 +885,7 @@ public class GelAnalysisTools {
             return ok("render_overlay_png", data);
                 
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("render_overlay_png", e);
+            return ErrorHandler.handleUnexpectedError("render_overlay_png", e, logger, recovery);
         }
     }
     
@@ -922,12 +905,15 @@ public class GelAnalysisTools {
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord img = store.getImage(imageHandle);
             if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+                return ErrorHandler.handleValidationError("quantify_bands", 
+                    new IllegalArgumentException("Image not found in session: " + imageHandle), 
+                    logger, recovery);
             }
             
             String analysisHandle = args.optString("analysis_handle", "");
             if (analysisHandle.isEmpty() || !store.hasAnalysis(analysisHandle)) {
-                return fail("analysis_not_found", "Analysis handle not found - run detect_bands first", "analysis_handle");
+                return ErrorHandler.handleValidationError("quantify_bands", 
+                    new IllegalArgumentException("Analysis handle not found - run detect_bands first"), logger, recovery);
             }
             
             // Clamp and echo parameters for determinism
@@ -1032,7 +1018,7 @@ public class GelAnalysisTools {
             return ok("quantify_bands", data);
                 
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("quantify_bands", e);
+            return ErrorHandler.handleUnexpectedError("quantify_bands", e, logger, recovery);
         }
     }
     
@@ -1187,11 +1173,14 @@ public class GelAnalysisTools {
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord img = store.getImage(imageHandle);
             if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+                return ErrorHandler.handleValidationError("export_results", 
+                    new IllegalArgumentException("Image not found in session: " + imageHandle), 
+                    logger, recovery);
             }
             
             if (!args.has("export_formats")) {
-                return fail(ERROR_MISSING_REQUIRED_FIELD, "export_formats array is required", "export_formats");
+                return ErrorHandler.handleValidationError("export_results", 
+                    new IllegalArgumentException("export_formats array is required"), logger, recovery);
             }
             
             JSONArray formats = args.getJSONArray("export_formats");
@@ -1294,7 +1283,7 @@ public class GelAnalysisTools {
             return ok("export_results", data);
                 
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("export_results", e);
+            return ErrorHandler.handleUnexpectedError("export_results", e, logger, recovery);
         }
     }
     
@@ -1341,7 +1330,7 @@ public class GelAnalysisTools {
                 .put("image_handle", img.handle);
                 
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("check_contamination", e);
+            return ErrorHandler.handleUnexpectedError("check_contamination", e, logger, recovery);
         }
     }
     
@@ -1382,7 +1371,7 @@ public class GelAnalysisTools {
                 .put("image_handle", img.handle);
                 
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("calibrate_molecular_weight", e);
+            return ErrorHandler.handleUnexpectedError("calibrate_molecular_weight", e, logger, recovery);
         }
     }
     
@@ -1400,7 +1389,9 @@ public class GelAnalysisTools {
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord img = store.getImage(imageHandle);
             if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+                return ErrorHandler.handleValidationError("calibrate_standard_curve", 
+                    new IllegalArgumentException("Image not found in session: " + imageHandle), 
+                    logger, recovery);
             }
             
             // Get standard curve parameters
@@ -1409,9 +1400,9 @@ public class GelAnalysisTools {
             
             if (concentrations == null || responses == null || 
                 concentrations.length() != responses.length() || concentrations.length() < 3) {
-                return fail("invalid_standard_data", 
-                           "Need at least 3 matched concentration-response pairs", 
-                           "concentrations,responses");
+                return ErrorHandler.handleValidationError("calibrate_standard_curve", 
+                    new IllegalArgumentException("Need at least 3 matched concentration-response pairs"), 
+                    logger, recovery);
             }
             
             // Convert to lists
@@ -1468,7 +1459,7 @@ public class GelAnalysisTools {
             return ok("calibrate_standard_curve", data);
                 
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("calibrate_standard_curve", e);
+            return ErrorHandler.handleUnexpectedError("calibrate_standard_curve", e, logger, recovery);
         }
     }
     
@@ -1486,7 +1477,9 @@ public class GelAnalysisTools {
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord img = store.getImage(imageHandle);
             if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+                return ErrorHandler.handleValidationError("compare_lanes", 
+                    new IllegalArgumentException("Image not found in session: " + imageHandle), 
+                    logger, recovery);
             }
             
             // Get lane groups
@@ -1495,9 +1488,9 @@ public class GelAnalysisTools {
             
             if (controlLanesArray == null || treatmentLanesArray == null ||
                 controlLanesArray.length() < 2 || treatmentLanesArray.length() < 2) {
-                return fail("invalid_lane_groups", 
-                           "Need at least 2 control and 2 treatment lanes for comparison", 
-                           "control_lanes,treatment_lanes");
+                return ErrorHandler.handleValidationError("compare_lanes", 
+                    new IllegalArgumentException("Need at least 2 control and 2 treatment lanes for comparison"), 
+                    logger, recovery);
             }
             
             // Convert to lists
@@ -1526,9 +1519,9 @@ public class GelAnalysisTools {
             Map<Integer, List<LaneComparator.Peak>> peaksByLane = extractPeaksFromQuantification(imageHandle, controlLanes, treatmentLanes);
             
             if (peaksByLane.isEmpty()) {
-                return fail("no_quantification_data", 
-                           "No quantification data found - run quantify_bands first", 
-                           "image_handle");
+                return ErrorHandler.handleValidationError("compare_lanes", 
+                    new IllegalArgumentException("No quantification data found - run quantify_bands first"), 
+                    logger, recovery);
             }
             
             // Perform statistical comparison
@@ -1554,7 +1547,7 @@ public class GelAnalysisTools {
             return ok("compare_lanes", data);
                 
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("compare_lanes", e);
+            return ErrorHandler.handleUnexpectedError("compare_lanes", e, logger, recovery);
         }
     }
     
@@ -1572,25 +1565,33 @@ public class GelAnalysisTools {
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord img = store.getImage(imageHandle);
             if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+                return ErrorHandler.handleValidationError("export_volcano_plot", 
+                    new IllegalArgumentException("Image not found in session: " + imageHandle), 
+                    logger, recovery);
             }
             
             String comparisonHandle = args.optString("comparison_handle", "");
             if (comparisonHandle.isEmpty() || !store.hasAnalysis(comparisonHandle)) {
-                return fail("comparison_not_found", "Lane comparison not found - run compare_lanes first", "comparison_handle");
+                return ErrorHandler.handleValidationError("export_volcano_plot", 
+                    new IllegalArgumentException("Lane comparison not found - run compare_lanes first"), 
+                    logger, recovery);
             }
             
             // Get comparison analysis
             SessionStore.AnalysisRecord analysisRecord = store.getAnalysis(comparisonHandle);
             if (!"lane_comparison".equals(analysisRecord.type)) {
-                return fail("invalid_comparison_type", "Analysis is not a lane comparison", "comparison_handle");
+                return ErrorHandler.handleValidationError("export_volcano_plot", 
+                    new IllegalArgumentException("Analysis is not a lane comparison"), 
+                    logger, recovery);
             }
             
             JSONObject analysisData = (JSONObject) analysisRecord.data;
             LaneComparator.LaneComparisonAnalysis analysis = parseComparisonAnalysis(analysisData);
             
             if (analysis == null) {
-                return fail("invalid_analysis_data", "Could not parse comparison analysis data", "comparison_handle");
+                return ErrorHandler.handleValidationError("export_volcano_plot", 
+                    new IllegalArgumentException("Could not parse comparison analysis data"), 
+                    logger, recovery);
             }
             
             // Get plot parameters
@@ -1617,7 +1618,9 @@ public class GelAnalysisTools {
             boolean saved = fs.saveAsPng(outputPath);
             
             if (!saved) {
-                return fail("export_failed", "Failed to save volcano plot PNG", "output_path");
+                return ErrorHandler.handleFileError("export_volcano_plot", 
+                    new java.io.IOException("Failed to save volcano plot PNG to: " + outputPath), 
+                    logger, recovery);
             }
             
             // Clean up
@@ -1636,7 +1639,7 @@ public class GelAnalysisTools {
             return ok("export_volcano_plot", data);
                 
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("export_volcano_plot", e);
+            return ErrorHandler.handleUnexpectedError("export_volcano_plot", e, logger, recovery);
         }
     }
     
@@ -1777,7 +1780,9 @@ public class GelAnalysisTools {
             
             SessionStore.ImageRecord img = store.getImage(imageHandle);
             if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+                return ErrorHandler.handleValidationError("enable_band_assist", 
+                    new IllegalArgumentException("Image not found in session: " + imageHandle), 
+                    logger, recovery);
             }
             
             // Get lanes from previous analysis
@@ -1795,7 +1800,9 @@ public class GelAnalysisTools {
             }
             
             if (lanes == null || lanes.isEmpty()) {
-                return fail(ERROR_IMAGE_STATE_CONFLICT, "No lanes detected. Please detect lanes first before using BandAssist.", "overlay");
+                return ErrorHandler.handleValidationError("enable_band_assist", 
+                    new IllegalStateException("No lanes detected. Please detect lanes first before using BandAssist."), 
+                    logger, recovery);
             }
             
             // Store BandAssist tool instance in session metadata
@@ -1815,7 +1822,7 @@ public class GelAnalysisTools {
             return ok("enable_band_assist", data);
                 
         } catch (Exception e) {
-            return fail(ERROR_IJ_RUNTIME_ERROR, "ImageJ runtime error: " + e.getMessage(), "runtime");
+            return ErrorHandler.handleImageProcessingError("enable_band_assist", e, logger, recovery);
         }
     }
     
@@ -1833,7 +1840,9 @@ public class GelAnalysisTools {
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord img = store.getImage(imageHandle);
             if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found in session", "image_handle");
+                return ErrorHandler.handleValidationError("disable_band_assist", 
+                    new IllegalArgumentException("Image not found in session: " + imageHandle), 
+                    logger, recovery);
             }
             
             // Get and disable assist tool
@@ -1855,7 +1864,7 @@ public class GelAnalysisTools {
             return ok("disable_band_assist", data);
                 
         } catch (Exception e) {
-            return fail(ERROR_IJ_RUNTIME_ERROR, "ImageJ runtime error: " + e.getMessage(), "runtime");
+            return ErrorHandler.handleImageProcessingError("disable_band_assist", e, logger, recovery);
         }
     }
     
@@ -1919,7 +1928,7 @@ public class GelAnalysisTools {
                     .put("rf_tolerance", args.optDouble("rf_tolerance", 0.02)));
                 
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("configure_band_assist", e);
+            return ErrorHandler.handleUnexpectedError("configure_band_assist", e, logger, recovery);
         }
     }
     
@@ -1957,7 +1966,7 @@ public class GelAnalysisTools {
                 .put("image_handle", img.handle);
                 
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("normalize_intensities", e);
+            return ErrorHandler.handleUnexpectedError("normalize_intensities", e, logger, recovery);
         }
     }
     
@@ -2106,7 +2115,7 @@ public class GelAnalysisTools {
                 .put("band_count", allBands != null ? allBands.stream().mapToInt(List::size).sum() : 0);
             
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("create_labeled_reference", e);
+            return ErrorHandler.handleUnexpectedError("create_labeled_reference", e, logger, recovery);
         }
     }
 
@@ -2165,7 +2174,7 @@ public class GelAnalysisTools {
                 .put("intensities_included", includeIntensities);
             
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("export_for_notebook", e);
+            return ErrorHandler.handleUnexpectedError("export_for_notebook", e, logger, recovery);
         }
     }
 
@@ -2213,7 +2222,7 @@ public class GelAnalysisTools {
                 .put("usage", "Ready for PowerPoint, Keynote, or Google Slides");
             
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("export_for_presentation", e);
+            return ErrorHandler.handleUnexpectedError("export_for_presentation", e, logger, recovery);
         }
     }
 
@@ -2841,7 +2850,9 @@ public class GelAnalysisTools {
             String referenceHandle = args.getString("reference_image_handle");
             SessionStore.ImageRecord refImg = store.getImage(referenceHandle);
             if (refImg == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Reference image not found", "reference_image_handle");
+                return ErrorHandler.handleValidationError("start_timeseries_analysis", 
+                    new IllegalArgumentException("Reference image not found: " + referenceHandle), 
+                    logger, recovery);
             }
             
             // Create time-series tracker with options
@@ -2881,7 +2892,7 @@ public class GelAnalysisTools {
             return ok("start_timeseries_analysis", data);
             
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("start_timeseries_analysis", e);
+            return ErrorHandler.handleUnexpectedError("start_timeseries_analysis", e, logger, recovery);
         }
     }
     
@@ -2898,12 +2909,16 @@ public class GelAnalysisTools {
             
             SessionStore.AnalysisRecord trackingRecord = store.getAnalysis(trackingHandle);
             if (trackingRecord == null) {
-                return fail("tracking_not_found", "Time-series tracking not found", "tracking_handle");
+                return ErrorHandler.handleValidationError("add_timepoint", 
+                    new IllegalArgumentException("Time-series tracking not found: " + trackingHandle), 
+                    logger, recovery);
             }
             
             SessionStore.ImageRecord img = store.getImage(imageHandle);
             if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found", "image_handle");
+                return ErrorHandler.handleValidationError("add_timepoint", 
+                    new IllegalArgumentException("Image not found: " + imageHandle), 
+                    logger, recovery);
             }
             
             TimeSeriesColonyTracker tracker = (TimeSeriesColonyTracker) trackingRecord.data;
@@ -2953,7 +2968,7 @@ public class GelAnalysisTools {
             return ok("add_timepoint", data);
             
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("add_timepoint", e);
+            return ErrorHandler.handleUnexpectedError("add_timepoint", e, logger, recovery);
         }
     }
     
@@ -2972,10 +2987,14 @@ public class GelAnalysisTools {
             SessionStore.ImageRecord targetImg = store.getImage(targetHandle);
             
             if (refImg == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Reference image not found", "reference_image_handle");
+                return ErrorHandler.handleValidationError("align_plate_images", 
+                    new IllegalArgumentException("Reference image not found: " + refHandle), 
+                    logger, recovery);
             }
             if (targetImg == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Target image not found", "target_image_handle");
+                return ErrorHandler.handleValidationError("align_plate_images", 
+                    new IllegalArgumentException("Target image not found: " + targetHandle), 
+                    logger, recovery);
             }
             
             // Configure alignment options
@@ -2990,7 +3009,9 @@ public class GelAnalysisTools {
                 PlateAlignment.alignPlates(refImg.image, targetImg.image, options);
             
             if (result.confidence < 0.5) {
-                return fail("alignment_failed", "Could not reliably align images", "alignment_confidence");
+                return ErrorHandler.handleImageProcessingError("align_plate_images", 
+                    new RuntimeException("Could not reliably align images - confidence: " + result.confidence), 
+                    logger, recovery);
             }
             
             // Apply alignment transformation
@@ -3014,7 +3035,7 @@ public class GelAnalysisTools {
             return ok("align_plate_images", data);
             
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("align_plate_images", e);
+            return ErrorHandler.handleUnexpectedError("align_plate_images", e, logger, recovery);
         }
     }
     
@@ -3031,7 +3052,9 @@ public class GelAnalysisTools {
             String imageHandle = args.getString("image_handle");
             SessionStore.ImageRecord img = store.getImage(imageHandle);
             if (img == null) {
-                return fail(ERROR_IMAGE_NOT_FOUND, "Image not found", "image_handle");
+                return ErrorHandler.handleValidationError("analyze_xgal_blueness", 
+                    new IllegalArgumentException("Image not found: " + imageHandle), 
+                    logger, recovery);
             }
             
             // Configure blueness analysis options
@@ -3044,7 +3067,9 @@ public class GelAnalysisTools {
             Map<String, java.awt.geom.Point2D> colonyPositions = extractColonyPositions(img);
             
             if (colonyPositions.isEmpty()) {
-                return fail("no_colonies_found", "No colonies found for blueness analysis", "colony_detection");
+                return ErrorHandler.handleValidationError("analyze_xgal_blueness", 
+                    new IllegalStateException("No colonies found for blueness analysis"), 
+                    logger, recovery);
             }
             
             // Analyze blueness for each colony
@@ -3092,7 +3117,7 @@ public class GelAnalysisTools {
             return ok("analyze_xgal_blueness", data);
             
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("analyze_xgal_blueness", e);
+            return ErrorHandler.handleUnexpectedError("analyze_xgal_blueness", e, logger, recovery);
         }
     }
     
@@ -3107,7 +3132,9 @@ public class GelAnalysisTools {
             SessionStore.AnalysisRecord trackingRecord = store.getAnalysis(trackingHandle);
             
             if (trackingRecord == null) {
-                return fail("tracking_not_found", "Time-series tracking not found", "tracking_handle");
+                return ErrorHandler.handleValidationError("export_timeseries_data", 
+                    new IllegalArgumentException("Time-series tracking not found: " + trackingHandle), 
+                    logger, recovery);
             }
             
             TimeSeriesColonyTracker tracker = (TimeSeriesColonyTracker) trackingRecord.data;
@@ -3157,7 +3184,7 @@ public class GelAnalysisTools {
             return ok("export_timeseries_data", data);
             
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("export_timeseries_data", e);
+            return ErrorHandler.handleUnexpectedError("export_timeseries_data", e, logger, recovery);
         }
     }
     
@@ -3257,7 +3284,7 @@ public class GelAnalysisTools {
                 .put("target_mw_kda", targetMw));
                 
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("map_fractions", e);
+            return ErrorHandler.handleUnexpectedError("map_fractions", e, logger, recovery);
         }
     }
     
@@ -3389,7 +3416,7 @@ public class GelAnalysisTools {
             return ok("compute_yield_purity", new org.json.JSONObject().put("steps", steps));
             
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("compute_yield_purity", e);
+            return ErrorHandler.handleUnexpectedError("compute_yield_purity", e, logger, recovery);
         }
     }
     
@@ -3514,7 +3541,7 @@ public class GelAnalysisTools {
                 .put("lanes", lanesOut));
                 
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("profile_isoforms", e);
+            return ErrorHandler.handleUnexpectedError("profile_isoforms", e, logger, recovery);
         }
     }
     
@@ -3645,7 +3672,7 @@ public class GelAnalysisTools {
                 .put("lanes", out));
 
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("hcp_snapshot", e);
+            return ErrorHandler.handleUnexpectedError("hcp_snapshot", e, logger, recovery);
         }
     }
 
@@ -3660,7 +3687,7 @@ public class GelAnalysisTools {
             TreatmentComparisonResult result = performTreatmentComparison(analysisData, params);
             return formatTreatmentComparisonResponse(result);
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("compare_treatments", e);
+            return ErrorHandler.handleUnexpectedError("compare_treatments", e, logger, recovery);
         }
     }
 
@@ -3922,7 +3949,7 @@ public class GelAnalysisTools {
             DigestKineticsResult result = performDigestKineticsAnalysis(analysisData, params);
             return formatDigestKineticsResponse(result);
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("digest_kinetics", e);
+            return ErrorHandler.handleUnexpectedError("digest_kinetics", e, logger, recovery);
         }
     }
 
@@ -4174,7 +4201,7 @@ public class GelAnalysisTools {
                 .put("message", "No overlay to refresh"));
                 
         } catch (Exception e) {
-            return recovery.createRecoveryResponse("refresh_canvas", e);
+            return ErrorHandler.handleUnexpectedError("refresh_canvas", e, logger, recovery);
         }
     }
     
