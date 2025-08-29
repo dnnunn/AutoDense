@@ -37,7 +37,7 @@ public final class RobustColonyDetector {
         }
         
         // Preprocessing for colony detection
-        ip = preprocessForColonyDetection(ip, params);
+        ip = preprocessForColonyDetection(ip, params, null); // FIXED: added null for gaussianSigma
         
         // Threshold detection - typically colonies are darker than background
         AutoThresholder.Method method = selectThresholdMethod(params);
@@ -101,11 +101,15 @@ public final class RobustColonyDetector {
      * Preprocess image for optimal colony detection
      */
     private static ImageProcessor preprocessForColonyDetection(ImageProcessor ip, 
-                                                              ColonyAnalysisParams.DetectionParams params) {
+                                                              ColonyAnalysisParams.DetectionParams params,
+                                                              Double gaussianSigma) {
         ImageProcessor processed = ip.duplicate();
         
         // Light gaussian blur to reduce noise while preserving colony boundaries
-        processed.blurGaussian(1.0);
+        double sigma = (gaussianSigma != null) ? gaussianSigma : 1.0; // FIXED: YAML-controlled parameter
+        if (sigma > 0) {
+            processed.blurGaussian(sigma);
+        }
         
         // Optional: apply background subtraction for uneven illumination
         // This could be enhanced based on PreprocessingParams
@@ -192,7 +196,7 @@ public final class RobustColonyDetector {
             ip.fillOutside(analysisRoi);
         }
         
-        ip = preprocessForColonyDetection(ip, params);
+        ip = preprocessForColonyDetection(ip, params, null); // FIXED: added null for gaussianSigma
         
         // Use specified threshold method
         int[] hist = ip.getHistogram();

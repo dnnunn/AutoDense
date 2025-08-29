@@ -13,12 +13,12 @@ import java.util.*;
 import java.util.List;
 
 public final class AgaroseOps {
-    public static Map<String,Object> detectLanes(ImagePlus imp, Integer laneCount, Integer smoothPx, Path outDir) throws Exception {
+    public static Map<String,Object> detectLanes(ImagePlus imp, Integer laneCount, Integer smoothPx, Double backgroundRemovalRadius, Path outDir) throws Exception {
         // Reuse SDS logic pattern—vertical projection → lanes
-        return autodense.sds.SdsOps.detectLanes(imp, laneCount, smoothPx, outDir);
+        return autodense.sds.SdsOps.detectLanes(imp, laneCount, smoothPx, backgroundRemovalRadius, outDir);
     }
-    public static Map<String,Object> detectBands(ImagePlus imp, double minProm, int minDistPx, Path outDir) throws Exception {
-        return autodense.sds.SdsOps.detectBands(imp, minProm, minDistPx, outDir);
+    public static Map<String,Object> detectBands(ImagePlus imp, double minProm, int minDistPx, Double backgroundRemovalRadius, Path outDir) throws Exception {
+        return autodense.sds.SdsOps.detectBands(imp, minProm, minDistPx, backgroundRemovalRadius, outDir);
     }
 
     public static Map<String,Object> calibrateLadder(ImagePlus imp, String ladderName, int laneIndex, Path bandsCsv, Path outCsv) throws Exception {

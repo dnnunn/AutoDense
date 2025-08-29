@@ -22,10 +22,13 @@ import java.util.List;
 
 public final class SdsOps {
 
-    public static Map<String,Object> detectLanes(ImagePlus imp, Integer laneCount, Integer smoothPx, Path outDir) throws Exception {
+    public static Map<String,Object> detectLanes(ImagePlus imp, Integer laneCount, Integer smoothPx, Double backgroundRemovalRadius, Path outDir) throws Exception {
         ImagePlus work = imp.duplicate();
         IJ.run(work, "8-bit", "");
-        new BackgroundSubtracter().rollingBallBackground(work.getProcessor(), 50, false, false, false, false, false);
+        double bgRadius = (backgroundRemovalRadius != null) ? backgroundRemovalRadius : 50.0; // FIXED: YAML-controlled parameter
+        if (bgRadius > 0) {
+            new BackgroundSubtracter().rollingBallBackground(work.getProcessor(), bgRadius, false, false, false, false, false);
+        }
 
         ImageProcessor ip = work.getProcessor();
         int w = ip.getWidth(), h = ip.getHeight();
@@ -65,7 +68,7 @@ public final class SdsOps {
         return Map.of("lanes_rois", "lane_"+laneRois.size(), "lanes_png", lanesPng.toString());
     }
 
-    public static Map<String,Object> detectBands(ImagePlus imp, double minProm, int minDistPx, Path outDir) throws Exception {
+    public static Map<String,Object> detectBands(ImagePlus imp, double minProm, int minDistPx, Double backgroundRemovalRadius, Path outDir) throws Exception {
         // For each lane ROI, compute horizontal profile and detect peaks
         Overlay ov = imp.getOverlay(); if (ov == null) throw new IllegalStateException("No lanes overlay");
         List<Roi> lanes = Arrays.asList(ov.toArray());
@@ -77,7 +80,10 @@ public final class SdsOps {
             imp.setRoi(lane);
             ImagePlus laneImp = new ImagePlus("lane", imp.getProcessor().crop());
             IJ.run(laneImp, "8-bit", "");
-            new BackgroundSubtracter().rollingBallBackground(laneImp.getProcessor(), 30, false, false, false, false, false);
+            double bgRadius = (backgroundRemovalRadius != null) ? backgroundRemovalRadius : 30.0; // FIXED: YAML-controlled parameter
+            if (bgRadius > 0) {
+                new BackgroundSubtracter().rollingBallBackground(laneImp.getProcessor(), bgRadius, false, false, false, false, false);
+            }
 
             ImageProcessor ip = laneImp.getProcessor();
             int w = ip.getWidth(), h = ip.getHeight();
@@ -116,10 +122,10 @@ public final class SdsOps {
     }
 
     public static Map<String,Object> integrate(ImagePlus imp, Path bandsCsv, Path outCsv) throws Exception {
-        return integrate(imp, bandsCsv, outCsv, null, null, null);
+        return integrate(imp, bandsCsv, outCsv, null, null, null, null);
     }
     
-    public static Map<String,Object> integrate(ImagePlus imp, Path bandsCsv, Path outCsv, Integer baselineWin, Double baselineQ, Integer bandHalfwin) throws Exception {
+    public static Map<String,Object> integrate(ImagePlus imp, Path bandsCsv, Path outCsv, Integer baselineWin, Double baselineQ, Integer bandHalfwin, Double backgroundRemovalRadius) throws Exception {
         var rows = Csv.read(bandsCsv); // id,lane,y_px,...
         // Group bands by lane to reuse per-lane background
         Map<Integer, List<Map<String,String>>> byLane = new HashMap<>();
@@ -135,7 +141,10 @@ public final class SdsOps {
             imp.setRoi(lane);
             ImagePlus laneImp = new ImagePlus("lane", imp.getProcessor().crop());
             IJ.run(laneImp, "8-bit", "");
-            new BackgroundSubtracter().rollingBallBackground(laneImp.getProcessor(), 20, false, false, false, false, false);
+            double bgRadius = (backgroundRemovalRadius != null) ? backgroundRemovalRadius : 20.0; // FIXED: YAML-controlled parameter
+            if (bgRadius > 0) {
+                new BackgroundSubtracter().rollingBallBackground(laneImp.getProcessor(), bgRadius, false, false, false, false, false);
+            }
 
             // Build lane profile and baseline with configurable parameters
             double[] prof = laneProfile(laneImp.getProcessor());           // length = lane height

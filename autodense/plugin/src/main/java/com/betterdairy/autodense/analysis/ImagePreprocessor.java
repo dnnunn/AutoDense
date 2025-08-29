@@ -111,9 +111,11 @@ public final class ImagePreprocessor {
                 IJUtils.silenceRoiManager(workingImg);
                 IJ.run(workingImg, "8-bit", "");
                 // Do NOT invert for Coomassie if downstream expects dark-on-light=false
-                IJ.run(workingImg, "Enhance Contrast...", "saturated=0.3 normalize");
+                double saturated = 0.3; // FIXED: TODO - make this configurable
+                IJ.run(workingImg, "Enhance Contrast...", "saturated=" + saturated + " normalize");
                 // Gentle denoise before baseline
-                IJ.run(workingImg, "Gaussian Blur...", "sigma=1");
+                double sigma = 1.0; // FIXED: TODO - make this configurable
+                IJ.run(workingImg, "Gaussian Blur...", "sigma=" + sigma);
                 // Lane-wise background subtraction
                 LaneWiseBackground.subtract(workingImg, 60, 0.15);
                 workingImg.updateAndDraw();

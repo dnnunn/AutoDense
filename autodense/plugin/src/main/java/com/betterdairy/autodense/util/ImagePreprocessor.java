@@ -50,8 +50,8 @@ public final class ImagePreprocessor {
         public double clipPercentileHigh = 99.0;
         public boolean normalizeIntensity = true; // RE-ENABLED: needed for detection algorithms
         public double gaussianSigma = 1.0; // RUN #1: ENABLED
-        public double backgroundRemovalRadius = 50.0; // RUN #1: ENABLED
-        public boolean enableDeskew = true; // RUN #1: ENABLED
+        public double backgroundRemovalRadius = 0.0; // FIXED: Default disabled, controlled by YAML
+        public boolean enableDeskew = false; // FIXED: Default disabled, controlled by YAML
         public double deskewAngleThreshold = 0.5; // degrees
         public boolean enableDebugLogging = true;
         
@@ -64,8 +64,8 @@ public final class ImagePreprocessor {
             config.clipPercentileLow = 2.0;
             config.clipPercentileHigh = 98.0;
             config.gaussianSigma = 1.5;
-            config.backgroundRemovalRadius = 30.0;
-            config.enableDeskew = true;
+            config.backgroundRemovalRadius = 0.0; // FIXED: Default disabled for gel
+            config.enableDeskew = false; // FIXED: Default disabled for gel
             return config;
         }
         
@@ -98,8 +98,8 @@ public final class ImagePreprocessor {
             // Read other preprocessing parameters
             config.normalizeIntensity = preConfig.optBoolean("normalize_intensity", true);
             config.gaussianSigma = preConfig.optDouble("gaussian_sigma", 1.0);
-            config.backgroundRemovalRadius = preConfig.optDouble("background_removal_radius", 30.0);
-            config.enableDeskew = preConfig.optBoolean("enable_deskew", true);
+            config.backgroundRemovalRadius = preConfig.optDouble("background_removal_radius", 0.0);
+            config.enableDeskew = preConfig.optBoolean("enable_deskew", false);
             config.deskewAngleThreshold = preConfig.optDouble("deskew_angle_threshold", 0.5);
             config.enableDebugLogging = preConfig.optBoolean("enable_debug_logging", true);
             
@@ -111,7 +111,7 @@ public final class ImagePreprocessor {
             config.clipPercentileLow = 1.0;
             config.clipPercentileHigh = 99.5;
             config.gaussianSigma = 2.0;
-            config.backgroundRemovalRadius = 20.0; // smaller radius for colonies
+            config.backgroundRemovalRadius = 0.0; // FIXED: Default disabled for colonies
             return config;
         }
     }
@@ -414,36 +414,73 @@ public final class ImagePreprocessor {
     }
     
     /**
-     * Deskew image using Hough transform as specified in 15-minute guide
-     * "Edge→Hough for near-vertical lines; rotate to nearest multiple of ~0.25–0.5° if |θ|>0.5°"
+     * Deskew image with guardrails to prevent extreme skewing
+     * FIXED: Added ROI-aware detection and angle validation per external audit recommendations
      */
     private static ImagePlus deskewImage(ImagePlus image, double angleThreshold, boolean enableLogging) {
         try {
-            // Edge detection first
-            ImagePlus edges = image.duplicate();
+            // FIXED: Estimate gel ROI first to avoid measuring angles from margins/labels
+            java.awt.Rectangle gelROI = estimateGelROI(image);
+            
+            // Extract gel region for angle detection
+            ImagePlus gelRegion = image.duplicate();
+            gelRegion.setRoi(gelROI);
+            IJ.run(gelRegion, "Crop", "");
+            
+            // Edge detection on gel region only
+            ImagePlus edges = gelRegion.duplicate();
             IJ.run(edges, "Find Edges", "");
             
-            // Simple angle detection using projection method (approximation of Hough)
-            // Full Hough would require additional libraries, so we use a simpler approach
-            double detectedAngle = estimateRotationAngle(edges);
+            // FIXED: ROI-aware angle detection with proper vertical alignment
+            double detectedAngleDeg = estimateRotationAngleInROI(edges);
+            
+            // FIXED: Guardrails - clamp suspicious angles
+            if (Math.abs(detectedAngleDeg) < 0.4) {
+                if (enableLogging) {
+                    logger.info(String.format("Detected angle %.2f° below noise floor (0.4°), skipping deskew", detectedAngleDeg));
+                }
+                edges.close();
+                gelRegion.close();
+                return image; // Below noise floor
+            }
+            
+            if (Math.abs(detectedAngleDeg) > 6.0) {
+                if (enableLogging) {
+                    logger.warning(String.format("Suspicious angle %.2f° > 6°, skipping deskew for safety", detectedAngleDeg));
+                }
+                edges.close();
+                gelRegion.close();
+                return image; // Suspicious - likely measurement error
+            }
             
             if (enableLogging) {
-                logger.info(String.format("Detected rotation angle: %.2f degrees", detectedAngle));
+                logger.info(String.format("Measured deskew angle: %.2f° (ROI: x=%d,y=%d,w=%d,h=%d)", 
+                           detectedAngleDeg, gelROI.x, gelROI.y, gelROI.width, gelROI.height));
             }
             
             // Only rotate if angle exceeds threshold
-            if (Math.abs(detectedAngle) > angleThreshold) {
-                // Round to nearest 0.25 degree increment as specified
-                double roundedAngle = Math.round(detectedAngle * 4.0) / 4.0;
+            if (Math.abs(detectedAngleDeg) > angleThreshold) {
+                // Round to nearest 0.25 degree increment
+                double roundedAngle = Math.round(detectedAngleDeg * 4.0) / 4.0;
                 
                 if (enableLogging) {
                     logger.info(String.format("Applying deskew rotation: %.2f degrees", roundedAngle));
                 }
                 
+                // FIXED: Single source of truth - apply rotation once with proper sign
                 ImagePlus rotated = image.duplicate();
                 IJ.run(rotated, "Rotate...", "angle=" + (-roundedAngle) + " grid=1 interpolation=Bilinear");
+                
+                // Clean up temporary images
+                edges.close();
+                gelRegion.close();
+                
                 return rotated;
             }
+            
+            // Clean up temporary images
+            edges.close();
+            gelRegion.close();
             
         } catch (Exception e) {
             if (enableLogging) {
@@ -455,41 +492,73 @@ public final class ImagePreprocessor {
     }
     
     /**
-     * Estimate rotation angle using projection method (simplified Hough approximation)
+     * ROI-aware rotation angle estimation with proper vertical lane alignment
+     * FIXED: Measures angle relative to vertical lanes, not horizontal features
      */
-    private static double estimateRotationAngle(ImagePlus edgeImage) {
+    private static double estimateRotationAngleInROI(ImagePlus edgeImage) {
         ImageProcessor ip = edgeImage.getProcessor();
         int width = ip.getWidth();
         int height = ip.getHeight();
         
-        // Test angles from -5 to +5 degrees
+        // FIXED: Focus on vertical edge strength for lane detection
         double bestAngle = 0;
-        double maxStrength = 0;
+        double maxVerticalStrength = 0;
         
-        for (double angle = -5.0; angle <= 5.0; angle += 0.25) {
-            double radians = Math.toRadians(angle);
-            double cos = Math.cos(radians);
-            double sin = Math.sin(radians);
+        // Test small angle range with finer granularity
+        for (double testAngle = -5.0; testAngle <= 5.0; testAngle += 0.25) {
             
-            // Calculate vertical projection strength at this angle
-            double strength = 0;
-            int samples = Math.min(width, 50); // Sample every few pixels
+            // Calculate vertical line strength at this angle
+            double verticalStrength = 0;
+            int validColumns = 0;
             
-            for (int x = 0; x < width; x += width / samples) {
-                int columnSum = 0;
-                for (int y = 0; y < height; y++) {
-                    // Project point at angle
-                    int projX = (int) (x * cos - y * sin);
-                    if (projX >= 0 && projX < width) {
-                        columnSum += ip.get(projX, y);
+            // Sample vertical columns across the image
+            for (int x = width / 8; x < width - width / 8; x += Math.max(1, width / 20)) {
+                double columnVariance = 0;
+                double columnMean = 0;
+                int pixelCount = 0;
+                
+                // Measure column intensity variation (edges create high variance)
+                for (int y = height / 8; y < height - height / 8; y++) {
+                    // Apply rotation projection
+                    double radians = Math.toRadians(testAngle);
+                    int projX = (int) (x * Math.cos(radians) - y * Math.sin(radians));
+                    int projY = (int) (x * Math.sin(radians) + y * Math.cos(radians));
+                    
+                    if (projX >= 0 && projX < width && projY >= 0 && projY < height) {
+                        int intensity = ip.get(projX, projY);
+                        columnMean += intensity;
+                        pixelCount++;
                     }
                 }
-                strength += columnSum * columnSum; // Favor high-contrast columns
+                
+                if (pixelCount > 0) {
+                    columnMean /= pixelCount;
+                    
+                    // Calculate variance for this projected column
+                    for (int y = height / 8; y < height - height / 8; y++) {
+                        double radians = Math.toRadians(testAngle);
+                        int projX = (int) (x * Math.cos(radians) - y * Math.sin(radians));
+                        int projY = (int) (x * Math.sin(radians) + y * Math.cos(radians));
+                        
+                        if (projX >= 0 && projX < width && projY >= 0 && projY < height) {
+                            int intensity = ip.get(projX, projY);
+                            columnVariance += Math.pow(intensity - columnMean, 2);
+                        }
+                    }
+                    
+                    columnVariance /= pixelCount;
+                    verticalStrength += Math.sqrt(columnVariance); // Standard deviation
+                    validColumns++;
+                }
             }
             
-            if (strength > maxStrength) {
-                maxStrength = strength;
-                bestAngle = angle;
+            if (validColumns > 0) {
+                verticalStrength /= validColumns; // Average across columns
+                
+                if (verticalStrength > maxVerticalStrength) {
+                    maxVerticalStrength = verticalStrength;
+                    bestAngle = testAngle;
+                }
             }
         }
         
@@ -521,5 +590,140 @@ public final class ImagePreprocessor {
             return String.format("mean=%.1f±%.1f, range=[%.1f,%.1f], percentiles=[%.1f,%.1f,%.1f,%.1f,%.1f]",
                 mean, std, min, max, p1, p5, p50, p95, p99);
         }
+    }
+    
+    /**
+     * ROI-aware normalization for gel workflows
+     * Computes percentiles only within the specified ROI to avoid margin/label artifacts
+     * 
+     * @param image Input image to normalize
+     * @param roi Region of interest (gel area), null for full image
+     * @param lowPercentile Low percentile for clipping (e.g., 1.0)
+     * @param highPercentile High percentile for clipping (e.g., 99.0)
+     * @return Normalized image
+     */
+    public static ImagePlus normalizeByPercentilesWithROI(ImagePlus image, 
+                                                         java.awt.Rectangle roi, 
+                                                         double lowPercentile, 
+                                                         double highPercentile) {
+        ImageProcessor ip = image.getProcessor().duplicate();
+        
+        // If no ROI specified, use full image (fallback to original behavior)
+        if (roi == null) {
+            return normalizeByPercentiles(image, lowPercentile, highPercentile);
+        }
+        
+        // Extract pixels only from ROI
+        java.util.List<Float> roiPixels = new java.util.ArrayList<>();
+        float[] pixels = (float[]) ip.convertToFloat().getPixels();
+        int width = ip.getWidth();
+        
+        for (int y = roi.y; y < roi.y + roi.height && y < ip.getHeight(); y++) {
+            for (int x = roi.x; x < roi.x + roi.width && x < width; x++) {
+                if (x >= 0 && y >= 0) {
+                    roiPixels.add(pixels[y * width + x]);
+                }
+            }
+        }
+        
+        if (roiPixels.isEmpty()) {
+            logger.warning("ROI contains no pixels, falling back to full image normalization");
+            return normalizeByPercentiles(image, lowPercentile, highPercentile);
+        }
+        
+        // Sort ROI pixels for percentile calculation
+        float[] sortedRoiPixels = new float[roiPixels.size()];
+        for (int i = 0; i < roiPixels.size(); i++) {
+            sortedRoiPixels[i] = roiPixels.get(i);
+        }
+        Arrays.sort(sortedRoiPixels);
+        
+        int n = sortedRoiPixels.length;
+        float pLow = sortedRoiPixels[(int)(n * lowPercentile / 100.0)];
+        float pHigh = sortedRoiPixels[(int)(n * highPercentile / 100.0)];
+        
+        logger.info(String.format("ROI normalization: p%.1f=%.2f, p%.1f=%.2f (n=%d pixels)", 
+                   lowPercentile, pLow, highPercentile, pHigh, n));
+        
+        // Apply normalization to ENTIRE image using ROI-derived percentiles
+        float range = pHigh - pLow;
+        if (range > 0) {
+            for (int i = 0; i < pixels.length; i++) {
+                float clipped = Math.max(pLow, Math.min(pHigh, pixels[i]));
+                pixels[i] = 255.0f * (clipped - pLow) / range;
+            }
+        }
+        
+        // Create normalized image
+        ImagePlus normalized = image.duplicate();
+        normalized.setProcessor(new ij.process.FloatProcessor(width, ip.getHeight(), pixels));
+        normalized.setTitle(image.getTitle() + "_roi_normalized");
+        
+        return normalized;
+    }
+    
+    /**
+     * Estimate gel bounding box for ROI-aware normalization
+     * Simple approach: find non-black regions with vertical structure
+     * 
+     * @param image Input gel image
+     * @return Rectangle representing gel area, or null if detection fails
+     */
+    public static java.awt.Rectangle estimateGelROI(ImagePlus image) {
+        return estimateGelROI(image, 0.1); // Default 10% threshold
+    }
+    
+    public static java.awt.Rectangle estimateGelROI(ImagePlus image, double darknessThresholdFraction) {
+        ImageProcessor ip = image.getProcessor();
+        int width = ip.getWidth();
+        int height = ip.getHeight();
+        
+        // Convert to float for analysis
+        float[] pixels = (float[]) ip.convertToFloat().getPixels();
+        
+        // Find rough bounds by excluding very dark margins
+        double meanIntensity = 0;
+        for (float pixel : pixels) {
+            meanIntensity += pixel;
+        }
+        meanIntensity /= pixels.length;
+        
+        double threshold = meanIntensity * darknessThresholdFraction; // FIXED: YAML-controlled darkness threshold
+        
+        int minX = width, maxX = 0, minY = height, maxY = 0;
+        boolean foundAnyPixels = false;
+        
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                if (pixels[y * width + x] > threshold) {
+                    minX = Math.min(minX, x);
+                    maxX = Math.max(maxX, x);
+                    minY = Math.min(minY, y);
+                    maxY = Math.max(maxY, y);
+                    foundAnyPixels = true;
+                }
+            }
+        }
+        
+        if (!foundAnyPixels || maxX <= minX || maxY <= minY) {
+            logger.warning("Could not estimate gel ROI, using center 80%");
+            // Fallback: center 80% of image
+            int margin = (int)(0.1 * Math.min(width, height));
+            return new java.awt.Rectangle(margin, margin, width - 2*margin, height - 2*margin);
+        }
+        
+        // Add small margin around detected bounds
+        int margin = Math.max(5, (int)(0.02 * Math.min(width, height)));
+        minX = Math.max(0, minX - margin);
+        minY = Math.max(0, minY - margin);
+        maxX = Math.min(width - 1, maxX + margin);
+        maxY = Math.min(height - 1, maxY + margin);
+        
+        java.awt.Rectangle gelROI = new java.awt.Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
+        logger.info(String.format("Estimated gel ROI: x=%d, y=%d, w=%d, h=%d (%.1f%% of image)", 
+                   gelROI.x, gelROI.y, gelROI.width, gelROI.height, 
+                   100.0 * gelROI.width * gelROI.height / (width * height)));
+        
+        return gelROI;
     }
 }

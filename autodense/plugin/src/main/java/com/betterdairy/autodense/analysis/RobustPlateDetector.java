@@ -35,10 +35,13 @@ public final class RobustPlateDetector {
      * Detect largest circular region (the plate) and return ROI + diameter estimate.
      * Uses Triangle thresholding → ParticleAnalyzer → largest particle selection.
      */
-    public static Result detectPlate(ImagePlus imp, boolean deskew) {
+    public static Result detectPlate(ImagePlus imp, boolean deskew, Double gaussianSigma) {
         ImagePlus dup = imp.duplicate();
         ImageProcessor ip = dup.getProcessor().convertToByte(true);
-        ip.blurGaussian(2.0);
+        double sigma = (gaussianSigma != null) ? gaussianSigma : 2.0; // FIXED: YAML-controlled parameter
+        if (sigma > 0) {
+            ip.blurGaussian(sigma);
+        }
 
         // Threshold with Triangle (often robust for plates); fallback to Otsu if needed
         AutoThresholder.Method method = AutoThresholder.Method.Triangle;
@@ -174,7 +177,7 @@ public final class RobustPlateDetector {
         ImagePlus processedImp = imp;
         
         // Detect plate with rim exclusion considerations
-        Result result = detectPlate(processedImp, false); // Could enable deskew based on params
+        Result result = detectPlate(processedImp, false, null); // Could enable deskew based on params, FIXED: added null for gaussianSigma
         
         // Validate detected plate size
         double estimatedDiameterMM = result.diameterPx / 20.0; // Rough estimate assuming ~20px/mm

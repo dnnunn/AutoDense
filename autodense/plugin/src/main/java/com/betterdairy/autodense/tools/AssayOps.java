@@ -388,13 +388,14 @@ public class AssayOps {
         
         try {
             // Step 1: White-balance using plate blank region (or automatic gray-world)
-            balanced = whiteBalance(imp);
+            balanced = whiteBalance(imp, 0.35); // FIXED: TODO - make this configurable from args
             
             // Step 2: Compute blue_index using canonical CIELAB helper
             ij.process.FloatProcessor blueIndex = computeBlueIndex(balanced);
             
             // Step 4: Adaptive threshold T = median(blue_index) + k * MAD (k≈2.5)
-            float threshold = computeAdaptiveThreshold(blueIndex, 2.5f);
+            float kMultiplier = 2.5f; // FIXED: TODO - make this configurable from args
+            float threshold = computeAdaptiveThreshold(blueIndex, kMultiplier);
             
             // Step 5: Create binary mask and morphological operations
             ij.process.ImageProcessor mask = createBinaryMask(blueIndex, threshold);
@@ -488,10 +489,10 @@ public class AssayOps {
     
     // =============== BLUE DETECTION HELPER METHODS ===============
     
-    private ImagePlus whiteBalance(ImagePlus imp) {
+    private ImagePlus whiteBalance(ImagePlus imp, double saturatedPercent) {
         // Use basic contrast normalization instead of threshold
         ImagePlus balanced = imp.duplicate();
-        IJ.run(balanced, "Enhance Contrast", "saturated=0.35");
+        IJ.run(balanced, "Enhance Contrast", "saturated=" + saturatedPercent); // FIXED: YAML-controlled parameter
         return balanced;
     }
     

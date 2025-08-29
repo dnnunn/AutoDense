@@ -10,6 +10,8 @@ import com.betterdairy.autodense.viz.ColonyViz;
 import com.betterdairy.autodense.viz.GelViz;
 import com.betterdairy.autodense.util.ImagePreprocessor;
 import com.betterdairy.autodense.util.SyntheticImageGenerator;
+import com.betterdairy.autodense.config.ConfigManagerBridge;
+import com.betterdairy.autodense.config.ConfigurationException;
 import net.imagej.ImageJ;
 import org.scijava.Context;
 import org.scijava.ui.UIService;
@@ -121,8 +123,8 @@ public class AutotuneAnalysisCLI {
         new ImageJ(ctx);
         // Never call ui.show() in CLI mode
         
-        // Load configuration
-        JSONObject config = loadConfigFile(configPath);
+        // Load configuration with fail-fast validation
+        JSONObject config = loadConfigFile(configPath, "gel_analysis");
         
         // Create session store and analysis tools
         SessionStore store = new SessionStore();
@@ -312,8 +314,8 @@ public class AutotuneAnalysisCLI {
         new ImageJ(ctx);
         // Never call ui.show() in CLI mode
         
-        // Load configuration
-        JSONObject config = loadConfigFile(configPath);
+        // Load configuration with fail-fast validation
+        JSONObject config = loadConfigFile(configPath, "colony_analysis");
         
         // Create session store and colony analysis tools
         SessionStore store = new SessionStore();
@@ -424,8 +426,8 @@ public class AutotuneAnalysisCLI {
         new ImageJ(ctx);
         // Never call ui.show() in CLI mode
         
-        // Load configuration
-        JSONObject config = loadConfigFile(configPath);
+        // Load configuration with fail-fast validation  
+        JSONObject config = loadConfigFile(configPath, "gel_analysis");
         
         // Create session store and gel analysis tools
         SessionStore store = new SessionStore();
@@ -514,10 +516,36 @@ public class AutotuneAnalysisCLI {
     }
     
     /**
-     * Load and parse configuration file (YAML or JSON)
-     * Ensures config keys match challenge pack parameter grids for autotune integration
+     * Load and validate configuration using ConfigManagerBridge with fail-fast validation.
+     * Implements full precedence hierarchy: defaults.yml → priors.json → preflight.yaml → user config → CLI flags
+     * 
+     * @param configPath Path to user configuration file
+     * @param workflowType Type of workflow for validation (colony_analysis, gel_analysis, preprocessing)
+     * @return Validated and merged configuration
+     * @throws IOException If config validation fails or file loading fails
      */
-    private static JSONObject loadConfigFile(String configPath) throws IOException {
+    private static JSONObject loadConfigFile(String configPath, String workflowType) throws IOException {
+        try {
+            // Create config manager bridge for the specific workflow type
+            ConfigManagerBridge configManager = ConfigManagerBridge.forCurrentDir(workflowType);
+            
+            // Load and validate config with full precedence hierarchy
+            JSONObject config = configManager.loadValidatedConfig(configPath, null);
+            
+            logger.info("Configuration loaded and validated successfully for workflow: " + workflowType);
+            return config;
+            
+        } catch (ConfigurationException e) {
+            // Re-throw as IOException for compatibility with existing error handling
+            throw new IOException("Configuration validation failed: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Legacy config loading method for backwards compatibility.
+     * Uses old simple YAML parsing without validation - should be phased out.
+     */
+    private static JSONObject loadConfigFileLegacy(String configPath) throws IOException {
         Path path = Paths.get(configPath);
         if (!Files.exists(path)) {
             throw new IOException("Config file not found: " + configPath);
@@ -659,8 +687,8 @@ public class AutotuneAnalysisCLI {
      * Run colony analysis with direct colony analysis pipeline
      */
     private static void runColony(String input, String outdir, String configPath) throws Exception {
-        // Load YAML configuration with new structure
-        JSONObject config = loadConfigFile(configPath);
+        // Load YAML configuration with fail-fast validation
+        JSONObject config = loadConfigFile(configPath, "colony_analysis");
         JSONObject preConfig = config.optJSONObject("pre");
         JSONObject detectConfig = config.optJSONObject("detect");
         JSONObject colonyConfig = config.optJSONObject("colony_detection"); // Legacy fallback
@@ -679,6 +707,7 @@ public class AutotuneAnalysisCLI {
         logImageStatistics(imagePlus, "Input colony plate image");
         
         // Apply preprocessing using YAML configuration
+        // FIXED: Colony plates don't need ROI-aware normalization - use standard preprocessing
         ImagePreprocessor.Config preprocessConfig = ImagePreprocessor.Config.fromYaml(preConfig);
         
         ImagePlus preprocessed = ImagePreprocessor.preprocessForDetection(imagePlus, preprocessConfig, outdir);
@@ -688,31 +717,38 @@ public class AutotuneAnalysisCLI {
         SessionStore store = new SessionStore();
         ColonyAnalysisTools colonyAnalysisTools = new ColonyAnalysisTools(store);
         
-        String imageHandle = store.putImage(preprocessed);
-        ImagePlus currentWorkingImage = preprocessed; // Track which image to use for overlay
-        logger.info("Starting colony analysis for preprocessed image: " + imageHandle);
+        // FIXED: Store BOTH original color image AND preprocessed image for X-gal blue detection
+        String originalImageHandle = store.putImage(imagePlus);        // Original color for blue detection
+        String preprocessedHandle = store.putImage(preprocessed);       // Preprocessed for other analyses
         
-        // Run colony detection with real pipeline
+        logger.info("Starting colony analysis - original color: " + originalImageHandle + 
+                   ", preprocessed: " + preprocessedHandle);
+        
+        // Run colony detection with original COLOR image for X-gal blue index analysis
         JSONObject detectArgs = new JSONObject()
-            .put("image_handle", imageHandle)
+            .put("image_handle", originalImageHandle)                   // ✅ FIXED: Use original color image
+            .put("preprocessed_handle", preprocessedHandle)             // Optional: preprocessed available
             .put("stain", colonyConfig.optString("stain", "x-gal"))
             .put("min_size", colonyConfig.optDouble("min_size", 5.0))
             .put("max_size", colonyConfig.optDouble("max_size", 1000.0))
             .put("plate_layout", colonyConfig.optInt("plate_layout", 1));
             
         JSONObject analysisResult = colonyAnalysisTools.countColonies(detectArgs);
-        if (!analysisResult.optBoolean("ok", false)) {
+        // FIXED: Check correct field name - colony tools use "success", not "ok"
+        if (!analysisResult.optBoolean("success", false)) {
             throw new RuntimeException("Colony detection failed: " + analysisResult.toString());
         }
         
-        // Generate colony overlay PNG using headless-safe visualization
-        BufferedImage annotatedImage = ColonyViz.renderOverlay(currentWorkingImage, analysisResult, true);
-        Path overlayPng = Paths.get(outdir, "colony_overlay.png");
+        // Generate colony overlay PNG using headless-safe visualization with original color image
+        BufferedImage annotatedImage = ColonyViz.renderOverlay(imagePlus, analysisResult, true);
+        Path overlayPng = Paths.get(outdir, "overlay.png");  // ✅ FIXED: Consistent naming with gel workflows
         ImageIO.write(annotatedImage, "PNG", overlayPng.toFile());
         
         // Extract real metrics from analysis results
         Map<String, Double> metrics = new LinkedHashMap<>();
-        metrics.put("colony_count", (double) analysisResult.optInt("total_colonies", 0));
+        // FIXED: Use correct field name from actual colony analysis response
+        int colonyCount = analysisResult.optInt("colony_count", analysisResult.optInt("total_colonies", 0));
+        metrics.put("colony_count", (double) colonyCount);
         
         // Calculate size coefficient of variation if colony data available
         if (analysisResult.has("colonies")) {
@@ -752,7 +788,7 @@ public class AutotuneAnalysisCLI {
             .put("input_path", input)
             .put("input_hash", inputHash)
             .put("metrics", convertMapToJSONObject(metrics))
-            .put("diagnostics_png", overlayPng.toString())
+            .put("diagnostics_png", "overlay.png")  // ✅ FIXED: Relative path for portability
             .put("meta", new JSONObject());
             
         Path reportPath = Paths.get(outdir, "run_report.json");
@@ -767,8 +803,8 @@ public class AutotuneAnalysisCLI {
      * Run SDS-PAGE analysis with lane/band detection pipeline
      */
     private static void runSdsPage(String input, String outdir, String configPath) throws Exception {
-        // Load YAML configuration with new structure
-        JSONObject config = loadConfigFile(configPath);
+        // Load YAML configuration with fail-fast validation
+        JSONObject config = loadConfigFile(configPath, "gel_analysis");
         JSONObject preConfig = config.optJSONObject("pre");
         JSONObject detectConfig = config.optJSONObject("detect");
         JSONObject sdsConfig = config.optJSONObject("detection"); // Legacy fallback
@@ -786,11 +822,31 @@ public class AutotuneAnalysisCLI {
         // Log image statistics as recommended: "global mean/std, p1/p99, polarity decision"
         logImageStatistics(imagePlus, "Input SDS-PAGE image");
         
-        // Apply preprocessing using YAML configuration
+        // Apply ROI-aware preprocessing for gel workflow
         ImagePreprocessor.Config preprocessConfig = ImagePreprocessor.Config.fromYaml(preConfig);
         
-        ImagePlus preprocessed = ImagePreprocessor.preprocessForDetection(imagePlus, preprocessConfig, outdir);
-        logImageStatistics(preprocessed, "Preprocessed SDS-PAGE image");
+        // FIXED: Use ROI-aware normalization to avoid margin artifacts
+        ImagePlus preprocessed;
+        if (preprocessConfig.normalizeIntensity) {
+            // Estimate gel ROI for normalization
+            java.awt.Rectangle gelROI = ImagePreprocessor.estimateGelROI(imagePlus);
+            
+            // Apply ROI-aware normalization first
+            ImagePlus roiNormalized = ImagePreprocessor.normalizeByPercentilesWithROI(
+                imagePlus, gelROI, 
+                preprocessConfig.clipPercentileLow, 
+                preprocessConfig.clipPercentileHigh
+            );
+            
+            // Continue with other preprocessing steps (disable normalization since we did it)
+            preprocessConfig.normalizeIntensity = false;
+            preprocessed = ImagePreprocessor.preprocessForDetection(roiNormalized, preprocessConfig, outdir);
+        } else {
+            // No normalization requested, use standard preprocessing
+            preprocessed = ImagePreprocessor.preprocessForDetection(imagePlus, preprocessConfig, outdir);
+        }
+        
+        logImageStatistics(preprocessed, "ROI-aware preprocessed SDS-PAGE image");
         
         // Initialize real gel analysis pipeline
         SessionStore store = new SessionStore();
@@ -828,33 +884,37 @@ public class AutotuneAnalysisCLI {
             .put("lanes", laneResult.optJSONArray("lanes"))
             .put("bands", bandResult.optJSONArray("bands"));
         BufferedImage annotatedImage = GelViz.renderOverlay(currentWorkingImage, combinedResult, true);
-        Path overlayPng = Paths.get(outdir, "sds_overlay.png");
+        Path overlayPng = Paths.get(outdir, "overlay.png");  // ✅ FIXED: Consistent naming across all workflows
         ImageIO.write(annotatedImage, "PNG", overlayPng.toFile());
         
         // Extract real metrics from analysis results (using correct field names from GelAnalysisTools)
         Map<String, Double> metrics = new LinkedHashMap<>();
-        metrics.put("lane_count", (double) laneResult.optInt("lanes_found", 0));
-        metrics.put("band_count", (double) bandResult.optInt("bands_total", 0));
+        int laneCount = laneResult.optInt("lanes_found", 0);
+        int bandCount = bandResult.optInt("bands_total", 0);
         
-        // Calculate molecular weight ladder R² if calibration data available
-        if (bandResult.has("mw_calibration_r2")) {
-            metrics.put("ladder_r2", bandResult.getDouble("mw_calibration_r2"));
-        } else {
-            metrics.put("ladder_r2", 0.95); // Default reasonable value
-        }
+        metrics.put("lane_count", (double) laneCount);
+        metrics.put("band_count", (double) bandCount);
         
-        // Calculate background signal-to-noise ratio
-        if (laneResult.has("background_snr")) {
-            metrics.put("background_snr", laneResult.getDouble("background_snr"));
+        // FIXED: Only include advanced metrics if features were actually detected
+        if (laneCount > 0 && bandCount > 0) {
+            // Calculate molecular weight ladder R² if calibration data available
+            if (bandResult.has("mw_calibration_r2")) {
+                metrics.put("ladder_r2", bandResult.getDouble("mw_calibration_r2"));
+            }
+            
+            // Calculate background signal-to-noise ratio
+            if (laneResult.has("background_snr")) {
+                metrics.put("background_snr", laneResult.getDouble("background_snr"));
+            }
+            
+            // Calculate band stability (position consistency)
+            if (bandResult.has("band_position_cv")) {
+                metrics.put("band_stability_jitter", bandResult.getDouble("band_position_cv"));
+            }
         } else {
-            metrics.put("background_snr", 4.2); // Default reasonable value
-        }
-        
-        // Calculate band stability (position consistency)
-        if (bandResult.has("band_position_cv")) {
-            metrics.put("band_stability_jitter", bandResult.getDouble("band_position_cv"));
-        } else {
-            metrics.put("band_stability_jitter", 0.03); // Default reasonable value (3%)
+            // No features detected - log this condition
+            logger.warning(String.format("SDS-PAGE analysis found no features (lanes=%d, bands=%d) - skipping advanced metrics", 
+                         laneCount, bandCount));
         }
         
         // Calculate simple hash of input file
@@ -866,7 +926,7 @@ public class AutotuneAnalysisCLI {
             .put("input_path", input)
             .put("input_hash", inputHash)
             .put("metrics", convertMapToJSONObject(metrics))
-            .put("diagnostics_png", overlayPng.toString())
+            .put("diagnostics_png", "overlay.png")  // ✅ FIXED: Relative path for portability
             .put("meta", new JSONObject());
             
         Path reportPath = Paths.get(outdir, "run_report.json");
@@ -882,8 +942,8 @@ public class AutotuneAnalysisCLI {
      * Run EtBr agarose gel analysis with lane/band detection pipeline
      */
     private static void runEtbr(String input, String outdir, String configPath) throws Exception {
-        // Load YAML configuration with new structure
-        JSONObject config = loadConfigFile(configPath);
+        // Load YAML configuration with fail-fast validation
+        JSONObject config = loadConfigFile(configPath, "gel_analysis");
         JSONObject preConfig = config.optJSONObject("pre");
         JSONObject detectConfig = config.optJSONObject("detect");
         JSONObject etbrConfig = config.optJSONObject("etbr_detection"); // Legacy fallback
@@ -901,11 +961,31 @@ public class AutotuneAnalysisCLI {
         // Log image statistics as recommended: "global mean/std, p1/p99, polarity decision"
         logImageStatistics(imagePlus, "Input EtBr image");
         
-        // Apply preprocessing using YAML configuration
+        // Apply ROI-aware preprocessing for gel workflow
         ImagePreprocessor.Config preprocessConfig = ImagePreprocessor.Config.fromYaml(preConfig);
         
-        ImagePlus preprocessed = ImagePreprocessor.preprocessForDetection(imagePlus, preprocessConfig, outdir);
-        logImageStatistics(preprocessed, "Preprocessed EtBr image");
+        // FIXED: Use ROI-aware normalization to avoid margin artifacts
+        ImagePlus preprocessed;
+        if (preprocessConfig.normalizeIntensity) {
+            // Estimate gel ROI for normalization
+            java.awt.Rectangle gelROI = ImagePreprocessor.estimateGelROI(imagePlus);
+            
+            // Apply ROI-aware normalization first
+            ImagePlus roiNormalized = ImagePreprocessor.normalizeByPercentilesWithROI(
+                imagePlus, gelROI, 
+                preprocessConfig.clipPercentileLow, 
+                preprocessConfig.clipPercentileHigh
+            );
+            
+            // Continue with other preprocessing steps (disable normalization since we did it)
+            preprocessConfig.normalizeIntensity = false;
+            preprocessed = ImagePreprocessor.preprocessForDetection(roiNormalized, preprocessConfig, outdir);
+        } else {
+            // No normalization requested, use standard preprocessing
+            preprocessed = ImagePreprocessor.preprocessForDetection(imagePlus, preprocessConfig, outdir);
+        }
+        
+        logImageStatistics(preprocessed, "ROI-aware preprocessed EtBr image");
         
         // Initialize real gel analysis pipeline
         SessionStore store = new SessionStore();
@@ -965,7 +1045,7 @@ public class AutotuneAnalysisCLI {
         // Run band detection for EtBr (different characteristics than SDS-PAGE)
         JSONObject bandArgs = new JSONObject()
             .put("image_handle", imageHandle)
-            .put("background_subtraction", etbrConfig.optBoolean("background_subtraction", true))
+            .put("background_subtraction", etbrConfig.optBoolean("background_subtraction", false))  // FIXED: Default to false
             .put("peak_detection_method", "fluorescence");  // EtBr-specific
             
         JSONObject bandResult = gelAnalysisTools.detectBands(bandArgs);
@@ -985,14 +1065,14 @@ public class AutotuneAnalysisCLI {
             bandRescueConfig.clipPercentileLow = 1.0;
             bandRescueConfig.clipPercentileHigh = 99.5;
             bandRescueConfig.gaussianSigma = detectConfig.optDouble("gaussian_sigma", 2.0) * 1.6; // σ × 1.6
-            bandRescueConfig.backgroundRemovalRadius = 50.0; // Larger rolling ball
+            bandRescueConfig.backgroundRemovalRadius = 0.0; // FIXED: Disable to avoid multiple background removal
             
             bandRescueImg = ImagePreprocessor.preprocessForDetection(bandRescueImg, bandRescueConfig, outdir);
             String bandRescueHandle = store.putImage(bandRescueImg);
             
             JSONObject rescueBandArgs = new JSONObject()
                 .put("image_handle", bandRescueHandle)
-                .put("background_subtraction", true)
+                .put("background_subtraction", false)  // FIXED: Disable to avoid multiple background removal
                 .put("peak_detection_method", "fluorescence");
                 
             JSONObject rescueBandResult = gelAnalysisTools.detectBands(rescueBandArgs);
@@ -1009,26 +1089,32 @@ public class AutotuneAnalysisCLI {
             .put("lanes", laneResult.optJSONArray("lanes"))
             .put("bands", bandResult.optJSONArray("bands"));
         BufferedImage annotatedImage = GelViz.renderOverlay(currentWorkingImage, combinedResult, true);
-        Path overlayPng = Paths.get(outdir, "etbr_overlay.png");
+        Path overlayPng = Paths.get(outdir, "overlay.png");  // ✅ FIXED: Consistent naming across all workflows
         ImageIO.write(annotatedImage, "PNG", overlayPng.toFile());
         
         // Extract real metrics from analysis results (using correct field names from GelAnalysisTools)
         Map<String, Double> metrics = new LinkedHashMap<>();
-        metrics.put("lane_count", (double) laneResult.optInt("lanes_found", 0));
-        metrics.put("band_count", (double) bandResult.optInt("bands_total", 0));
+        int laneCount = laneResult.optInt("lanes_found", 0);
+        int bandCount = bandResult.optInt("bands_total", 0);
         
-        // Calculate molecular weight ladder R² for DNA sizing
-        if (bandResult.has("dna_ladder_r2")) {
-            metrics.put("ladder_linear_r2", bandResult.getDouble("dna_ladder_r2"));
-        } else {
-            metrics.put("ladder_linear_r2", 0.98); // Default reasonable value for DNA
-        }
+        metrics.put("lane_count", (double) laneCount);
+        metrics.put("band_count", (double) bandCount);
         
-        // Calculate smearing index (DNA degradation indicator)
-        if (bandResult.has("smearing_index")) {
-            metrics.put("smearing_index", bandResult.getDouble("smearing_index"));
+        // FIXED: Only include advanced metrics if features were actually detected
+        if (laneCount > 0 && bandCount > 0) {
+            // Calculate molecular weight ladder R² for DNA sizing
+            if (bandResult.has("dna_ladder_r2")) {
+                metrics.put("ladder_linear_r2", bandResult.getDouble("dna_ladder_r2"));
+            }
+            
+            // Calculate smearing index (DNA degradation indicator)
+            if (bandResult.has("smearing_index")) {
+                metrics.put("smearing_index", bandResult.getDouble("smearing_index"));
+            }
         } else {
-            metrics.put("smearing_index", 0.12); // Default reasonable value
+            // No features detected - log this condition
+            logger.warning(String.format("EtBr analysis found no features (lanes=%d, bands=%d) - skipping advanced metrics", 
+                         laneCount, bandCount));
         }
         
         // Add rescue usage to metrics for optimization feedback
@@ -1045,7 +1131,7 @@ public class AutotuneAnalysisCLI {
             .put("input_path", input)
             .put("input_hash", inputHash)
             .put("metrics", convertMapToJSONObject(metrics))
-            .put("diagnostics_png", overlayPng.toString())
+            .put("diagnostics_png", "overlay.png")  // ✅ FIXED: Relative path for portability
             .put("rescue_used", rescueUsed)
             .put("meta", new JSONObject());
             

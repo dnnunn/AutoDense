@@ -27,14 +27,15 @@ public final class ColonyDetector {
      * Detect colonies within a plate region
      */
     public static List<Colony> detect(ImagePlus image, OvalRoi plateRoi) {
-        return detect(image, plateRoi, 6, 60, true);
+        return detect(image, plateRoi, 6, 60, true, null, null);
     }
     
     /**
      * Detect colonies with full parameter control
      */
     public static List<Colony> detect(ImagePlus image, OvalRoi plateRoi, 
-                                    int minDiamPx, int maxDiamPx, boolean splitTouching) {
+                                    int minDiamPx, int maxDiamPx, boolean splitTouching,
+                                    String thresholdMethod, Integer thresholdRadius) {
         
         ImagePlus working = image.duplicate();
         working.setTitle("colony_detection_" + System.currentTimeMillis());
@@ -52,7 +53,9 @@ public final class ColonyDetector {
         }
         
         // Step 3: LoG-based blob detection via Auto Local Threshold
-        IJ.run(working, "Auto Local Threshold", "method=Phansalkar radius=15 parameter_1=0 parameter_2=0 white");
+        String method = (thresholdMethod != null) ? thresholdMethod : "Phansalkar"; // FIXED: YAML-controlled parameter
+        int radius = (thresholdRadius != null) ? thresholdRadius : 15; // FIXED: YAML-controlled parameter
+        IJ.run(working, "Auto Local Threshold", "method=" + method + " radius=" + radius + " parameter_1=0 parameter_2=0 white");
         
         // Step 4: Morphological cleanup
         IJ.run(working, "Fill Holes", "");

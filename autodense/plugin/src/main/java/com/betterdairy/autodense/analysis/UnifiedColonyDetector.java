@@ -191,6 +191,7 @@ public final class UnifiedColonyDetector {
     
     /**
      * Apply morphological filtering to clean up detection mask
+     * Fixed: Ensure true binary (0/255) values for IJ1 morphological operations
      */
     private static void applyMorphologicalFiltering(ImagePlus maskImage, DetectionParams params) {
         // Ensure mask is 8-bit grayscale for morphological operations
@@ -198,6 +199,25 @@ public final class UnifiedColonyDetector {
             IJ.run(maskImage, "8-bit", "");
         }
         
+        // CRITICAL FIX: Ensure true binary values (0/255) for IJ1 operations
+        ImageProcessor ip = maskImage.getProcessor();
+        int width = ip.getWidth();
+        int height = ip.getHeight();
+        
+        // Create true binary processor with exactly {0, 255} values
+        final ij.process.ByteProcessor binaryProcessor = new ij.process.ByteProcessor(width, height);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                // Any non-zero value becomes 255, zero stays 0
+                int value = ip.getPixel(x, y);
+                binaryProcessor.set(x, y, value > 0 ? 255 : 0);
+            }
+        }
+        
+        // Replace with true binary processor
+        maskImage.setProcessor(binaryProcessor);
+        
+        // Now safe to apply IJ1 binary operations
         // Opening to remove small noise
         IJ.run(maskImage, "Options...", "iterations=1 count=1 black do=Open");
         

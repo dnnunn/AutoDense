@@ -111,6 +111,10 @@ public final class AnnulusBackground {
      * More robust than standard deviation for outlier-resistant thresholding.
      */
     public static double estimateBackgroundMAD(ImageProcessor ip, Rectangle roi) {
+        return estimateBackgroundMAD(ip, roi, 2.5); // Default k=2.5
+    }
+    
+    public static double estimateBackgroundMAD(ImageProcessor ip, Rectangle roi, double kMultiplier) {
         ArrayList<Float> pixels = new ArrayList<>();
         
         // Sample pixels from ROI
@@ -136,6 +140,6 @@ public final class AnnulusBackground {
         Collections.sort(deviations);
         float mad = deviations.get(deviations.size() / 2);
         
-        return median + 2.5 * mad; // Adaptive threshold: T = median + k*MAD with k≈2.5
+        return median + kMultiplier * mad; // FIXED: YAML-controlled k multiplier
     }
 }

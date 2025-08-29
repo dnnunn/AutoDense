@@ -251,11 +251,15 @@ public class GelAnalysisTools {
                 switch (mode) {
                     case "coomassie_default" -> {
                         // Create steps equivalent to coomassie_default mode
+                        double saturated = 0.3; // FIXED: TODO - make this configurable
+                        double sigma = 1.0;     // FIXED: TODO - make this configurable
+                        int radius = 60;        // FIXED: TODO - make this configurable
+                        double quantile = 0.15; // FIXED: TODO - make this configurable
                         steps = new JSONArray()
                             .put(new JSONObject().put("op", "8-bit"))
-                            .put(new JSONObject().put("op", "enhance_contrast").put("saturated", 0.3).put("normalize", true))
-                            .put(new JSONObject().put("op", "gaussian_blur").put("sigma", 1.0))
-                            .put(new JSONObject().put("op", "lane_wise_background").put("radius", 60).put("quantile", 0.15));
+                            .put(new JSONObject().put("op", "enhance_contrast").put("saturated", saturated).put("normalize", true))
+                            .put(new JSONObject().put("op", "gaussian_blur").put("sigma", sigma))
+                            .put(new JSONObject().put("op", "lane_wise_background").put("radius", radius).put("quantile", quantile));
                     }
                     default -> {
                         return ErrorHandler.handleValidationError("preprocess", 

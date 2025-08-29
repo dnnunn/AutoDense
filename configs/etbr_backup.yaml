@@ -4,8 +4,8 @@ pre:
   clip_percentiles: [1.0, 99.0]
   normalize_intensity: true
   gaussian_sigma: 1.0
-  background_removal_radius: 0.0  # TESTING: disabled to avoid halos
-  enable_deskew: false  # DISABLED to test if this causes skewing
+  background_removal_radius: 30.0  # rolling ball radius for gels
+  enable_deskew: true
   deskew_angle_threshold: 0.5  # degrees
   enable_debug_logging: true
   clahe:
@@ -22,7 +22,7 @@ detect:
 expected_lanes: 12
 sensitivity: 0.4
 constant_spacing: false
-background_subtraction: false  # FIXED: Disable to avoid multiple background removal
+background_subtraction: true
 peak_detection_method: "fluorescence"
 
 # === SYSTEMATIC TEST MODIFICATION ===

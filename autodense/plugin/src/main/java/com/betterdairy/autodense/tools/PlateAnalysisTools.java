@@ -103,7 +103,7 @@ public class PlateAnalysisTools {
             
             // Step 1: Optional illumination correction
             if (correctIllumination) {
-                performIlluminationCorrection(workingImage, gaussianSigma);
+                performIlluminationCorrection(workingImage, gaussianSigma, 0.1); // FIXED: added default saturated parameter
             }
             
             // Step 2: Convert to grayscale if needed
@@ -113,7 +113,8 @@ public class PlateAnalysisTools {
             
             // Step 3: Local threshold instead of global
             try {
-                IJ.run(workingImage, "Auto Local Threshold", "method=" + thresholdMethod + " radius=25 parameter_1=0 parameter_2=0 white");
+                int radius = args.optInt("threshold_radius", 25); // FIXED: YAML-controlled parameter
+                IJ.run(workingImage, "Auto Local Threshold", "method=" + thresholdMethod + " radius=" + radius + " parameter_1=0 parameter_2=0 white");
             } catch (Exception e) {
                 // Fallback to regular threshold if Auto Local Threshold not available
                 IJ.setAutoThreshold(workingImage, thresholdMethod + " dark");
@@ -237,7 +238,8 @@ public class PlateAnalysisTools {
             
             // Auto Local Threshold (Fiji plugin - falls back to regular threshold)
             try {
-                IJ.run(workingImage, "Auto Local Threshold", "method=" + thresholdMethod + " radius=15 parameter_1=0 parameter_2=0 white");
+                int radius = args.optInt("threshold_radius", 15); // FIXED: YAML-controlled parameter
+                IJ.run(workingImage, "Auto Local Threshold", "method=" + thresholdMethod + " radius=" + radius + " parameter_1=0 parameter_2=0 white");
             } catch (Exception e) {
                 // Fallback to regular threshold if Auto Local Threshold not available
                 IJ.setAutoThreshold(workingImage, "Triangle dark");
@@ -1196,7 +1198,7 @@ public class PlateAnalysisTools {
      * Illumination correction using ImageJ native calls:
      * Gaussian Blur (σ 60) on duplicate → Image Calculator > Divide → Enhance Contrast
      */
-    private void performIlluminationCorrection(ImagePlus image, double sigma) {
+    private void performIlluminationCorrection(ImagePlus image, double sigma, double saturatedPercent) {
         // Create background estimate using Gaussian blur
         ImagePlus background = image.duplicate();
         IJ.run(background, "Gaussian Blur...", "sigma=" + sigma);
@@ -1209,7 +1211,7 @@ public class PlateAnalysisTools {
         ImagePlus corrected = ic.run("Divide create 32-bit", image, background);
         
         // Enhance contrast and normalize
-        IJ.run(corrected, "Enhance Contrast...", "saturated=0.1 normalize");
+        IJ.run(corrected, "Enhance Contrast...", "saturated=" + saturatedPercent + " normalize"); // FIXED: YAML-controlled parameter
         
         // Replace original image processor
         image.setProcessor(corrected.getProcessor());
