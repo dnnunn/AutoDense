@@ -716,8 +716,8 @@ public class AutotuneAnalysisCLI {
      * Run colony analysis with direct colony analysis pipeline
      */
     private static void runColony(String input, String outdir, String configPath) throws Exception {
-        // Load YAML configuration with fail-fast validation
-        JSONObject config = loadConfigFile(configPath, "colony_analysis");
+        // Load YAML configuration using legacy parser (matches detect-only mode)
+        JSONObject config = loadConfigFileLegacy(configPath);
         JSONObject preConfig = config.optJSONObject("pre");
         JSONObject detectConfig = config.optJSONObject("detect");
         JSONObject colonyConfig = config.optJSONObject("colony_detection"); // Legacy fallback
@@ -725,6 +725,12 @@ public class AutotuneAnalysisCLI {
         if (preConfig == null) preConfig = new JSONObject();
         if (detectConfig == null) detectConfig = new JSONObject();
         if (colonyConfig == null) colonyConfig = new JSONObject();
+        
+        // Debug logging to validate parameter handoff
+        System.err.printf("[CONFIG_DEBUG] Colony Full Pipeline Config loaded from: %s%n", configPath);
+        System.err.printf("[CONFIG_DEBUG] pre section: %s%n", preConfig.toString());
+        System.err.printf("[CONFIG_DEBUG] detect section: %s%n", detectConfig.toString());
+        System.err.printf("[CONFIG_DEBUG] colony section: %s%n", colonyConfig.toString());
         
         // Load image via SCIFIO/ImageJ2 as specified in 15-minute guide
         ImagePlus imagePlus = loadImageViaSCIFIO(input);
@@ -832,8 +838,8 @@ public class AutotuneAnalysisCLI {
      * Run SDS-PAGE analysis with lane/band detection pipeline
      */
     private static void runSdsPage(String input, String outdir, String configPath) throws Exception {
-        // Load YAML configuration with fail-fast validation
-        JSONObject config = loadConfigFile(configPath, "gel_analysis");
+        // Load YAML configuration using legacy parser (matches detect-only mode)
+        JSONObject config = loadConfigFileLegacy(configPath);
         JSONObject preConfig = config.optJSONObject("pre");
         JSONObject detectConfig = config.optJSONObject("detect");
         JSONObject sdsConfig = config.optJSONObject("detection"); // Legacy fallback
@@ -841,6 +847,12 @@ public class AutotuneAnalysisCLI {
         if (preConfig == null) preConfig = new JSONObject();
         if (detectConfig == null) detectConfig = new JSONObject();
         if (sdsConfig == null) sdsConfig = new JSONObject();
+        
+        // Debug logging to validate parameter handoff
+        System.err.printf("[CONFIG_DEBUG] SDS Full Pipeline Config loaded from: %s%n", configPath);
+        System.err.printf("[CONFIG_DEBUG] pre section: %s%n", preConfig.toString());
+        System.err.printf("[CONFIG_DEBUG] detect section: %s%n", detectConfig.toString());
+        System.err.printf("[CONFIG_DEBUG] sds section: %s%n", sdsConfig.toString());
         
         // Load image via SCIFIO/ImageJ2 as specified in 15-minute guide
         ImagePlus imagePlus = loadImageViaSCIFIO(input);
@@ -956,8 +968,8 @@ public class AutotuneAnalysisCLI {
      * Run EtBr agarose gel analysis with lane/band detection pipeline
      */
     private static void runEtbr(String input, String outdir, String configPath) throws Exception {
-        // Load YAML configuration with fail-fast validation
-        JSONObject config = loadConfigFile(configPath, "gel_analysis");
+        // Load YAML configuration using legacy parser (matches detect-only mode)
+        JSONObject config = loadConfigFileLegacy(configPath);
         JSONObject preConfig = config.optJSONObject("pre");
         JSONObject detectConfig = config.optJSONObject("detect");
         JSONObject etbrConfig = config.optJSONObject("etbr_detection"); // Legacy fallback
@@ -965,6 +977,12 @@ public class AutotuneAnalysisCLI {
         if (preConfig == null) preConfig = new JSONObject();
         if (detectConfig == null) detectConfig = new JSONObject();
         if (etbrConfig == null) etbrConfig = new JSONObject();
+        
+        // Debug logging to validate parameter handoff
+        System.err.printf("[CONFIG_DEBUG] EtBr Full Pipeline Config loaded from: %s%n", configPath);
+        System.err.printf("[CONFIG_DEBUG] pre section: %s%n", preConfig.toString());
+        System.err.printf("[CONFIG_DEBUG] detect section: %s%n", detectConfig.toString());
+        System.err.printf("[CONFIG_DEBUG] etbr section: %s%n", etbrConfig.toString());
         
         // Load image via SCIFIO/ImageJ2 as specified in 15-minute guide
         ImagePlus imagePlus = loadImageViaSCIFIO(input);
