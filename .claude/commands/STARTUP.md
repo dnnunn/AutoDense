@@ -7,8 +7,6 @@
 > - **Owner:** @davidnunn
 > - **Last-verified:** 2025-08-26
 
-## Read Claude.md
-
 ## Read CLAUDEKIT_REFERENCE
 
 * to familiarize yourself with tools, hooks and agents to help you in coding, troubleshooting, debugging and code hygiene.
@@ -30,6 +28,10 @@
 ## Read Latest Project Structure
 
 /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/StructureDocs
+
+Commit this structure to your project memory and if you have issues finding files, subdirectories or paths, refer to it immediately and don't make guesses.
+
+## Read Claude.md
 
 # Ask whether to build and run Autodense
 

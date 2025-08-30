@@ -13,12 +13,20 @@ runner:
   run_cmd: "python -m autodense_autotune.java_bridge colony_count --input {input} --config configs/colony.yaml --outdir {outdir}"
 search:
   param_grids:
+    # AUDITOR'S SAFE COLONY GRIDS: Baseline mostly disabled (colonies are fragile!)
+    - file: "configs/colony.yaml"
+      path: "detect.baseline.method"
+      values: ["none", "none", "percentile"]  # 2/3 chance baseline disabled
+    - file: "configs/colony.yaml"
+      path: "detect.baseline.window_frac"
+      values: [0.005, 0.01, 0.015]  # Very gentle if enabled (0.5-1.5%)
+    - file: "configs/colony.yaml"
+      path: "detect.prominence_frac"
+      values: [0.06, 0.08, 0.10]
+    - file: "configs/colony.yaml"
+      path: "detect.min_peak_distance_frac"
+      values: [0.04, 0.05, 0.06]  # Larger spacing for colonies
+    # Legacy segmentation parameters (still needed for colony detection)
     - file: "configs/colony.yaml"
       path: "segmentation.threshold"
       values: [0.25, 0.30, 0.35]
-    - file: "configs/colony.yaml"
-      path: "segmentation.min_area"
-      values: [20, 30, 40]
-    - file: "configs/colony.yaml"
-      path: "post.merge_distance_px"
-      values: [3, 5, 7]

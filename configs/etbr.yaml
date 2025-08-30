@@ -14,9 +14,27 @@ pre:
     tile_grid: [8,8]
 
 detect:
-  prominence_frac: 0.10
-  min_peak_distance_px: 10
+  # AUDITOR'S SAFE BASELINE SYSTEM: EtBr-specific config
+  min_peak_distance_frac: 0.035     # slightly tighter spacing for EtBr vs SDS
+  prominence_frac: 0.06              # lenient for fluorescent bands (was 0.10)
   rescue_enabled: true
+  
+  baseline:
+    method: "percentile"            # gentle baseline for fluorescent bands
+    window_frac: 0.015              # 1.5% of ROI width (slightly less than SDS)
+    window_px: 0                    # 0 = use fraction
+    clamp_min_px: 3                 # same safe bounds as SDS
+    clamp_max_px: 10                # slightly smaller max for EtBr
+    quantile: 0.08                  # lower quantile for fluorescent baseline
+
+bands:
+  baseline:
+    method: "percentile"            # gentle baseline for EtBr band detection
+    window_frac: 0.012              # 1.2% of ROI width for band detection (tighter than lane)
+    window_px: 0                    # 0 = use fraction; else explicit px
+    clamp_min_px: 2                 # Hard minimum bound for bands
+    clamp_max_px: 6                 # Hard maximum bound for bands (tighter for fluorescent)
+    quantile: 0.06                  # 6th percentile for fluorescent band baseline
 
 # Legacy parameters (for backward compatibility)
 expected_lanes: 12

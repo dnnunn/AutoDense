@@ -11,9 +11,19 @@ runner:
   run_cmd: "python -m autodense_autotune.java_bridge sds_page --input {input} --config configs/sds.yaml --outdir {outdir}"
 search:
   param_grids:
+    # AUDITOR'S SAFE PARAMETER GRIDS: Explore safe baseline ranges (3-15px, never 32px!)
     - file: "configs/sds.yaml"
-      path: "detection.min_width"
-      values: [10, 12, 14]
+      path: "detect.baseline.method"
+      values: ["percentile", "morph", "none"]
     - file: "configs/sds.yaml"
-      path: "detection.prominence"
-      values: [0.25, 0.30, 0.35]
+      path: "detect.baseline.window_frac"
+      values: [0.01, 0.02, 0.03]  # 1-3% of ROI width (safe vs old 4% = 32px destructive)
+    - file: "configs/sds.yaml"
+      path: "detect.baseline.quantile"
+      values: [0.05, 0.10, 0.15]
+    - file: "configs/sds.yaml"
+      path: "detect.prominence_frac"
+      values: [0.04, 0.06, 0.08]
+    - file: "configs/sds.yaml"
+      path: "detect.min_peak_distance_frac"
+      values: [0.03, 0.04, 0.05]

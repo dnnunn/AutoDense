@@ -9,6 +9,15 @@ import com.betterdairy.autodense.validation.InputValidator;
 import com.betterdairy.autodense.viz.ColonyViz;
 import com.betterdairy.autodense.viz.GelViz;
 import com.betterdairy.autodense.util.ImagePreprocessor;
+import com.betterdairy.autodense.util.ConfigIO;
+import com.betterdairy.autodense.analysis.LaneDetector;
+import com.betterdairy.autodense.model.Models.Lane;
+import java.awt.Rectangle;
+import java.util.Map;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import java.util.Arrays;
+import ij.IJ;
 import com.betterdairy.autodense.util.SyntheticImageGenerator;
 import com.betterdairy.autodense.config.ConfigManagerBridge;
 import com.betterdairy.autodense.config.ConfigurationException;
@@ -67,8 +76,28 @@ public class AutotuneAnalysisCLI {
         // HARD GUARD: Force headless mode to prevent UI issues
         System.setProperty("java.awt.headless", "true");
         
+        // WATERMARK: Prove we're running the right code
+        System.err.println("[WATERMARK] AutoDense build="
+          + AutotuneAnalysisCLI.class.getPackage().getImplementationVersion()
+          + " loadedFrom=" + AutotuneAnalysisCLI.class
+                  .getProtectionDomain().getCodeSource().getLocation());
+        
+        // ENVIRONMENT DIFF: Print environment to spot make vs direct differences
+        System.err.printf("[ENV] java.version=%s  java.class.path.size=%d%n",
+          System.getProperty("java.version"),
+          System.getProperty("java.class.path","").split(java.io.File.pathSeparator).length);
+        System.err.printf("[ENV] PATH.head=%s%n", System.getenv("PATH").split(java.io.File.pathSeparator,2)[0]);
+        System.err.printf("[ENV] VIRTUAL_ENV=%s PYTHONHOME=%s PYTHONPATH=%s%n",
+          System.getenv("VIRTUAL_ENV"), System.getenv("PYTHONHOME"), System.getenv("PYTHONPATH"));
+        
         if (args.length >= 1 && "generate-synthetic".equals(args[0])) {
             generateSyntheticImages(args.length > 1 ? args[1] : "../../tmp/");
+            return;
+        }
+        
+        // DETECT-ONLY MODE: Test detector directly on preprocessed image
+        if (args.length >= 6 && "--detect-only".equals(args[0])) {
+            runDetectOnly(args);
             return;
         }
         
@@ -823,28 +852,13 @@ public class AutotuneAnalysisCLI {
         logImageStatistics(imagePlus, "Input SDS-PAGE image");
         
         // Apply ROI-aware preprocessing for gel workflow
+        System.err.println("[PATH] preprocess:start");
         ImagePreprocessor.Config preprocessConfig = ImagePreprocessor.Config.fromYaml(preConfig);
         
-        // FIXED: Use ROI-aware normalization to avoid margin artifacts
-        ImagePlus preprocessed;
-        if (preprocessConfig.normalizeIntensity) {
-            // Estimate gel ROI for normalization
-            java.awt.Rectangle gelROI = ImagePreprocessor.estimateGelROI(imagePlus);
-            
-            // Apply ROI-aware normalization first
-            ImagePlus roiNormalized = ImagePreprocessor.normalizeByPercentilesWithROI(
-                imagePlus, gelROI, 
-                preprocessConfig.clipPercentileLow, 
-                preprocessConfig.clipPercentileHigh
-            );
-            
-            // Continue with other preprocessing steps (disable normalization since we did it)
-            preprocessConfig.normalizeIntensity = false;
-            preprocessed = ImagePreprocessor.preprocessForDetection(roiNormalized, preprocessConfig, outdir);
-        } else {
-            // No normalization requested, use standard preprocessing
-            preprocessed = ImagePreprocessor.preprocessForDetection(imagePlus, preprocessConfig, outdir);
-        }
+        // TEMPORARILY DISABLE ROI-aware preprocessing to debug
+        // Apply standard preprocessing instead
+        ImagePlus preprocessed = ImagePreprocessor.preprocessForDetection(imagePlus, preprocessConfig, outdir);
+        System.err.println("[PATH] preprocess:done");
         
         logImageStatistics(preprocessed, "ROI-aware preprocessed SDS-PAGE image");
         
@@ -1225,5 +1239,471 @@ public class AutotuneAnalysisCLI {
         
         logger.info(String.format("%s statistics - mean=%.1f±%.1f, range=[%.1f,%.1f], p1/p99=[%.1f,%.1f], shouldInvert=%s",
             description, mean, std, min, max, p1, p99, shouldInvert));
+    }
+    
+    /**
+     * DETECT-ONLY MODE: Test detector directly on preprocessed image with config integration
+     * Usage: --detect-only --preprocessed path/to/stage1_norm.png --roi x0,y0,w,h --config-yaml configs/sds.yaml --outdir output/
+     */
+    private static void runDetectOnly(String[] args) {
+        try {
+            String preprocessedPath = null;
+            String roiSpec = null;
+            String outdir = null;
+            String configPath = null;
+            
+            // Parse detect-only arguments
+            for (int i = 1; i < args.length - 1; i++) {
+                if ("--preprocessed".equals(args[i])) {
+                    preprocessedPath = args[i + 1];
+                    i++; // skip next arg
+                } else if ("--roi".equals(args[i])) {
+                    roiSpec = args[i + 1];
+                    i++; // skip next arg
+                } else if ("--outdir".equals(args[i])) {
+                    outdir = args[i + 1];
+                    i++; // skip next arg
+                } else if ("--config-yaml".equals(args[i])) {
+                    configPath = args[i + 1];
+                    i++; // skip next arg
+                }
+            }
+            
+            if (preprocessedPath == null || roiSpec == null || outdir == null) {
+                System.err.println("Usage: --detect-only --preprocessed path/to/stage1_norm.png --roi x0,y0,w,h [--config-yaml configs/sds.yaml] --outdir output/");
+                System.exit(1);
+            }
+            
+            System.err.println("[DETECT_ONLY] Starting direct detector test with config integration");
+            System.err.printf("[DETECT_ONLY] preprocessed=%s roi=%s config=%s outdir=%s%n", preprocessedPath, roiSpec, configPath, outdir);
+            
+            // 1) Load config (if provided) - use legacy loader to avoid Python environment issues
+            Map<String, Object> config = Map.of(); // default empty
+            if (configPath != null) {
+                JSONObject jsonConfig = loadConfigFileLegacy(configPath);
+                config = jsonConfig.toMap(); // Convert JSONObject to Map<String,Object>
+                System.err.printf("[DETECT_ONLY] Config loaded from: %s (legacy mode)%n", configPath);
+            } else {
+                System.err.println("[DETECT_ONLY] No config provided - using safe defaults");
+            }
+            
+            // 2) Load preprocessed image
+            ImagePlus preprocessed = IJ.openImage(preprocessedPath);
+            if (preprocessed == null) {
+                System.err.println("[DETECT_ONLY] ERROR: Could not load preprocessed image: " + preprocessedPath);
+                System.exit(1);
+            }
+            
+            // 3) Parse ROI and set in ImagePlus
+            Rectangle roi = parseRoi(roiSpec);
+            preprocessed.setRoi(roi);
+            System.err.printf("[DETECT_ONLY] ROI parsed: x=%d y=%d w=%d h=%d%n", roi.x, roi.y, roi.width, roi.height);
+            
+            // 4) Call REAL LaneDetector.findLanes() with config integration
+            int expectedLanes = 0; // use unbiased detection (defaults to 8)
+            List<Lane> lanes = LaneDetector.findLanes(preprocessed, expectedLanes, false, 0.8, 0.0, false, LaneDetector.Polarity.AUTO, config);
+            System.err.printf("[DETECT_ONLY] LaneDetector found %d lanes%n", lanes.size());
+            
+            // 5) AUDITOR'S GATING & HONEST REPORTING: Add metadata
+            Map<String, Object> metadata = createDetectionMetadata(config, lanes.size());
+            
+            // 6) Save artifacts with baseline info
+            Path outdirPath = Paths.get(outdir);
+            Files.createDirectories(outdirPath);
+            saveDetectionResults(outdirPath, lanes, metadata, configPath);
+            
+            System.err.printf("[DETECT_ONLY] lanes=%d baseline_method=%s%n", lanes.size(), 
+                             metadata.getOrDefault("baseline_method", "unknown"));
+            System.exit(lanes.isEmpty() ? 2 : 0);
+            
+        } catch (Exception e) {
+            System.err.println("[DETECT_ONLY] ERROR: " + e.getMessage());
+            e.printStackTrace();
+            System.exit(1);
+        }
+    }
+    
+    private static Rectangle parseRoi(String roiSpec) {
+        String[] parts = roiSpec.split(",");
+        if (parts.length != 4) {
+            throw new IllegalArgumentException("ROI must be x0,y0,w,h");
+        }
+        return new Rectangle(
+            Integer.parseInt(parts[0]),
+            Integer.parseInt(parts[1]), 
+            Integer.parseInt(parts[2]),
+            Integer.parseInt(parts[3])
+        );
+    }
+    
+    private static double[] projectHorizontal(ImagePlus imp, Rectangle roi) {
+        ImageProcessor ip = imp.getProcessor();
+        double[] profX = new double[roi.width];
+        
+        for (int dx = 0; dx < roi.width; dx++) {
+            double acc = 0;
+            int n = 0;
+            for (int dy = 0; dy < roi.height; dy++) {
+                int x = roi.x + dx;
+                int y = roi.y + dy;
+                if (x >= 0 && x < ip.getWidth() && y >= 0 && y < ip.getHeight()) {
+                    float v = ip.getf(x, y);
+                    if (Double.isFinite(v)) {
+                        acc += v;
+                        n++;
+                    }
+                }
+            }
+            profX[dx] = acc / Math.max(1, n);
+        }
+        
+        return profX;
+    }
+    
+    private static List<LaneDetector.Peak> testRobustPeakDetection(double[] profX) {
+        // Apply the same robust processing as in LaneDetector
+        int w = profX.length;
+        
+        // DEBUG: Check raw profile before processing
+        System.err.printf("[DETECT_ONLY] RAW profile: min=%.3f max=%.3f med=%.3f%n", 
+                         min(profX), max(profX), median(profX));
+        
+        // Percentile clipping
+        double[] sorted = profX.clone();
+        Arrays.sort(sorted);
+        double p5 = sorted[(int)(sorted.length * 0.05)];
+        double p95 = sorted[(int)(sorted.length * 0.95)];
+        
+        System.err.printf("[DETECT_ONLY] Percentiles: p5=%.3f p95=%.3f range=%.3f%n", 
+                         p5, p95, p95 - p5);
+        
+        for (int i = 0; i < profX.length; i++) {
+            profX[i] = Math.max(0.0, Math.min(1.0, (profX[i] - p5) / Math.max(1e-8, (p95 - p5))));
+        }
+        
+        System.err.printf("[DETECT_ONLY] AFTER percentile clip: min=%.3f max=%.3f med=%.3f%n", 
+                         min(profX), max(profX), median(profX));
+        
+        // Light 1D smoothing
+        double sigma = Math.min(3.0, Math.max(1.0, w / 300.0));
+        profX = gaussian1D(profX, sigma);
+        
+        // CORRECTLY PLACED DEBUG: Before baseline removal
+        System.err.printf("[DETECT_ONLY] BEFORE baseline removal: med=%.3f max=%.3f%n", median(profX), max(profX));
+        
+        // AUDITOR'S SUGGESTION: Skip aggressive baseline removal - test signal directly
+        System.err.println("[DETECT_ONLY] SKIPPING morphological opening (too aggressive) - testing signal directly");
+        
+        // COMMENTED OUT: Morphological opening as baseline (was destroying signal)
+        // int minDistPx = Math.max(6, (int) Math.round(w * 0.04));
+        // double[] base = movingMin(movingMax(profX, minDistPx), minDistPx);
+        // for (int i = 0; i < profX.length; i++) {
+        //     profX[i] = Math.max(0, profX[i] - base[i]);
+        // }
+        
+        System.err.printf("[DETECT_ONLY] SIGNAL preserved: med=%.3f max=%.3f%n", median(profX), max(profX));
+        
+        // Calculate minimum distance for peak detection (separate from baseline removal)
+        int minDistPx = Math.max(6, (int) Math.round(w * 0.04));
+        
+        // Dual threshold
+        double med = median(profX);
+        double maxv = max(profX);
+        double relProm = Math.max(0.03, 0.10 * med);
+        double absProm = Math.max(0.02, 0.02 * maxv);
+        double minProm = Math.max(relProm, absProm);
+        
+        System.err.printf("[DETECT_ONLY] p5=%.3f p95=%.3f med=%.3f max=%.3f minDist=%d minProm=%.3f%n",
+                         p5, p95, med, maxv, minDistPx, minProm);
+        
+        // AUDITOR'S SUGGESTION: Try with very lenient parameters first
+        System.err.println("[DETECT_ONLY] Testing with FORCED lenient parameters: minDist=3 minProm=0.0");
+        List<LaneDetector.Peak> lenientPeaks = findPeaksRobust(profX, 0.0, 3);
+        System.err.printf("[DETECT_ONLY] LENIENT test found %d peaks%n", lenientPeaks.size());
+        if (!lenientPeaks.isEmpty()) {
+            System.err.println("[DETECT_ONLY] SUCCESS: Signal exists, normal thresholds too strict");
+            return lenientPeaks;
+        }
+        
+        // Three-tier detection
+        int[][] runs = {
+            { minDistPx, (int) Math.round(minProm * 1000) },
+            { (int) Math.round(minDistPx * 0.8), (int) Math.round(minProm * 700) },
+            { (int) Math.round(minDistPx * 0.6), (int) Math.round(minProm * 400) }
+        };
+        
+        for (int[] r : runs) {
+            List<LaneDetector.Peak> peaks = findPeaksRobust(profX, r[1] / 1000.0, r[0]);
+            if (!peaks.isEmpty()) {
+                System.err.println("[DETECT_ONLY] tier=OK " + r[0] + "/" + (r[1] / 1000.0));
+                return peaks;
+            }
+        }
+        
+        System.err.println("[DETECT_ONLY] all tiers failed");
+        return new ArrayList<>();
+    }
+    
+    private static void saveProfilePng(Path path, double[] profile, List<LaneDetector.Peak> peaks) throws IOException {
+        int w = profile.length;
+        int h = 120;
+        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_BYTE_GRAY);
+        
+        // Draw profile as white line on black background
+        for (int x = 0; x < w; x++) {
+            int y = h - 10 - (int) Math.round(100 * Math.max(0, Math.min(1, profile[x])));
+            if (y >= 0 && y < h) {
+                img.getRaster().setSample(x, y, 0, 255);
+            }
+        }
+        
+        // Mark peaks as vertical lines
+        java.awt.Graphics2D g = img.createGraphics();
+        g.setColor(java.awt.Color.GRAY);
+        for (LaneDetector.Peak p : peaks) {
+            if (p.pos >= 0 && p.pos < w) {
+                g.drawLine(p.pos, 0, p.pos, h - 1);
+            }
+        }
+        g.dispose();
+        
+        ImageIO.write(img, "PNG", path.toFile());
+    }
+    
+    private static void saveProfileCsv(Path path, double[] profile) throws IOException {
+        try (FileWriter writer = new FileWriter(path.toFile())) {
+            writer.write("x,value\n");
+            for (int i = 0; i < profile.length; i++) {
+                writer.write(i + "," + profile[i] + "\n");
+            }
+        }
+    }
+    
+    /**
+     * Write error JSON for failed runs - don't emit fake success
+     */
+    private static void writeErrorJson(String outdir, String errorType, String message) throws IOException {
+        JSONObject errorReport = new JSONObject()
+            .put("task", "error")
+            .put("error_type", errorType)
+            .put("error_message", message)
+            .put("timestamp", System.currentTimeMillis());
+            
+        Path reportPath = Paths.get(outdir, "error_report.json");
+        Files.createDirectories(reportPath.getParent());
+        
+        try (FileWriter writer = new FileWriter(reportPath.toFile())) {
+            writer.write(errorReport.toString(2));
+        }
+    }
+    
+    // Helper functions (duplicated from LaneDetector for detect-only mode)
+    private static double median(double[] arr) {
+        double[] sorted = arr.clone();
+        Arrays.sort(sorted);
+        int n = sorted.length;
+        if (n % 2 == 0) {
+            return (sorted[n/2 - 1] + sorted[n/2]) / 2.0;
+        } else {
+            return sorted[n/2];
+        }
+    }
+    
+    private static double max(double[] arr) {
+        double maxVal = Double.NEGATIVE_INFINITY;
+        for (double v : arr) maxVal = Math.max(maxVal, v);
+        return maxVal;
+    }
+    
+    private static double min(double[] arr) {
+        double minVal = Double.POSITIVE_INFINITY;
+        for (double v : arr) minVal = Math.min(minVal, v);
+        return minVal;
+    }
+    
+    private static double[] gaussian1D(double[] arr, double sigma) {
+        if (sigma <= 0) return arr.clone();
+        
+        int radius = (int) Math.ceil(3 * sigma);
+        double[] result = new double[arr.length];
+        double[] kernel = new double[2 * radius + 1];
+        
+        // Generate Gaussian kernel
+        double sum = 0;
+        for (int i = 0; i <= 2 * radius; i++) {
+            double x = i - radius;
+            kernel[i] = Math.exp(-0.5 * x * x / (sigma * sigma));
+            sum += kernel[i];
+        }
+        // Normalize kernel
+        for (int i = 0; i <= 2 * radius; i++) {
+            kernel[i] /= sum;
+        }
+        
+        // Convolve
+        for (int i = 0; i < arr.length; i++) {
+            double val = 0;
+            for (int j = -radius; j <= radius; j++) {
+                int idx = i + j;
+                if (idx >= 0 && idx < arr.length) {
+                    val += arr[idx] * kernel[j + radius];
+                }
+            }
+            result[i] = val;
+        }
+        return result;
+    }
+    
+    private static double[] movingMax(double[] arr, int window) {
+        double[] result = new double[arr.length];
+        for (int i = 0; i < arr.length; i++) {
+            double maxVal = Double.NEGATIVE_INFINITY;
+            for (int j = Math.max(0, i - window/2); j < Math.min(arr.length, i + window/2 + 1); j++) {
+                maxVal = Math.max(maxVal, arr[j]);
+            }
+            result[i] = maxVal;
+        }
+        return result;
+    }
+    
+    private static double[] movingMin(double[] arr, int window) {
+        double[] result = new double[arr.length];
+        for (int i = 0; i < arr.length; i++) {
+            double minVal = Double.POSITIVE_INFINITY;
+            for (int j = Math.max(0, i - window/2); j < Math.min(arr.length, i + window/2 + 1); j++) {
+                minVal = Math.min(minVal, arr[j]);
+            }
+            result[i] = minVal;
+        }
+        return result;
+    }
+    
+    private static List<LaneDetector.Peak> findPeaksRobust(double[] a, double minProm, int minDist) {
+        // 1) local maxima candidates
+        List<Integer> cand = new ArrayList<>();
+        for (int i = 1; i < a.length - 1; i++) {
+            if (a[i] > a[i-1] && a[i] >= a[i+1]) {
+                cand.add(i);
+            }
+        }
+
+        // 2) compute simple prominence for each
+        List<LaneDetector.Peak> peaks = new ArrayList<>();
+        for (int idx : cand) {
+            double leftMin = a[idx], rightMin = a[idx];
+            // walk left
+            double cur = a[idx];
+            for (int i = idx - 1; i >= 0; i--) { 
+                cur = Math.min(cur, a[i]); 
+                if (a[i] > a[i+1]) break; 
+            }
+            leftMin = cur;
+            // walk right
+            cur = a[idx];
+            for (int i = idx + 1; i < a.length; i++) { 
+                cur = Math.min(cur, a[i]); 
+                if (a[i] > a[i-1]) break; 
+            }
+            rightMin = cur;
+            double prom = a[idx] - Math.max(leftMin, rightMin);
+            if (prom >= minProm) {
+                peaks.add(new LaneDetector.Peak(idx, prom));
+            }
+        }
+        
+        // 3) enforce minDist by greedy suppression around highest peaks
+        peaks.sort((p, q) -> Double.compare(q.prominence, p.prominence));
+        boolean[] taken = new boolean[a.length];
+        List<LaneDetector.Peak> out = new ArrayList<>();
+        for (LaneDetector.Peak p : peaks) {
+            boolean ok = true;
+            for (int j = Math.max(0, p.pos - minDist); j < Math.min(a.length, p.pos + minDist + 1); j++) {
+                if (taken[j]) { ok = false; break; }
+            }
+            if (ok) {
+                out.add(p);
+                for (int j = Math.max(0, p.pos - minDist); j < Math.min(a.length, p.pos + minDist + 1); j++) {
+                    taken[j] = true;
+                }
+            }
+        }
+        out.sort((p, q) -> Integer.compare(p.pos, q.pos));
+        return out;
+    }
+    
+    // === AUDITOR'S GATING & HONEST REPORTING ===
+    
+    /**
+     * Create detection metadata following auditor's honest reporting requirements
+     */
+    private static Map<String, Object> createDetectionMetadata(Map<String, Object> config, int laneCount) {
+        Map<String, Object> metadata = new HashMap<>();
+        
+        // AUDITOR REQUIREMENT: Always report that detector was called
+        metadata.put("detector_called", true);
+        
+        // Extract baseline info from config
+        @SuppressWarnings("unchecked")
+        Map<String, Object> detectConfig = (Map<String, Object>) config.getOrDefault("detect", Map.of());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> baselineConfig = (Map<String, Object>) detectConfig.getOrDefault("baseline", Map.of());
+        
+        String method = String.valueOf(baselineConfig.getOrDefault("method", "percentile"));
+        Object windowFrac = baselineConfig.getOrDefault("window_frac", 0.02);
+        Object windowPx = baselineConfig.getOrDefault("window_px", 0);
+        
+        // AUDITOR REQUIREMENT: Report baseline method and window size
+        Map<String, Object> baselineMetadata = Map.of(
+            "method", method,
+            "window_frac", windowFrac,
+            "window_px", windowPx
+        );
+        metadata.put("baseline", baselineMetadata);
+        
+        // AUDITOR REQUIREMENT: Honest reporting - no fake confidence when lanes=0
+        if (laneCount == 0) {
+            metadata.put("status", "no_lanes");
+            // Don't add fake R² or confidence metrics
+        } else {
+            metadata.put("status", "lanes_detected");
+        }
+        
+        return metadata;
+    }
+    
+    /**
+     * Save detection results with metadata as specified by auditor
+     */
+    private static void saveDetectionResults(Path outdirPath, List<Lane> lanes, Map<String, Object> metadata, String configPath) throws IOException {
+        // Create results JSON following auditor's spec: { lanes: N, baseline: {...}, thresholds: {...} }
+        JSONObject results = new JSONObject();
+        results.put("lanes", lanes.size());
+        results.put("baseline", metadata.get("baseline"));
+        results.put("detector_called", metadata.get("detector_called"));
+        results.put("status", metadata.get("status"));
+        
+        if (configPath != null) {
+            results.put("config_file", configPath);
+        }
+        
+        // Add lane details if detected
+        if (!lanes.isEmpty()) {
+            List<Map<String, Object>> laneDetails = new ArrayList<>();
+            for (Lane lane : lanes) {
+                Map<String, Object> laneInfo = new HashMap<>();
+                // Add lane details - need to access Lane fields appropriately
+                laneInfo.put("lane_id", lane.toString()); // Basic representation for now
+                laneDetails.add(laneInfo);
+            }
+            results.put("lane_details", laneDetails);
+        }
+        
+        // Write results JSON
+        Path resultsPath = outdirPath.resolve("detection_results.json");
+        try (FileWriter writer = new FileWriter(resultsPath.toFile())) {
+            writer.write(results.toString(2)); // Pretty print with 2-space indent
+        }
+        
+        System.err.printf("[DETECT_ONLY] Results saved to: %s%n", resultsPath);
     }
 }

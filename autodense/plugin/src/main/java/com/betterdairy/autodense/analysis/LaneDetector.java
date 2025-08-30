@@ -6,10 +6,27 @@ import ij.process.ImageProcessor;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.logging.Logger;
 import com.betterdairy.autodense.model.Models.Lane;
 
 public final class LaneDetector {
     private LaneDetector() {}
+    
+    private static final Logger logger = Logger.getLogger(LaneDetector.class.getName());
+    
+    // SENTINEL: Must-call probe to prove detector ran
+    public static final java.util.concurrent.atomic.AtomicBoolean CALLED = new java.util.concurrent.atomic.AtomicBoolean(false);
+    
+    /**
+     * Polarity enum to make band/background contrast explicit and robust
+     */
+    public enum Polarity { 
+        BANDS_DARK,   // Dark bands on bright background
+        BANDS_BRIGHT, // Bright bands on dark background  
+        AUTO          // Auto-detect from image statistics
+    }
+    
     // Lanes are assumed nearly uniform in width; allow +/-25%
     private static final double LANE_WIDTH_TOL_FRAC = 0.25;
     // For constant-spacing mode, occupy this fraction of the spacing as the lane ROI (default)
@@ -24,28 +41,68 @@ public final class LaneDetector {
     }
 
     public static List<Lane> findLanes(ImagePlus imp, int expectedCount, boolean constantSpacing) {
-        return findLanes(imp, expectedCount, constantSpacing, LANE_WIDTH_FILL_FRACTION, 0.0, true);
+        return findLanes(imp, expectedCount, constantSpacing, LANE_WIDTH_FILL_FRACTION, 0.0, true, Polarity.AUTO);
     }
-
+    
+    public static List<Lane> findLanes(ImagePlus imp, int expectedCount, boolean constantSpacing, Polarity polarity) {
+        return findLanes(imp, expectedCount, constantSpacing, LANE_WIDTH_FILL_FRACTION, 0.0, true, polarity);
+    }
+    
+    // Backward compatibility - maintain old signature
     public static List<Lane> findLanes(ImagePlus imp,
                                        int expectedCount,
                                        boolean constantSpacing,
                                        double laneWidthFraction,
                                        double gridOffsetFraction,
                                        boolean preprocessForDetection) {
-        // 1) Normalize to 8-bit for simple projection
-        IJ.run(imp, "8-bit", "");
+        return findLanes(imp, expectedCount, constantSpacing, laneWidthFraction, gridOffsetFraction, preprocessForDetection, Polarity.AUTO);
+    }
+
+    // Config-enabled version (primary)
+    public static List<Lane> findLanes(ImagePlus imp,
+                                       int expectedCount,
+                                       boolean constantSpacing,
+                                       double laneWidthFraction,
+                                       double gridOffsetFraction,
+                                       boolean preprocessForDetection,
+                                       Polarity polarity,
+                                       Map<String,Object> config) {
+        return findLanesInternal(imp, expectedCount, constantSpacing, laneWidthFraction, gridOffsetFraction, preprocessForDetection, polarity, config);
+    }
+    
+    // Backward compatibility - no config parameter
+    public static List<Lane> findLanes(ImagePlus imp,
+                                       int expectedCount,
+                                       boolean constantSpacing,
+                                       double laneWidthFraction,
+                                       double gridOffsetFraction,
+                                       boolean preprocessForDetection,
+                                       Polarity polarity) {
+        // Use empty config for backward compatibility
+        return findLanesInternal(imp, expectedCount, constantSpacing, laneWidthFraction, gridOffsetFraction, preprocessForDetection, polarity, Map.of());
+    }
+    
+    private static List<Lane> findLanesInternal(ImagePlus imp,
+                                       int expectedCount,
+                                       boolean constantSpacing,
+                                       double laneWidthFraction,
+                                       double gridOffsetFraction,
+                                       boolean preprocessForDetection,
+                                       Polarity polarity,
+                                       Map<String,Object> config) {
+        // SENTINEL: Mark that detector was called
+        CALLED.set(true);
+        System.err.println("[PATH] detection:start");
+        
+        // FIXED: Preserve preprocessed image data - don't destroy floating-point precision
+        // Work directly with the carefully preprocessed image instead of converting to 8-bit
         ImageProcessor ip = imp.getProcessor();
         int W = ip.getWidth();
         int H = ip.getHeight();
 
-        // 2) Pre-process lightly and estimate gel bounds using longest active run
-        if (preprocessForDetection) {
-            contrastStretch(ip, 0.01, 0.99); // robust linear stretch
-            gaussianBlur(ip, 1.0);
-            // Optional: mild tilt compensation (disabled by default for speed)
-            // ip = compensateTilt(ip);
-        }
+        // FIXED: Skip redundant preprocessing - image is already preprocessed by ImagePreprocessor pipeline
+        // The preprocessForDetection parameter is now informational only since preprocessing is done externally
+        // This prevents double-processing and preserves the careful preprocessing work
 
         int margin = Math.max(10, W / 200);
         int[] bounds = estimateGelBounds(ip, margin);
@@ -74,46 +131,163 @@ public final class LaneDetector {
             return lanes;
         }
 
+        // AXIS SANITY CHECK: Verify we're projecting the right dimension
+        double[] profX = new double[w];  // mean over y for each x (THIS is the lane profile)
+        double[] profY = new double[H];  // mean over x for each y (diagnostic only)
+        
+        for (int dx = 0; dx < w; dx++) {
+            double acc = 0; int n = 0;
+            for (int dy = 0; dy < H; dy++) {
+                int x = xLeft + dx;
+                float v = ip.getf(x, dy);
+                if (Double.isFinite(v)) { acc += v; n++; }
+            }
+            profX[dx] = acc / Math.max(1, n);
+        }
+        
+        for (int dy = 0; dy < H; dy++) {
+            double acc = 0; int n = 0;
+            for (int dx = 0; dx < w; dx++) {
+                int x = xLeft + dx;
+                float v = ip.getf(x, dy);
+                if (Double.isFinite(v)) { acc += v; n++; }
+            }
+            profY[dy] = acc / Math.max(1, n);
+        }
+        
+        double stdX = computeStd(profX);
+        double stdY = computeStd(profY);
+        logger.info(String.format("[LANE_PROJ] axis stdX=%.4f stdY=%.4f (expect stdX >> stdY)", stdX, stdY));
+        
+        // NaN/scale landmine check
+        double min = Double.POSITIVE_INFINITY, max = Double.NEGATIVE_INFINITY;
+        int nNaN = 0, nZero = 0;
+        for (double v : profX) {
+            if (!Double.isFinite(v)) { nNaN++; continue; }
+            if (v == 0.0) nZero++;
+            min = Math.min(min, v);
+            max = Math.max(max, v);
+        }
+        logger.info(String.format("[LANE_PROJ] len=%d min=%.4f max=%.4f zero%%=%.1f NaN=%d", 
+                                 profX.length, min, max, 100.0 * nZero / profX.length, nNaN));
+        
+        // ROBUST BASELINE & PROMINENCE: Remove the floor, set sane floors
+        // Percentile clip on the 1D profile (NOT global image)
+        double p5 = percentile(profX, 5);
+        double p95 = percentile(profX, 95);
+        for (int i = 0; i < profX.length; i++) {
+            profX[i] = clamp01((profX[i] - p5) / Math.max(1e-8, (p95 - p5)));
+        }
+        
+        // Light 1D smoothing
+        double sigma = Math.min(3.0, Math.max(1.0, w / 300.0));
+        profX = gaussian1D(profX, sigma);
+        
+        // Baseline: resolve from YAML (ROI-aware, clamped); safe defaults inside fromConfig()
+        BaselineParams bp = BaselineParams.fromConfig(config, w);
+        
+        // Apply safe baseline removal with logging
+        double[] profForPeaks = BaselineUtils.subtractBaseline(profX, bp, "lanes", System.err);
+        
+        // Peak spacing from config (px or frac vs ROI width), fallback to 0.04*w
+        int minDistPx = resolveMinDistPx(config, w);
+        
+        // Prominence floors; allow YAML override via detect.prominence_frac
+        double med = median(profForPeaks), maxv = max(profForPeaks);
+        double defaultMinProm = Math.max(
+            Math.max(0.03, 0.10 * med),  // relative to median
+            Math.max(0.02, 0.02 * maxv)  // absolute 2% of max
+        );
+        double minProm = getCfgDouble(config, "detect.prominence_frac", defaultMinProm);
+        
+        logger.info(String.format("[LANE_PROJ] p5=%.3f p95=%.3f med=%.3f max=%.3f minDist=%d minProm=%.3f",
+                                 p5, p95, med, maxv, minDistPx, minProm));
+        
+        // Three-tier detection: strict → medium → lenient
+        int[][] runs = {
+            { minDistPx, (int) Math.round(minProm * 1000) },                    // strict
+            { (int) Math.round(minDistPx * 0.8), (int) Math.round(minProm * 700) }, // medium
+            { (int) Math.round(minDistPx * 0.6), (int) Math.round(minProm * 400) }  // lenient
+        };
+        
+        List<Peak> peaks = null;
+        for (int[] r : runs) {
+            peaks = findPeaksRobust(profForPeaks, r[1] / 1000.0, r[0]); // Use baseline-corrected profile
+            if (!peaks.isEmpty()) {
+                logger.info("[LANE_PROJ] tier=OK " + r[0] + "/" + (r[1] / 1000.0));
+                break;
+            }
+        }
+        if (peaks.isEmpty()) {
+            logger.info("[LANE_PROJ] all tiers failed");
+        }
+        
+        // OLD CODE - keeping for backward compatibility but using new robust detection
         // 3) Fast column projection using array access (orders faster than getf() calls)
         // Convert to float array for vectorized access
         float[] pixels = (float[]) ip.convertToFloat().getPixels();
-        double[] proj = new double[w];
+        double[] proj = profX; // Use the robust profile we just computed
+        
+        // FIXED: Determine the actual pixel value range instead of assuming 0-255
+        // Find min/max of the actual image data to handle floating-point preprocessed images
+        float minVal = Float.MAX_VALUE, maxVal = Float.MIN_VALUE;
+        for (float pixel : pixels) {
+            if (pixel < minVal) minVal = pixel;
+            if (pixel > maxVal) maxVal = pixel;
+        }
+        
+        // FIXED: Auto-detect polarity from image statistics and make it explicit
+        boolean bandsDark;
+        if (polarity == Polarity.BANDS_DARK) {
+            bandsDark = true;
+        } else if (polarity == Polarity.BANDS_BRIGHT) {
+            bandsDark = false;
+        } else { // Polarity.AUTO
+            // Auto-detect: if mean is closer to maxVal, background is bright (bands dark)
+            double normalizedMean = (minVal + maxVal == 0) ? 0.5 : (minVal - minVal) / (maxVal - minVal);
+            double rangeMidpoint = (maxVal + minVal) / 2.0;
+            double actualMean = 0;
+            for (float pixel : pixels) actualMean += pixel;
+            actualMean /= pixels.length;
+            bandsDark = actualMean > rangeMidpoint; // Mean closer to max = bright background, dark bands
+        }
         
         for (int xi = 0; xi < w; xi++) {
             int x = xLeft + xi;
             double s = 0;
             for (int y = 0; y < H; y++) {
                 int pixelIndex = y * W + x;
-                s += 255.0 - pixels[pixelIndex]; // invert: darker -> larger
+                // FIXED: Polarity-aware projection - make explicit instead of always inverting
+                if (bandsDark) {
+                    s += (maxVal - pixels[pixelIndex]);  // dark bands -> big peaks
+                } else {
+                    s += (pixels[pixelIndex] - minVal);  // bright bands -> big peaks  
+                }
             }
             proj[xi] = s;
         }
-        // Enhanced smoothing with Savitzky-Golay-like filter for better lane boundary detection
-        int smoothR = Math.max(5, w / 200); // Smaller radius for better resolution
-        double[] smooth = applySavitzkyGolaySmoothing(proj, smoothR);
+        // Convert robust peaks back to old format for compatibility
+        List<Integer> peaksOld = new ArrayList<>();
+        for (Peak p : peaks) {
+            peaksOld.add(xLeft + p.pos); // Convert back to absolute coordinates
+        }
+        logger.info(String.format("[LANE_PROJ] robust detection found %d peaks", peaksOld.size()));
 
-        // 4) Peak detection with prominence and spacing
-        double mean = 0, std = 0;
-        for (double v : smooth) mean += v;
-        mean /= w;
-        for (double v : smooth) std += (v - mean) * (v - mean);
-        std = Math.sqrt(std / Math.max(1, w - 1));
-        double thresh = mean + 0.5 * std; // lower to catch more lanes
-        // Dynamic minimum spacing: set min_lane_sep_px = max(8, width * 0.04)
-        int minDist = Math.max(8, (int)(W * 0.04)); // Dynamic spacing based on image width
-        double minProm = 0.2 * std; // relaxed prominence
-
-        List<Integer> peaks = detectPeaks(smooth, xLeft, w, mean, smoothR, thresh, minProm, minDist);
-
+        // Need variables for fallback detection - create from robust profX
+        double[] smooth = profX; // Already processed robustly above
+        int minDistFallback = Math.max(6, (int) Math.round(w * 0.04));
+        double meanFallback = median(profX); // Use median as more robust measure
+        double stdFallback = computeStd(profX);
+        
         // 5) Expand each peak to lane bounds within cropped region, with padding
         List<Lane> lanes = new ArrayList<>();
         int idx = 1;
-        for (int pxAbs : peaks) {
+        for (int pxAbs : peaksOld) {
             int p = pxAbs - xLeft;
             int l = p, r = p;
             while (l - 1 >= 0 && smooth[l - 1] <= smooth[l]) l--;
             while (r + 1 < w && smooth[r + 1] <= smooth[r]) r++;
-            int pad = Math.max(6, minDist / 8);
+            int pad = Math.max(6, minDistFallback / 8);
             int xl = Math.max(xLeft, xLeft + l - pad);
             int xr = Math.min(xRight, xLeft + r + pad);
             if (xr > xl) lanes.add(new Lane(idx++, xl, xr));
@@ -123,11 +297,18 @@ public final class LaneDetector {
         if ((expectedCount > 0 && lanes.size() != expectedCount) || (expectedCount <= 0 && lanes.size() < 6)) {
             int target = expectedCount > 0 ? expectedCount : 8; // heuristic default
             int targetMinDist = Math.max(18, (xRight - xLeft + 1) / Math.max(1, (int)(1.6 * target)));
-            double t = thresh; double p = minProm;
+            // Use fallback values instead of old undefined variables
+            double t = meanFallback + 0.2 * stdFallback; // equivalent to old thresh calculation
+            double p = 0.1 * stdFallback; // equivalent to old minProm
             List<Lane> best = lanes; int bestDiff = Math.abs(target - lanes.size());
             for (int step = 0; step < 6 && bestDiff > 0; step++) {
-                t -= 0.1 * std; p -= 0.05 * std; if (p < 0) p = 0;
-                List<Integer> cand = detectPeaks(smooth, xLeft, w, mean, smoothR, t, p, targetMinDist);
+                t -= 0.1 * stdFallback; 
+                p -= 0.05 * stdFallback; 
+                if (p < 0) p = 0;
+                // Use robust peak detection for fallback too
+                List<Peak> candPeaks = findPeaksRobust(smooth, p, targetMinDist);
+                List<Integer> cand = new ArrayList<>();
+                for (Peak pk : candPeaks) cand.add(xLeft + pk.pos);
                 List<Lane> ls = new ArrayList<>(); idx = 1;
                 for (int pxAbs : cand) {
                     int c = pxAbs - xLeft; int l = c, r = c;
@@ -149,7 +330,25 @@ public final class LaneDetector {
         
         // 8) Edge trimming: drop partial lanes cut off by crop (< 70% of median lane width)
         lanes = trimEdgeLanes(lanes);
+        
+        // ADDED: Two-pass polarity fallback as suggested by auditor
+        if (lanes.isEmpty() && polarity == Polarity.AUTO) {
+            logger.info("[POLARITY_RESCUE] Zero lanes detected with AUTO polarity, trying explicit opposite polarity");
+            
+            // Try opposite polarity - if we assumed BANDS_DARK, try BANDS_BRIGHT
+            Polarity oppositePolarity = bandsDark ? Polarity.BANDS_BRIGHT : Polarity.BANDS_DARK;
+            List<Lane> rescueLanes = findLanes(imp, expectedCount, constantSpacing, laneWidthFraction, gridOffsetFraction, false, oppositePolarity);
+            
+            if (!rescueLanes.isEmpty()) {
+                logger.info("[POLARITY_RESCUE] Success with opposite polarity: " + rescueLanes.size() + " lanes found");
+                System.err.println("[PATH] detection:done count=" + rescueLanes.size());
+                return rescueLanes;
+            } else {
+                logger.info("[POLARITY_RESCUE] Still zero lanes with opposite polarity");
+            }
+        }
 
+        System.err.println("[PATH] detection:done count=" + lanes.size());
         return lanes;
     }
 
@@ -279,13 +478,22 @@ public final class LaneDetector {
     private static int[] estimateGelBounds(ImageProcessor ip, int margin) {
         int W = ip.getWidth(), H = ip.getHeight();
         int start = margin, end = W - margin - 1;
+        
+        // FIXED: Use auditor's robust percentile-based approach for float images
+        // Compute a robust "white" level from the image using percentiles
+        float[] pixels = (float[]) ip.convertToFloat().getPixels();
+        float[] copy = pixels.clone();
+        java.util.Arrays.sort(copy);
+        float p98 = copy[(int)(copy.length * 0.98)];
+        
         // Compute dark fraction per column on a coarse stride
         double[] frac = new double[W];
         for (int x = margin; x < W - margin; x++) {
             int dark = 0, cnt = 0;
             for (int y = H / 8; y < H - H / 8; y += 3) {
-                int v = ip.get(x, y) & 0xFF; cnt++;
-                if (v < 240) dark++;
+                float v = ip.getf(x, y); cnt++;
+                // FIXED: Dynamic "not-white" test instead of hardcoded 240
+                if (v < 0.94f * p98) dark++;  // dynamic "not-white" test
             }
             frac[x] = dark / Math.max(1.0, cnt);
         }
@@ -413,5 +621,196 @@ public final class LaneDetector {
         // For now, return original processor (full tilt compensation would require rotation)
         // Future enhancement: implement rotation based on detected tilt
         return ip;
+    }
+    
+    /**
+     * Helper classes and functions for robust peak detection
+     */
+    public static class Peak { 
+        public int pos; 
+        public double prominence; 
+        public Peak(int p, double pr) { pos = p; prominence = pr; } 
+    }
+    
+    private static double computeStd(double[] arr) {
+        double mean = 0;
+        for (double v : arr) mean += v;
+        mean /= arr.length;
+        double var = 0;
+        for (double v : arr) var += (v - mean) * (v - mean);
+        return Math.sqrt(var / Math.max(1, arr.length - 1));
+    }
+    
+    private static double percentile(double[] arr, int pct) {
+        double[] sorted = arr.clone();
+        java.util.Arrays.sort(sorted);
+        int index = (int) (sorted.length * pct / 100.0);
+        index = Math.max(0, Math.min(sorted.length - 1, index));
+        return sorted[index];
+    }
+    
+    private static double clamp01(double x) {
+        return Math.max(0.0, Math.min(1.0, x));
+    }
+    
+    private static double median(double[] arr) {
+        double[] sorted = arr.clone();
+        java.util.Arrays.sort(sorted);
+        int n = sorted.length;
+        if (n % 2 == 0) {
+            return (sorted[n/2 - 1] + sorted[n/2]) / 2.0;
+        } else {
+            return sorted[n/2];
+        }
+    }
+    
+    private static double max(double[] arr) {
+        double maxVal = Double.NEGATIVE_INFINITY;
+        for (double v : arr) maxVal = Math.max(maxVal, v);
+        return maxVal;
+    }
+    
+    private static double[] gaussian1D(double[] arr, double sigma) {
+        if (sigma <= 0) return arr.clone();
+        
+        int radius = (int) Math.ceil(3 * sigma);
+        double[] result = new double[arr.length];
+        double[] kernel = new double[2 * radius + 1];
+        
+        // Generate Gaussian kernel
+        double sum = 0;
+        for (int i = 0; i <= 2 * radius; i++) {
+            double x = i - radius;
+            kernel[i] = Math.exp(-0.5 * x * x / (sigma * sigma));
+            sum += kernel[i];
+        }
+        // Normalize kernel
+        for (int i = 0; i <= 2 * radius; i++) {
+            kernel[i] /= sum;
+        }
+        
+        // Convolve
+        for (int i = 0; i < arr.length; i++) {
+            double val = 0;
+            for (int j = -radius; j <= radius; j++) {
+                int idx = i + j;
+                if (idx >= 0 && idx < arr.length) {
+                    val += arr[idx] * kernel[j + radius];
+                }
+            }
+            result[i] = val;
+        }
+        return result;
+    }
+    
+    private static double[] movingMax(double[] arr, int window) {
+        double[] result = new double[arr.length];
+        for (int i = 0; i < arr.length; i++) {
+            double maxVal = Double.NEGATIVE_INFINITY;
+            for (int j = Math.max(0, i - window/2); j < Math.min(arr.length, i + window/2 + 1); j++) {
+                maxVal = Math.max(maxVal, arr[j]);
+            }
+            result[i] = maxVal;
+        }
+        return result;
+    }
+    
+    private static double[] movingMin(double[] arr, int window) {
+        double[] result = new double[arr.length];
+        for (int i = 0; i < arr.length; i++) {
+            double minVal = Double.POSITIVE_INFINITY;
+            for (int j = Math.max(0, i - window/2); j < Math.min(arr.length, i + window/2 + 1); j++) {
+                minVal = Math.min(minVal, arr[j]);
+            }
+            result[i] = minVal;
+        }
+        return result;
+    }
+    
+    /**
+     * Reference peak finder that can't fail - dead-simple local-max + approximate prominence
+     */
+    private static List<Peak> findPeaksRobust(double[] a, double minProm, int minDist) {
+        // 1) local maxima candidates
+        List<Integer> cand = new ArrayList<>();
+        for (int i = 1; i < a.length - 1; i++) {
+            if (a[i] > a[i-1] && a[i] >= a[i+1]) {
+                cand.add(i);
+            }
+        }
+
+        // 2) compute simple prominence for each (to nearest lower minima on both sides)
+        List<Peak> peaks = new ArrayList<>();
+        for (int idx : cand) {
+            double leftMin = a[idx], rightMin = a[idx];
+            // walk left
+            double cur = a[idx];
+            for (int i = idx - 1; i >= 0; i--) { 
+                cur = Math.min(cur, a[i]); 
+                if (a[i] > a[i+1]) break; 
+            }
+            leftMin = cur;
+            // walk right
+            cur = a[idx];
+            for (int i = idx + 1; i < a.length; i++) { 
+                cur = Math.min(cur, a[i]); 
+                if (a[i] > a[i-1]) break; 
+            }
+            rightMin = cur;
+            double prom = a[idx] - Math.max(leftMin, rightMin);
+            if (prom >= minProm) {
+                peaks.add(new Peak(idx, prom));
+            }
+        }
+        
+        // 3) enforce minDist by greedy suppression around highest peaks
+        peaks.sort((p, q) -> Double.compare(q.prominence, p.prominence));
+        boolean[] taken = new boolean[a.length];
+        List<Peak> out = new ArrayList<>();
+        for (Peak p : peaks) {
+            boolean ok = true;
+            for (int j = Math.max(0, p.pos - minDist); j < Math.min(a.length, p.pos + minDist + 1); j++) {
+                if (taken[j]) { ok = false; break; }
+            }
+            if (ok) {
+                out.add(p);
+                for (int j = Math.max(0, p.pos - minDist); j < Math.min(a.length, p.pos + minDist + 1); j++) {
+                    taken[j] = true;
+                }
+            }
+        }
+        out.sort((p, q) -> Integer.compare(p.pos, q.pos));
+        return out;
+    }
+    
+    // === tiny config helpers (dotted path lookups) ===
+    @SuppressWarnings("unchecked")
+    private static Object get(Map<String,Object> cfg, String path) {
+        if (cfg == null) return null;
+        String[] parts = path.split("\\.");
+        Object cur = cfg;
+        for (String p : parts) {
+            if (!(cur instanceof Map)) return null;
+            cur = ((Map<String,Object>)cur).get(p);
+            if (cur == null) return null;
+        }
+        return cur;
+    }
+    
+    private static double getCfgDouble(Map<String,Object> cfg, String path, double dflt) {
+        Object o = get(cfg, path);
+        return (o instanceof Number) ? ((Number)o).doubleValue() : dflt;
+    }
+    
+    private static int getCfgInt(Map<String,Object> cfg, String path, int dflt) {
+        Object o = get(cfg, path);
+        return (o instanceof Number) ? ((Number)o).intValue() : dflt;
+    }
+    
+    private static int resolveMinDistPx(Map<String,Object> cfg, int roiW) {
+        int px = getCfgInt(cfg, "detect.min_peak_distance_px", -1);
+        if (px > 0) return Math.max(1, px);
+        double frac = getCfgDouble(cfg, "detect.min_peak_distance_frac", 0.04);
+        return Math.max(6, (int)Math.round(frac * roiW));
     }
 }

@@ -4,8 +4,8 @@ pre:
   clip_percentiles: [2.0, 98.0]  # tighter clipping for SDS
   normalize_intensity: true
   gaussian_sigma: 1.5
-  background_removal_radius: 30.0  # rolling ball radius for gels
-  enable_deskew: true
+  background_removal_radius: 0.0   # DISABLED - was creating white streaks
+  enable_deskew: false              # DISABLED - was creating skewing artifacts
   deskew_angle_threshold: 0.5  # degrees
   enable_debug_logging: true
   clahe:
@@ -14,9 +14,27 @@ pre:
     tile_grid: [8,8]
 
 detect:
-  prominence_frac: 0.12   # slightly higher for SDS
-  min_peak_distance_px: 8
+  # AUDITOR'S SAFE BASELINE SYSTEM: Config-driven parameters
+  min_peak_distance_frac: 0.04     # fraction of ROI width for lane spacing
+  prominence_frac: 0.06             # peak prominence threshold (was 0.12, made more lenient)
   rescue_enabled: true
+  
+  baseline:
+    method: "percentile"            # "none" | "percentile" | "morph" 
+    window_frac: 0.02               # 2% of ROI width (gentle vs old 4% = 32px!)
+    window_px: 0                    # 0 = use fraction; else explicit px
+    clamp_min_px: 3                 # Hard minimum bound (safety)
+    clamp_max_px: 12                # Hard maximum bound (was 32px destructive!)
+    quantile: 0.10                  # 10th percentile for baseline
+
+bands:
+  baseline:
+    method: "percentile"            # "none" | "percentile" | "morph" 
+    window_frac: 0.015              # 1.5% of ROI width for band detection (tighter than lane detection)
+    window_px: 0                    # 0 = use fraction; else explicit px
+    clamp_min_px: 2                 # Hard minimum bound for bands
+    clamp_max_px: 8                 # Hard maximum bound for bands (tighter than lanes)
+    quantile: 0.08                  # 8th percentile for band baseline (more sensitive)
 
 # Legacy parameters (for backward compatibility)
 detection:

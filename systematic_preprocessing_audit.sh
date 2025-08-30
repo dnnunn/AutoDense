@@ -56,7 +56,7 @@ restore_config() {
 
 # Process each image with each parameter
 test_count=0
-for image in tmp/*.{jpg,png}; do
+for image in samples/*.{jpg,png}; do
     [ -f "$image" ] || continue
     
     image_name=$(basename "$image")

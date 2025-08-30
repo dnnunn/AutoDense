@@ -59,33 +59,34 @@ public class ConfigManagerBridge {
             command.add("python3");
             command.add("-c");
             
-            // Python script that imports and uses the config_manager
+            // Python script that imports and uses the config_manager with proper formatting
             StringBuilder pythonScript = new StringBuilder();
-            pythonScript.append("import sys; import json; ");
-            pythonScript.append("sys.path.insert(0, '").append(projectRoot.resolve("autodense_autotune")).append("'); ");
-            pythonScript.append("from config_manager import create_config_manager; ");
-            pythonScript.append("manager = create_config_manager('").append(projectRoot).append("', '").append(workflowType).append("'); ");
+            pythonScript.append("import sys\n");
+            pythonScript.append("import json\n");
+            pythonScript.append("sys.path.insert(0, '").append(projectRoot.resolve("autodense_autotune")).append("')\n");
+            pythonScript.append("from config_manager import create_config_manager\n");
+            pythonScript.append("manager = create_config_manager('").append(projectRoot).append("', '").append(workflowType).append("')\n");
             
             // Handle optional parameters
             if (userConfigPath != null && !userConfigPath.isEmpty()) {
-                pythonScript.append("user_config = '").append(userConfigPath).append("'; ");
+                pythonScript.append("user_config = '").append(userConfigPath).append("'\n");
             } else {
-                pythonScript.append("user_config = None; ");
+                pythonScript.append("user_config = None\n");
             }
             
             if (cliOverrides != null && !cliOverrides.isEmpty()) {
-                pythonScript.append("cli_overrides = json.loads('''").append(cliOverrides).append("'''); ");
+                pythonScript.append("cli_overrides = json.loads('''").append(cliOverrides).append("''')\n");
             } else {
-                pythonScript.append("cli_overrides = None; ");
+                pythonScript.append("cli_overrides = None\n");
             }
             
-            // Load config with validation
-            pythonScript.append("try: ");
-            pythonScript.append("  config = manager.load_config(user_config, cli_overrides, validate=True); ");
-            pythonScript.append("  print(json.dumps(config, sort_keys=True)); ");
-            pythonScript.append("except Exception as e: ");
-            pythonScript.append("  print('ERROR:' + str(e), file=sys.stderr); ");
-            pythonScript.append("  sys.exit(1)");
+            // Load config with validation - proper Python formatting
+            pythonScript.append("try:\n");
+            pythonScript.append("    config = manager.load_config(user_config, cli_overrides, validate=True)\n");
+            pythonScript.append("    print(json.dumps(config, sort_keys=True))\n");
+            pythonScript.append("except Exception as e:\n");
+            pythonScript.append("    print('ERROR:' + str(e), file=sys.stderr)\n");
+            pythonScript.append("    sys.exit(1)");
             
             command.add(pythonScript.toString());
             
@@ -163,12 +164,13 @@ public class ConfigManagerBridge {
             command.add("-c");
             
             StringBuilder pythonScript = new StringBuilder();
-            pythonScript.append("import sys; import json; ");
-            pythonScript.append("sys.path.insert(0, '").append(projectRoot.resolve("autodense_autotune")).append("'); ");
-            pythonScript.append("from config_manager import create_config_manager; ");
-            pythonScript.append("manager = create_config_manager('").append(projectRoot).append("', '").append(workflowType).append("'); ");
-            pythonScript.append("user_config = '").append(userConfigPath != null ? userConfigPath : "").append("' if '").append(userConfigPath != null ? userConfigPath : "").append("' else None; ");
-            pythonScript.append("config = manager.load_config(user_config, None, validate=False); ");
+            pythonScript.append("import sys\n");
+            pythonScript.append("import json\n");
+            pythonScript.append("sys.path.insert(0, '").append(projectRoot.resolve("autodense_autotune")).append("')\n");
+            pythonScript.append("from config_manager import create_config_manager\n");
+            pythonScript.append("manager = create_config_manager('").append(projectRoot).append("', '").append(workflowType).append("')\n");
+            pythonScript.append("user_config = '").append(userConfigPath != null ? userConfigPath : "").append("' if '").append(userConfigPath != null ? userConfigPath : "").append("' else None\n");
+            pythonScript.append("config = manager.load_config(user_config, None, validate=False)\n");
             pythonScript.append("print(json.dumps(config, sort_keys=True))");
             
             command.add(pythonScript.toString());
@@ -208,10 +210,11 @@ public class ConfigManagerBridge {
             command.add("-c");
             
             String pythonScript = String.format(
-                "import sys; import json; " +
-                "sys.path.insert(0, '%s'); " +
-                "from config_manager import config_fingerprint; " +
-                "config = json.loads('''%s'''); " +
+                "import sys\n" +
+                "import json\n" +
+                "sys.path.insert(0, '%s')\n" +
+                "from config_manager import config_fingerprint\n" +
+                "config = json.loads('''%s''')\n" +
                 "print(config_fingerprint(config))",
                 projectRoot.resolve("autodense_autotune"),
                 config.toString()

@@ -1,9 +1,9 @@
-# Colony counting parameters - MINIMAL preprocessing for testing
+# Colony counting parameters - MINIMAL preprocessing (normalization destroys features)
 pre:
   invert_polarity: auto   # true|false|auto
-  clip_percentiles: [0.5, 99.5]  # gentle clipping
-  normalize_intensity: false      # DISABLED - was destroying features
-  gaussian_sigma: 0.5     # minimal smoothing
+  clip_percentiles: [0.5, 99.5]  # gentle clipping (only used if normalization enabled)
+  normalize_intensity: false      # DISABLED - rescaling destroys colony contrast
+  gaussian_sigma: 1.0     # basic smoothing
   background_removal_radius: 0.0  # DISABLED - was removing colonies
   enable_deskew: false    # colonies don't need deskewing
   deskew_angle_threshold: 0.5  # degrees
@@ -14,9 +14,29 @@ pre:
     tile_grid: [8,8]
 
 detect:
-  prominence_frac: 0.08   # lower for colony detection
-  min_peak_distance_px: 15  # larger distance for colonies
+  # AUDITOR'S SAFE BASELINE SYSTEM: Colony-specific config
+  min_peak_distance_frac: 0.05     # larger spacing for colonies vs lanes
+  prominence_frac: 0.08             # lower for colony detection
+  threshold_radius: 15              # required by colony_analysis validation
+  min_colony_size: 5.0              # required by colony_analysis validation  
   rescue_enabled: true
+  
+  baseline:
+    method: "none"                  # COLONIES ARE FRAGILE: default off
+    window_frac: 0.01               # if enabled, very gentle (1% vs 2% for gels)
+    window_px: 0                    # 0 = use fraction
+    clamp_min_px: 2                 # tighter clamps for colonies
+    clamp_max_px: 8                 # smaller max window
+    quantile: 0.05                  # lower quantile if needed
+
+bands:
+  baseline:
+    method: "none"                  # COLONIES DON'T HAVE BANDS: disabled
+    window_frac: 0.01               # not applicable for colonies
+    window_px: 0                    
+    clamp_min_px: 2                 
+    clamp_max_px: 8                 
+    quantile: 0.05
 
 # Legacy parameters (for backward compatibility)
 segmentation:
