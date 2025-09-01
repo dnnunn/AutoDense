@@ -401,11 +401,11 @@ public class GelAnalysisTools {
             // Suppress ROI Manager and ensure clean overlay workflow
             IJUtils.silenceRoiManager(img.image);
             
-            // Detect lanes using existing detector
-            List<Lane> lanes = LaneDetector.findLanes(
-                img.image, expectedLanes, constantSpacing, 
-                laneWidth, gridOffset, true
+            // Phase 1.2: Use truth preservation detection for dual reporting
+            LaneDetector.DetectionResult detectionResult = LaneDetector.findLanesWithTruthPreservation(
+                img.image, expectedLanes, constantSpacing, LaneDetector.Polarity.AUTO
             );
+            List<Lane> lanes = detectionResult.lanes;
             
             // Debug logging for lane detection diagnostics
             if (!lanes.isEmpty()) {
@@ -458,9 +458,12 @@ public class GelAnalysisTools {
             // Ensure this image remains current for subsequent operations
             store.setLastActiveImageHandle(img.handle);
             
-            // Build standardized success response
+            // Build standardized success response with Phase 1.2 dual reporting
             JSONObject data = new JSONObject()
                 .put("lanes_found", lanes.size())
+                .put("lanes_raw", detectionResult.rawCount)  // Phase 1.2: Raw detection count
+                .put("lanes_reconciled", detectionResult.finalCount)  // Phase 1.2: Final count after reconciliation
+                .put("reconciliation_explanation", detectionResult.reconciliationExplanation)  // Phase 1.2: Explanation
                 .put("overlay_handle", overlayHandle)
                 .put("analysis_handle", analysisHandle)
                 .put("image_handle", img.handle)
@@ -529,11 +532,21 @@ public class GelAnalysisTools {
         final List<Lane> lanes;
         final List<List<Band>> allBands;
         final int totalBands;
+        final int rawTotalBands;  // Phase 1.2: Raw detection count for truth preservation
 
         BandDetectionResult(List<Lane> lanes, List<List<Band>> allBands, int totalBands) {
             this.lanes = lanes;
             this.allBands = allBands;
             this.totalBands = totalBands;
+            this.rawTotalBands = totalBands;  // Default: raw same as final
+        }
+        
+        // Phase 1.2: Enhanced constructor with raw count tracking
+        BandDetectionResult(List<Lane> lanes, List<List<Band>> allBands, int totalBands, int rawTotalBands) {
+            this.lanes = lanes;
+            this.allBands = allBands;
+            this.totalBands = totalBands;
+            this.rawTotalBands = rawTotalBands;
         }
     }
 
@@ -581,19 +594,24 @@ public class GelAnalysisTools {
         SessionStore.ImageRecord img = store.getImage(params.imageHandle);
         List<List<Band>> allBands = new ArrayList<>();
         int totalBands = 0;
+        int rawTotalBands = 0;  // Phase 1.2: Track raw detection count
         
         for (int laneIndex = 0; laneIndex < lanes.size(); laneIndex++) {
             Lane lane = lanes.get(laneIndex);
             List<Band> bands = BandDetector.findBands(img.image, lane);
             allBands.add(bands);
             totalBands += bands.size();
+            rawTotalBands += bands.size();  // Phase 1.2: For now, same as final (no filtering yet)
             
             // Debug logging for band detection diagnostics
             logger.fine(String.format("[BANDS] lane i=%d, peaks=%d, prominence>=%.3f, sigma=%.1f", 
                 laneIndex + 1, bands.size(), params.prominence, params.smoothSigma));
         }
         
-        return new BandDetectionResult(lanes, allBands, totalBands);
+        // Phase 1.2: Log raw band detection count for truth preservation
+        logger.info(String.format("[TRUTH_PRESERVED] Raw band detection count: %d (before any adjustments)", rawTotalBands));
+        
+        return new BandDetectionResult(lanes, allBands, totalBands, rawTotalBands);
     }
 
     private String createBandDetectionOverlay(BandDetectionResult result, String imageHandle) {
@@ -662,6 +680,8 @@ public class GelAnalysisTools {
         JSONObject data = new JSONObject()
             .put("lanes_analyzed", result.lanes.size())
             .put("bands_total", result.totalBands)
+            .put("bands_raw", result.rawTotalBands)  // Phase 1.2: Raw detection count
+            .put("bands_reconciled", result.totalBands)  // Phase 1.2: Final count after reconciliation
             .put("overlay_handle", overlayHandle)
             .put("analysis_handle", analysisHandle)
             .put("image_handle", img.handle)

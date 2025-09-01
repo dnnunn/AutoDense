@@ -19,7 +19,7 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 | Document | Summary | Words | Last Verified |
 |----------|---------|--------|---------------|
 | **Architecture.md** | Detailed technical reference for AutoDense's handle-based architecture with Gemini orchestration and ImageJ execution | 403 | - |
-| **CLAUDE.md** | Concise session primer providing AI assistants with project context, capabilities, and development guidelines | 753 | - |
+| **CLAUDE.md** | Concise session primer providing AI assistants with project context, capabilities, and development guidelines | 753 | 2025-09-01 |
 | **docs/API_REFERENCE.md** | Technical reference for tool interfaces, schemas, and canonical API surface | 1189 | - |
 | **docs/CANONICAL_TOOLS_SUMMARY.md** | Streamlined Gemini interface definition with 8 core tool actions for simplified orchestration | 704 | - |
 | **docs/HANDLE_PERSISTENCE_STRATEGY.md** | Strategy for managing state persistence using handle-based system for images, overlays, and analyses | 767 | - |

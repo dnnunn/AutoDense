@@ -206,6 +206,22 @@ For a more detailed description of the Architecture see:
 * **Challenge pack validation:** Testing real-world optimization scenarios
 * **Python-Java bridge reliability:** Ensuring stable communication under optimization loads
 
+### 🔗 Critical Integration Requirements (September 2025)
+
+**IMPORTANT: `--no-exit` Flag for Gemini Optimizer Integration**
+
+* **Issue**: `System.exit(0)` added to fix CLI timeout issues **BREAKS** iterative optimization workflow
+* **Solution**: `--no-exit` flag implemented in AutotuneAnalysisCLI.java
+* **Usage**: When calling from Python optimizer, ALWAYS include `--no-exit` flag:
+  ```bash
+  java -cp ... com.betterdairy.autodense.cli.AutotuneAnalysisCLI --no-exit sds_page input.jpg config.yaml output/
+  ```
+* **Why Critical**: Without `--no-exit`, each analysis terminates the JVM, breaking optimization loops
+* **Behavior**: 
+  - Normal CLI usage: Calls `System.exit(0)` to prevent hanging threads
+  - With `--no-exit`: Returns normally, allowing continued execution for optimization cycles
+  - Error handling: Throws RuntimeException instead of `System.exit(1)` when `--no-exit` is used
+
 ### 🎯 Next Targets
 
 1. **Validate autotune performance** on representative gel/colony/PCR datasets

@@ -186,11 +186,15 @@ public final class ColonyAnalysisTools {
             
             // Detect colonies using unified detection system
             List<Colony> colonies = UnifiedColonyDetector.detect(rec.image, plateRoi, unifiedParams, pxPerMM);
+            int rawColonyCount = colonies.size(); // Phase 1.2: Capture raw detection count
             
             // Update colony diameters with proper mm conversion
             if (plate != null) {
                 colonies = updateColonyMeasurements(colonies, pxPerMM);
             }
+            
+            // Phase 1.2: Log raw colony detection count for truth preservation
+            logger.info(String.format("[TRUTH_PRESERVED] Raw colony detection count: %d (before any adjustments)", rawColonyCount));
             
             // Create and apply overlay
             Overlay ov = ColonyOverlay.renderDetection(colonies);
@@ -204,6 +208,8 @@ public final class ColonyAnalysisTools {
             JSONObject response = ok("count_colonies", new JSONObject()
                 .put("overlay_handle", ovh)
                 .put("colony_count", colonies.size())
+                .put("colonies_raw", rawColonyCount)  // Phase 1.2: Raw detection count
+                .put("colonies_reconciled", colonies.size())  // Phase 1.2: Final count after reconciliation
                 .put("min_diameter_px", detectionParams.minDiameterPx())
                 .put("max_diameter_px", detectionParams.maxDiameterPx())
                 .put("min_diameter_mm", ParameterConverter.UnitConversion.pxToMm(detectionParams.minDiameterPx(), pxPerMM))

@@ -7,7 +7,7 @@
     "detection_confidence": 0.95,
     "count_stability_score": 0.8,
     "lane_physics_violations": 0,
-    "coverage_lanes": 0.5,
+    "coverage_lanes": 0.35000000000000003,
     "rescue_used": false,
     "coverage_total": 0.3918662275867137,
     "baseline_pre_med": 0.8205342012293199,
@@ -42,8 +42,13 @@
   "meta": {},
   "diagnostics_png": "overlay.png",
   "metrics": {
-    "lane_count": 10,
-    "band_count": 0
+    "bands_reconciled": 0,
+    "lanes_reconciled": 7,
+    "lane_count": 7,
+    "lanes_raw": 7,
+    "band_count": 0,
+    "bands_raw": 0
   },
+  "reconciliation_explanation": "Raw detection preserved: 7 (no adjustments needed); Raw detection preserved: 0 (no adjustments needed)",
   "input_path": "samples/sds_gel.jpg"
 }

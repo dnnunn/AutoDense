@@ -296,4 +296,32 @@ Run current SDS test after Phase 1 changes:
 - **EtBr**: 11 peaks detected (raw) vs 20 expected, 0 bands detected  
 - **Colony**: 0 colonies detected (complete failure)
 
+### **CRITICAL INTEGRATION UPDATE (September 1, 2025)**
+
+**⚠️ GEMINI OPTIMIZER INTEGRATION BLOCKER RESOLVED**
+
+**Issue**: `System.exit(0)` added to fix CLI timeout issues **BREAKS** iterative optimization workflow
+- Each analysis call terminates the JVM, preventing optimization loops
+- Python-Java bridge cannot maintain process continuity
+
+**Solution**: `--no-exit` flag implemented in AutotuneAnalysisCLI.java (lines 94-103, 145-164)
+
+**MANDATORY for AI Integration**:
+```bash
+# ❌ BREAKS optimization (terminates JVM)
+java -cp ... AutotuneAnalysisCLI sds_page input.jpg config.yaml output/
+
+# ✅ WORKS with optimization (returns normally)  
+java -cp ... AutotuneAnalysisCLI --no-exit sds_page input.jpg config.yaml output/
+```
+
+**Integration Requirements**:
+1. **Python Bridge**: MUST include `--no-exit` in all subprocess calls
+2. **Error Handling**: Catches RuntimeException instead of System.exit(1)
+3. **Process Management**: Caller responsible for thread cleanup without System.exit()
+
+**Documentation Updated**:
+- CLAUDE.md: Added critical integration requirements section
+- This file: Added integration blocker resolution
+
 This remediation plan addresses the fundamental epistemological issue (truth vs priors), architectural disconnect (AI not invoked), and technical detection problems (config conflicts, band detection failure) in a systematic, testable approach.
