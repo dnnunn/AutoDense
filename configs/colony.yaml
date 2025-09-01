@@ -45,4 +45,11 @@ segmentation:
 post:
   merge_distance_px: 5  # pixels
 
+# Colony-specific detection parameters (WHAT THE JAVA CODE ACTUALLY READS!)
+colony_detection:
+  stain: "x-gal"          # Stain type for colony analysis
+  min_size: 5.0           # Minimum colony size in pixels
+  max_size: 1000.0        # Maximum colony size in pixels  
+  plate_layout: 1         # Plate layout configuration
+
 # TEMP CONFIG - variant: full - Fri Aug 29 08:57:14 BST 2025

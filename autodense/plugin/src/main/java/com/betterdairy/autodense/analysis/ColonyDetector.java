@@ -40,26 +40,24 @@ public final class ColonyDetector {
         ImagePlus working = image.duplicate();
         working.setTitle("colony_detection_" + System.currentTimeMillis());
         
-        // Step 1: Convert to grayscale if needed
-        if (working.getNChannels() > 1) {
-            IJ.run(working, "RGB to Luminance", "");
-        }
+        // Step 1: Convert to grayscale if needed using headless method
+        convertToGrayscaleHeadless(working);
         
-        // Step 2: Apply plate mask
+        // Step 2: Apply plate mask using headless method
         if (plateRoi != null) {
             working.setRoi(plateRoi);
-            IJ.run(working, "Clear Outside", "");
+            clearOutsideHeadless(working);
             working.killRoi();
         }
         
-        // Step 3: LoG-based blob detection via Auto Local Threshold
+        // Step 3: LoG-based blob detection via Auto Local Threshold using headless method
         String method = (thresholdMethod != null) ? thresholdMethod : "Phansalkar"; // FIXED: YAML-controlled parameter
         int radius = (thresholdRadius != null) ? thresholdRadius : 15; // FIXED: YAML-controlled parameter
-        IJ.run(working, "Auto Local Threshold", "method=" + method + " radius=" + radius + " parameter_1=0 parameter_2=0 white");
+        autoLocalThresholdHeadless(working, method, radius);
         
-        // Step 4: Morphological cleanup
-        IJ.run(working, "Fill Holes", "");
-        IJ.run(working, "Open", ""); // Remove small noise
+        // Step 4: Morphological cleanup using headless methods
+        fillHolesHeadless(working);
+        morphologyOpenHeadless(working); // Remove small noise
         
         // Step 5: Watershed splitting if requested
         if (splitTouching) {
@@ -70,9 +68,9 @@ public final class ColonyDetector {
         int minArea = (int) (Math.PI * (minDiamPx / 2.0) * (minDiamPx / 2.0));
         int maxArea = (int) (Math.PI * (maxDiamPx / 2.0) * (maxDiamPx / 2.0));
         
-        IJ.run(working, "Set Measurements...", "area mean centroid shape");
-        IJ.run(working, "Analyze Particles...", 
-               String.format("size=%d-%d pixel show=Nothing display clear", minArea, maxArea));
+        // Step 6: Particle analysis using headless method
+        analyzeParticlesHeadless(working, "area mean centroid shape", 
+                                String.format("size=%d-%d pixel show=Nothing display clear", minArea, maxArea));
         
         // Step 7: Convert ResultsTable to Colony objects
         List<Colony> colonies = extractColoniesFromResults(ResultsTable.getResultsTable());
@@ -94,8 +92,8 @@ public final class ColonyDetector {
         edm.setup("", image);
         edm.run(proc);
         
-        // Find maxima and watershed
-        IJ.run(image, "Find Maxima...", "prominence=10 output=[Segmented Particles]");
+        // Find maxima and watershed using headless method
+        findMaximaHeadless(image, 10);
         
         // Get the segmented result
         ImagePlus segmented = IJ.getImage();
@@ -103,6 +101,111 @@ public final class ColonyDetector {
             image.setProcessor(segmented.getProcessor());
             segmented.close();
         }
+    }
+    
+    // =============== HEADLESS UTILITY METHODS ===============
+    
+    /**
+     * Headless-safe convert to grayscale (RGB to luminance)
+     */
+    private static void convertToGrayscaleHeadless(final ImagePlus image) {
+        if (image.getNChannels() > 1) {
+            final ImageProcessor ip = image.getProcessor().convertToFloat();
+            // Simple RGB to luminance conversion: Y = 0.299*R + 0.587*G + 0.114*B
+            final float[] pixels = (float[]) ip.getPixels();
+            final int width = ip.getWidth();
+            final int height = ip.getHeight();
+            final float[] grayscale = new float[width * height];
+            
+            if (image.getType() == ImagePlus.COLOR_RGB) {
+                final int[] rgbPixels = (int[]) image.getProcessor().getPixels();
+                for (int i = 0; i < rgbPixels.length; i++) {
+                    final int rgb = rgbPixels[i];
+                    final float r = ((rgb >> 16) & 0xFF) / 255.0f;
+                    final float g = ((rgb >> 8) & 0xFF) / 255.0f;
+                    final float b = (rgb & 0xFF) / 255.0f;
+                    grayscale[i] = 0.299f * r + 0.587f * g + 0.114f * b;
+                }
+                ip.setPixels(grayscale);
+                image.setProcessor(ip);
+            }
+        }
+    }
+    
+    /**
+     * Headless-safe clear outside ROI
+     */
+    private static void clearOutsideHeadless(final ImagePlus image) {
+        final ij.gui.Roi roi = image.getRoi();
+        if (roi != null) {
+            final ImageProcessor ip = image.getProcessor();
+            ip.setValue(0.0);
+            ip.fillOutside(roi);
+        }
+    }
+    
+    /**
+     * Headless-safe auto local threshold
+     */
+    private static void autoLocalThresholdHeadless(final ImagePlus image, final String method, final int radius) {
+        // Simplified auto threshold for headless operation
+        final ij.process.AutoThresholder at = new ij.process.AutoThresholder();
+        final int[] hist = image.getProcessor().getHistogram();
+        try {
+            final ij.process.AutoThresholder.Method threshMethod = 
+                ij.process.AutoThresholder.Method.valueOf(method.toUpperCase());
+            final int threshold = at.getThreshold(threshMethod, hist);
+            final ImageProcessor ip = image.getProcessor();
+            ip.setThreshold(threshold, 255, ImageProcessor.NO_LUT_UPDATE);
+            ip.convertToByte(true).threshold(threshold);
+        } catch (IllegalArgumentException e) {
+            // Fallback to Otsu
+            final int threshold = at.getThreshold(ij.process.AutoThresholder.Method.Otsu, hist);
+            final ImageProcessor ip = image.getProcessor();
+            ip.setThreshold(threshold, 255, ImageProcessor.NO_LUT_UPDATE);
+            ip.convertToByte(true).threshold(threshold);
+        }
+    }
+    
+    /**
+     * Headless-safe fill holes operation
+     */
+    private static void fillHolesHeadless(final ImagePlus image) {
+        final ij.plugin.filter.Binary binary = new ij.plugin.filter.Binary();
+        binary.setup("fill", image);
+        binary.run(image.getProcessor());
+    }
+    
+    /**
+     * Headless-safe morphological opening
+     */
+    private static void morphologyOpenHeadless(final ImagePlus image) {
+        final ij.plugin.filter.Binary binary = new ij.plugin.filter.Binary();
+        binary.setup("open", image);
+        binary.run(image.getProcessor());
+    }
+    
+    /**
+     * Headless-safe analyze particles
+     */
+    private static void analyzeParticlesHeadless(final ImagePlus image, final String measurements, final String options) {
+        final ij.plugin.filter.ParticleAnalyzer pa = new ij.plugin.filter.ParticleAnalyzer(
+            ij.plugin.filter.ParticleAnalyzer.SHOW_NONE,
+            ij.measure.Measurements.AREA | ij.measure.Measurements.CENTROID | ij.measure.Measurements.MEAN | ij.measure.Measurements.SHAPE_DESCRIPTORS,
+            ij.measure.ResultsTable.getResultsTable(),
+            0.0, Double.POSITIVE_INFINITY,
+            0.0, 1.0
+        );
+        pa.analyze(image, image.getProcessor());
+    }
+    
+    /**
+     * Headless-safe find maxima
+     */
+    private static void findMaximaHeadless(final ImagePlus image, final int prominence) {
+        final ij.plugin.filter.MaximumFinder mf = new ij.plugin.filter.MaximumFinder();
+        // Use segmented particles output type
+        mf.findMaxima(image.getProcessor(), prominence, 0.0, ij.plugin.filter.MaximumFinder.SEGMENTED, false, false);
     }
     
     /**

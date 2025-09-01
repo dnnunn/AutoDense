@@ -8,6 +8,9 @@ import ij.ImagePlus;
 import ij.gui.OvalRoi;
 import ij.measure.ResultsTable;
 import ij.process.ImageProcessor;
+import ij.process.ColorProcessor;
+import ij.plugin.filter.Binary;
+import ij.plugin.filter.Convolver;
 
 import java.awt.Rectangle;
 import java.util.ArrayList;
@@ -108,13 +111,13 @@ public final class UnifiedColonyDetector {
         try {
             // Step 2: Convert to grayscale if needed
             if (working.getNChannels() > 1) {
-                IJ.run(working, "RGB to Luminance", "");
+                working = convertToGrayscaleHeadless(working);
             }
             
             // Step 3: Apply plate mask if provided
             if (plateRoi != null) {
                 working.setRoi(plateRoi);
-                IJ.run(working, "Clear Outside", "");
+                clearOutsideHeadless(working);
                 working.killRoi();
             }
             
@@ -196,7 +199,7 @@ public final class UnifiedColonyDetector {
     private static void applyMorphologicalFiltering(ImagePlus maskImage, DetectionParams params) {
         // Ensure mask is 8-bit grayscale for morphological operations
         if (maskImage.getType() != ImagePlus.GRAY8) {
-            IJ.run(maskImage, "8-bit", "");
+            convertTo8BitHeadless(maskImage);
         }
         
         // CRITICAL FIX: Ensure true binary values (0/255) for IJ1 operations
@@ -217,15 +220,15 @@ public final class UnifiedColonyDetector {
         // Replace with true binary processor
         maskImage.setProcessor(binaryProcessor);
         
-        // Now safe to apply IJ1 binary operations
+        // Now safe to apply headless binary operations
         // Opening to remove small noise
-        IJ.run(maskImage, "Options...", "iterations=1 count=1 black do=Open");
+        morphologyOpenHeadless(maskImage, 1);
         
         // Fill holes in colonies
-        IJ.run(maskImage, "Fill Holes", "");
+        fillHolesHeadless(maskImage);
         
         // Light closing to connect nearby fragments
-        IJ.run(maskImage, "Options...", "iterations=1 count=1 black do=Close");
+        morphologyCloseHeadless(maskImage, 1);
     }
     
     /**
@@ -383,4 +386,57 @@ public final class UnifiedColonyDetector {
         String report,          // Human-readable assessment
         boolean acceptable      // Whether detection is usable
     ) {}
+    
+    // ================== HEADLESS-SAFE IMPLEMENTATIONS ==================
+    
+    private static ImagePlus convertToGrayscaleHeadless(ImagePlus imp) {
+        ImagePlus result = imp.duplicate();
+        if (result.getProcessor() instanceof ColorProcessor) {
+            ImageProcessor ip = result.getProcessor().convertToByte(true);
+            result.setProcessor(ip);
+        }
+        return result;
+    }
+    
+    private static void clearOutsideHeadless(ImagePlus imp) {
+        if (imp.getRoi() != null) {
+            ImageProcessor ip = imp.getProcessor();
+            ip.setMask(imp.getRoi().getMask());
+            ip.fill();
+            ip.setMask(null);
+        }
+    }
+    
+    private static void convertTo8BitHeadless(ImagePlus imp) {
+        ImageProcessor ip = imp.getProcessor().convertToByte(true);
+        imp.setProcessor(ip);
+    }
+    
+    private static void morphologyOpenHeadless(ImagePlus imp, int iterations) {
+        ImageProcessor ip = imp.getProcessor();
+        for (int i = 0; i < iterations; i++) {
+            ip.erode();
+        }
+        for (int i = 0; i < iterations; i++) {
+            ip.dilate();
+        }
+    }
+    
+    private static void fillHolesHeadless(ImagePlus imp) {
+        ImageProcessor ip = imp.getProcessor();
+        // Simple hole filling using flood fill from edges
+        ij.plugin.filter.Binary binary = new ij.plugin.filter.Binary();
+        binary.setup("fill", imp);
+        binary.run(ip);
+    }
+    
+    private static void morphologyCloseHeadless(ImagePlus imp, int iterations) {
+        ImageProcessor ip = imp.getProcessor();
+        for (int i = 0; i < iterations; i++) {
+            ip.dilate();
+        }
+        for (int i = 0; i < iterations; i++) {
+            ip.erode();
+        }
+    }
 }

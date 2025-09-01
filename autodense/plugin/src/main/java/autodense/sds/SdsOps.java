@@ -24,7 +24,7 @@ public final class SdsOps {
 
     public static Map<String,Object> detectLanes(ImagePlus imp, Integer laneCount, Integer smoothPx, Double backgroundRemovalRadius, Path outDir) throws Exception {
         ImagePlus work = imp.duplicate();
-        IJ.run(work, "8-bit", "");
+        convertTo8BitHeadless(work);
         double bgRadius = (backgroundRemovalRadius != null) ? backgroundRemovalRadius : 50.0; // FIXED: YAML-controlled parameter
         if (bgRadius > 0) {
             new BackgroundSubtracter().rollingBallBackground(work.getProcessor(), bgRadius, false, false, false, false, false);
@@ -79,7 +79,7 @@ public final class SdsOps {
             ImageStatistics stats = imp.getStatistics(Measurements.RECT); // ensure rect
             imp.setRoi(lane);
             ImagePlus laneImp = new ImagePlus("lane", imp.getProcessor().crop());
-            IJ.run(laneImp, "8-bit", "");
+            convertTo8BitHeadless(laneImp);
             double bgRadius = (backgroundRemovalRadius != null) ? backgroundRemovalRadius : 30.0; // FIXED: YAML-controlled parameter
             if (bgRadius > 0) {
                 new BackgroundSubtracter().rollingBallBackground(laneImp.getProcessor(), bgRadius, false, false, false, false, false);
@@ -140,7 +140,7 @@ public final class SdsOps {
             Roi lane = findLaneRoi(imp, laneIdx); // your lane ROI from overlay
             imp.setRoi(lane);
             ImagePlus laneImp = new ImagePlus("lane", imp.getProcessor().crop());
-            IJ.run(laneImp, "8-bit", "");
+            convertTo8BitHeadless(laneImp);
             double bgRadius = (backgroundRemovalRadius != null) ? backgroundRemovalRadius : 20.0; // FIXED: YAML-controlled parameter
             if (bgRadius > 0) {
                 new BackgroundSubtracter().rollingBallBackground(laneImp.getProcessor(), bgRadius, false, false, false, false, false);
@@ -193,6 +193,16 @@ public final class SdsOps {
         return idx;
     }
     private static double max(double[] a){ double m=Double.NEGATIVE_INFINITY; for(double v:a) m=Math.max(m,v); return m; }
+    
+    // =============== HEADLESS UTILITY METHODS ===============
+    
+    /**
+     * Headless-safe 8-bit conversion (IJ1 API, no GUI)
+     */
+    private static void convertTo8BitHeadless(final ImagePlus image) {
+        final ImageProcessor ip = image.getProcessor().convertToByte(true);
+        image.setProcessor(ip);
+    }
     
     // --- Lane-wise background model helpers ---
     static double[] laneProfile(ImageProcessor ip) {

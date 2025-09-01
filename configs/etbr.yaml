@@ -43,6 +43,14 @@ constant_spacing: false
 background_subtraction: false  # FIXED: Disable to avoid multiple background removal
 peak_detection_method: "fluorescence"
 
+# EtBr-specific detection parameters (WHAT THE JAVA CODE ACTUALLY READS!)
+etbr_detection:
+  expected_lanes: 20              # EtBr gels typically have more lanes
+  sensitivity: 0.6                # Good sensitivity for fluorescent bands  
+  constant_spacing: false         # EtBr gels often have irregular spacing
+  background_subtraction: false   # Disable to avoid multiple background removal
+  peak_detection_method: "fluorescence"  # EtBr-specific detection method
+
 # === SYSTEMATIC TEST MODIFICATION ===
 # Original backed up to: /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/systematic_test_results/20250829_084715/etbr/etbr_gel_full/config_original_backup.yaml
 # Test variant: full (for etbr)

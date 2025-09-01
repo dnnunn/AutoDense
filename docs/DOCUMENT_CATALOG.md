@@ -4,13 +4,13 @@
 > - **Purpose:** Comprehensive catalog with concise summaries of all project documentation
 > - **Scope:** All markdown files across the entire project with categories, summaries, and metadata
 > - **Owner:** @davidnunn
-> - **Last-verified:** 2025-08-26
+> - **Last-verified:** 2025-08-30
 
 ## Overview
 
 This catalog provides a centralized reference for all AutoDense documentation, including concise summaries, categories, word counts, and verification dates. Use this as a starting point to navigate the documentation ecosystem.
 
-**Total Documents:** 80 files across 9 categories
+**Total Documents:** 85 files across 9 categories
 
 ---
 
@@ -65,6 +65,7 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 | **docs/DEPENDENCY_STRATEGY.md** | Library management strategy for maintaining minimal, secure, and stable dependencies | 979 | - |
 | **docs/DEMO_SYSTEM.md** | Testing framework and demonstration system for validating analysis workflows | 870 | - |
 | **docs/TOOL_VALIDATION_SYSTEM.md** | Quality assurance system for tool validation and response verification | 861 | 2025-08-26 |
+| **build.sh** | Unified build script eliminating directory confusion with automatic environment setup and simple test commands | 142 | 2025-08-30 |
 
 ## 📚 Documentation & Project Management
 
@@ -120,18 +121,22 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 | **SessionSummaries/Session_summary_August_28_2025_CLI_Architecture.md** | YAML-based preprocessing parameter architecture completion for CLI integration and systematic debugging | 1247 | 2025-08-28 |
 | **SessionSummaries/Session_summary_August_29_2025_Detection_Pipeline_Fix.md** | Breakthrough session resolving core detection failure with aggressive baseline removal fix and AI optimization roadmap | 1847 | 2025-08-29 |
 | **SessionSummaries/Session_summary_August_30_2025_Environment_Documentation.md** | Critical environment documentation session preventing session time waste and diagnosing fundamental lane detection algorithm flaws | 2400 | 2025-08-30 |
+| **SessionSummaries/Session_summary_August_30_2025_Configuration_Pipeline_Fix.md** | Configuration handoff resolution and build system organization with HeadlessException diagnosis | 1850 | 2025-08-30 |
 | **NextSteps/NextSteps_August_27_2025.md** | Priority tasks for LLM toolkit deployment, colony counting fixes, and consensus audit implementation | 1654 | 2025-08-27 |
 | **NextSteps/NextSteps_August_27_2025_Evening.md** | Focused priority tasks for completing PMD complexity refactoring and error handling standardization | 1456 | 2025-08-27 |
 | **NextSteps/NextSteps_August_28_2025_CLI_Architecture.md** | Priority debugging tasks for systematic YAML-controlled preprocessing parameter testing and root cause analysis | 1521 | 2025-08-28 |
 | **NextSteps/NextSteps_August_29_2025_Detection_Pipeline_Fix.md** | Implementation roadmap and priorities following detection pipeline breakthrough with 4-phase AI optimization plan | 2156 | 2025-08-29 |
 | **NextSteps/NextSteps_August_30_2025_Environment_Documentation.md** | Priority tasks following environment documentation focusing on critical lane detection algorithm fixes and accuracy improvements | 2100 | 2025-08-30 |
+| **NextSteps/NextSteps_August_30_2025_Configuration_Pipeline_Fix.md** | HeadlessException fix priority and full pipeline completion tasks following configuration resolution | 1650 | 2025-08-30 |
 | **Issues/Issues_August_27_2025.md** | Critical compilation blockers and system issues discovered during toolkit development with priority matrix | 2118 | 2025-08-27 |
 | **Issues/Issues_August_27_2025_Evening.md** | Technical debt and process issues from PMD complexity work including scattered development patterns | 1834 | 2025-08-27 |
 | **Issues/Issues_August_28_2025_CLI_Architecture.md** | Technical debt and unresolved preprocessing rotation issues identified during CLI architecture implementation | 1692 | 2025-08-28 |
 | **Issues/Issues_August_29_2025_Detection_Pipeline_Fix.md** | Issues identified during detection pipeline breakthrough including resolved baseline removal bug and remaining tasks | 2034 | 2025-08-29 |
 | **Issues/Issues_August_30_2025_Environment_Documentation.md** | Critical issues discovered during environment documentation including severe lane detection algorithm under-performance and biased targeting | 2800 | 2025-08-30 |
+| **Issues/Issues_August_30_2025_Configuration_Pipeline_Fix.md** | HeadlessException blocking and process improvements needed following configuration handoff resolution | 1550 | 2025-08-30 |
 | **StructureDocs/Structure_August_29_2025_Evening.md** | Complete project structure snapshot following detection pipeline breakthrough with 54 directories and 196 files | 2247 | 2025-08-29 |
 | **StructureDocs/Structure_August_30_2025_Environment_Fix.md** | Critical environment procedures documentation to prevent session time waste with exact Python venv, Maven build, and CLI testing procedures | 2847 | 2025-08-30 |
+| **StructureDocs/Structure_August_30_2025_Configuration_Pipeline_Fix.md** | Project structure snapshot with unified build system and resolved configuration infrastructure | 1400 | 2025-08-30 |
 | **ChatGPT/Cleanup.md** | Comprehensive documentation cleanup strategy and quality improvement guidelines | 4306 | 2025-08-26 |
 | **ChatGPT/What to fix (surgical and minimal).md** | Targeted fix list for preset wiring and band detection issues | 1955 | - |
 | **docs/DOCUMENTATION.md** | Comprehensive documentation overview and navigation guide | 2531 | 2025-08-26 |

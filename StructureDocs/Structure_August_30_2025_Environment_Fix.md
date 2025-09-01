@@ -6,53 +6,41 @@
 > - **Owner:** @davidnunn
 > - **Last-verified:** 2025-08-30
 
-## 🚨 CRITICAL: Essential Working Procedures (READ FIRST)
+## 🚨 CRITICAL: Essential Working Procedures (ORGANIZATIONAL CHAOS FIXED!)
 
-**These procedures prevent wasting 20+ minutes every session rediscovering basic facts:**
+**NEW UNIFIED SYSTEM - No more wasting 20+ minutes per session!**
 
-### Python Environment (MANDATORY)
+### One Command Solution (REPLACES ALL MANUAL PROCEDURES)
 ```bash
-# Packages exist in .venv, NOT globally - always activate first:
+# Complete build, test, and validation:
 cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense
 source .venv/bin/activate
-
-# Verify (should show yaml 6.0.2):
-python -c "import yaml; print('yaml version:', yaml.__version__)"
+./build.sh all
 ```
 
-### Java Compilation (EXACT PATHS)
+### Individual Commands (when needed)
 ```bash
-# Maven MUST run from plugin directory:
-cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin
+# Check environment:
+./build.sh env-check
 
-# For quick recompile:
-mvn compile -q
+# Build and test:
+./build.sh compile test-cli
 
-# For CLI testing (creates runtime-classpath.txt):
-mvn dependency:build-classpath -Dmdep.outputFile=target/runtime-classpath.txt -q
+# Clean rebuild:
+./build.sh clean all
 
-# For Makefile compatibility (creates classpath.txt):
-mvn compile dependency:build-classpath -Dmdep.outputFile=target/classpath.txt
-
-# For clean build:
-mvn clean package -DskipTests -q
+# Show all options:
+./build.sh help
 ```
 
-**CRITICAL DIFFERENCE:**
-- CLI testing uses: `target/runtime-classpath.txt`
-- Makefile expects: `target/classpath.txt`
-- Both point to same dependencies, different file names!
+**PROBLEMS SOLVED:**
+✅ **JAR Location**: Always at `autodense/plugin/target/autodense-plugin-0.1.0-SNAPSHOT.jar`  
+✅ **Classpath Files**: Both `classpath.txt` and `runtime-classpath.txt` generated automatically  
+✅ **Directory Confusion**: Script changes to correct directories automatically  
+✅ **Python Environment**: Integrated venv activation checking  
+✅ **Error Messages**: Clear guidance when something goes wrong  
 
-### Java CLI Testing (EXACT COMMAND)
-```bash
-# MUST run from root directory with correct JAR/classpath paths:
-cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense
-java -cp "autodense/plugin/target/autodense-plugin-0.1.0-SNAPSHOT.jar:$(cat autodense/plugin/target/runtime-classpath.txt)" \
-  com.betterdairy.autodense.cli.AutotuneAnalysisCLI \
-  --detect-only --preprocessed samples/sds_gel.jpg \
-  --roi 50,100,800,400 --config-yaml configs/sds.yaml \
-  --outdir output/detect_config_test
-```
+**SEE**: `/BUILD_GUIDE.md` for complete documentation
 
 ### Absolute Paths (MEMORIZE)
 - **Root**: `/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense`

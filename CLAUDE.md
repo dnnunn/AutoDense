@@ -213,3 +213,6 @@ For a more detailed description of the Architecture see:
 3. **Extend challenge packs** with additional analysis scenarios
 4. **Performance benchmarking** of optimization vs legacy modes
 5. **User interface integration** for optimization controls and feedback
+- before running any build, you must look at this file /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/StructureDocs/Absolute_Paths.md
+- always consult DEFINITIVE_BUILD_REFERENCE.md before any build/compile/test
+   operation to use the correct paths, environments, and procedures

@@ -5,6 +5,13 @@ AutoDense Codebase Packaging Script
 Creates tar.gz archive of AutoDense source code for audit, review, or distribution.
 Uses the same exclusion patterns as the audit system to ensure consistent packaging.
 
+Excludes large files that are not necessary for understanding AutoDense functionality:
+- Generated output images (9-11MB each, can be recreated by running tests)
+- Large dependency JARs (311MB total in packaging/resources)
+- Original gel sample images (19MB total in autodense/samples)
+- Build artifacts and caches
+- Previous archive files
+
 Usage:
     python3 scripts/package_codebase.py [output_directory]
 
@@ -56,6 +63,34 @@ EXCLUSION_PATTERNS = [
     "packaging/resources/Fiji.app",
     "packaging/resources/models",
     "packaging/resources/icons",
+    
+    # Large files not necessary for understanding functionality issues
+    # ================================================================
+    
+    # Generated output images (can be recreated by running tests)
+    "output",  # Contains large stage0_input.png, overlay.png files (9-11MB each)
+    
+    # Sample images (keep only essential test samples, exclude large originals)
+    "autodense/samples",  # Large original gel photos not needed for code analysis
+    
+    # Large dependency JARs (162 JARs in packaging/resources totaling 311MB)
+    "packaging/resources",  # Already covered above but being explicit
+    
+    # Previously generated code packages
+    "*codebase*.tar.gz",  # Avoid recursive packaging
+    "*audit*.tar.gz",     # Previous audit packages
+    
+    # Large Maven dependency cache (if present)
+    ".m2/repository",
+    
+    # Duplicate sample images in root samples/ vs autodense/samples/
+    # Keep root samples/ as they're smaller and used in current testing
+    
+    # Additional large files discovered during analysis
+    "*debug*toolkit*.tar.gz",  # Debug toolkit archives
+    "*preflight*priors*.tar.gz",  # Preflight archives
+    "*.pkl.gz",  # Python pickle files (numpy test data)
+    "*.ima.gz",  # Image data files (matplotlib sample data)
 ]
 
 def timestamp() -> str:
@@ -163,6 +198,13 @@ def create_package(root: Path, output_dir: Path, excludes: List[str]) -> Path:
 def main():
     """Main entry point for the packaging script."""
     try:
+        # Handle help request
+        if len(sys.argv) > 1 and sys.argv[1] in ["--help", "-h", "help"]:
+            print("Usage: python3 package_codebase.py [output_directory]")
+            print("\nPackages AutoDense codebase excluding large binary files.")
+            print("If no output directory is specified, creates package in project root.")
+            sys.exit(0)
+            
         # Determine output directory
         if len(sys.argv) > 2:
             print("Usage: python3 package_codebase.py [output_directory]")

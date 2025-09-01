@@ -1,0 +1,8 @@
+{
+  "input_hash": "d7f0a14a",
+  "task": "colony_count",
+  "meta": {},
+  "diagnostics_png": "overlay.png",
+  "metrics": {"colony_count": 0},
+  "input_path": "samples/colony_plate.jpg"
+}

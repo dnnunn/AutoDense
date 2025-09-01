@@ -1,0 +1,12 @@
+{
+  "input_hash": "685c6687",
+  "task": "etbr_agarose",
+  "meta": {},
+  "diagnostics_png": "overlay.png",
+  "metrics": {
+    "lane_count": 11,
+    "band_count": 0
+  },
+  "rescue_used": false,
+  "input_path": "samples/etbr_gel.jpg"
+}

@@ -1,0 +1,49 @@
+{
+  "input_hash": "ec3d953e",
+  "task": "sds_page",
+  "observation": {
+    "ladder_residual_mean": 1,
+    "ladder_linear_r2": 0,
+    "detection_confidence": 0.95,
+    "count_stability_score": 0.8,
+    "lane_physics_violations": 0,
+    "coverage_lanes": 0.5,
+    "rescue_used": false,
+    "coverage_total": 0.3918662275867137,
+    "baseline_pre_med": 0.8205342012293199,
+    "polarity": "auto_detect",
+    "prominence_frac": 0.06,
+    "position_jitter_px": 0.6,
+    "baseline": {
+      "method": "percentile",
+      "clamp_min_px": 3,
+      "window_frac": 0.02,
+      "window_px": 0,
+      "clamp_max_px": 12,
+      "quantile": 0.1
+    },
+    "profile_std_x": 52.68406854805663,
+    "lane_width_std": 10,
+    "profile_std_y": 29.117506329836317,
+    "baseline_post_med": 0,
+    "lane_width_mean": 50,
+    "analysis_method": "canonical_gel_workflow",
+    "ladder_band_count": 0,
+    "lane_spacing_cv": 0.15,
+    "signal_to_background_ratio": 0.15428395962428268,
+    "band_physics_violations": 0,
+    "lane_parallelism_score": 0.8,
+    "coverage_bands": 0,
+    "baseline_post_max": 0.17946579877068014,
+    "min_peak_distance_frac": 0.04,
+    "ladder_physics_score": 0.5,
+    "status": "ok"
+  },
+  "meta": {},
+  "diagnostics_png": "overlay.png",
+  "metrics": {
+    "lane_count": 10,
+    "band_count": 0
+  },
+  "input_path": "samples/sds_gel.jpg"
+}
