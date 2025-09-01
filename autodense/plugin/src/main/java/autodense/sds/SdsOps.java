@@ -1,28 +1,31 @@
 package autodense.sds;
 
-import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.Line;
 import ij.gui.Overlay;
 import ij.gui.Roi;
 import ij.measure.Measurements;
 import ij.plugin.filter.BackgroundSubtracter;
-import ij.plugin.filter.ParticleAnalyzer;
 import ij.process.ImageProcessor;
 import ij.process.ImageStatistics;
 import autodense.util.Csv;
 import autodense.util.OverlayExporter;
 
-import java.awt.*;
-import java.io.File;
-import java.nio.file.Files;
+import java.awt.Color;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class SdsOps {
 
-    public static Map<String,Object> detectLanes(ImagePlus imp, Integer laneCount, Integer smoothPx, Double backgroundRemovalRadius, Path outDir) throws Exception {
+    private SdsOps() {
+        // Utility class - prevent instantiation
+    }
+
+    public static Map<String, Object> detectLanes(final ImagePlus imp, final Integer laneCount, final Integer smoothPx, final Double backgroundRemovalRadius, final Path outDir) throws Exception {
         ImagePlus work = imp.duplicate();
         convertTo8BitHeadless(work);
         double bgRadius = (backgroundRemovalRadius != null) ? backgroundRemovalRadius : 50.0; // FIXED: YAML-controlled parameter
@@ -33,31 +36,39 @@ public final class SdsOps {
         ImageProcessor ip = work.getProcessor();
         int w = ip.getWidth(), h = ip.getHeight();
         double[] colSum = new double[w];
-        for (int x=0; x<w; x++) {
+        for (int x = 0; x < w; x++) {
             double sum = 0;
-            for (int y=0; y<h; y++) sum += (255 - (ip.get(x,y) & 0xff));
+            for (int y = 0; y < h; y++) {
+                sum += (255 - (ip.get(x, y) & 0xff));
+            }
             colSum[x] = sum;
         }
-        int k = smoothPx == null ? 9 : Math.max(3, smoothPx|1);
+        int k = smoothPx == null ? 9 : Math.max(3, smoothPx | 1);
         colSum = smooth(colSum, k);
 
         List<Integer> peaks = peakFind(colSum, /*minProm*/ 0.05 * max(colSum), /*minDist*/ 20);
         if (laneCount != null && peaks.size() != laneCount) {
             // fallback: split width evenly
             peaks = new ArrayList<>();
-            for (int i=0;i<laneCount;i++) peaks.add((int)Math.round((i+0.5)*(w/(double)laneCount)));
+            for (int i = 0; i < laneCount; i++) {
+                peaks.add((int) Math.round((i + 0.5) * (w / (double) laneCount)));
+            }
         }
 
-        int laneW = (int)Math.round(w / (double) Math.max(1, peaks.size()));
-        Overlay ov = imp.getOverlay(); if (ov == null) ov = new Overlay();
+        int laneW = (int) Math.round(w / (double) Math.max(1, peaks.size()));
+        Overlay ov = imp.getOverlay();
+        if (ov == null) {
+            ov = new Overlay();
+        }
         List<Roi> laneRois = new ArrayList<>();
-        for (int i=0;i<peaks.size();i++) {
+        for (int i = 0; i < peaks.size(); i++) {
             int cx = peaks.get(i);
-            int x0 = Math.max(0, cx - laneW/2);
-            Roi r = new Roi(x0, 0, Math.min(laneW, w-x0), h);
+            int x0 = Math.max(0, cx - laneW / 2);
+            Roi r = new Roi(x0, 0, Math.min(laneW, w - x0), h);
+            // TODO: Replace HSV with CIELAB color space as per checkstyle warning
             r.setStrokeColor(Color.getHSBColor(0.12f, 1f, 0.9f));
             r.setStrokeWidth(1.5);
-            r.setName("lane_"+(i+1));
+            r.setName("lane_" + (i + 1));
             ov.add(r);
             laneRois.add(r);
         }
@@ -65,12 +76,15 @@ public final class SdsOps {
 
         Path lanesPng = outDir.resolve("lanes_overlay.png");
         OverlayExporter.exportOverlayPNG(imp, lanesPng.toFile());
-        return Map.of("lanes_rois", "lane_"+laneRois.size(), "lanes_png", lanesPng.toString());
+        return Map.of("lanes_rois", "lane_" + laneRois.size(), "lanes_png", lanesPng.toString());
     }
 
-    public static Map<String,Object> detectBands(ImagePlus imp, double minProm, int minDistPx, Double backgroundRemovalRadius, Path outDir) throws Exception {
+    public static Map<String, Object> detectBands(final ImagePlus imp, final double minProm, final int minDistPx, final Double backgroundRemovalRadius, final Path outDir) throws Exception {
         // For each lane ROI, compute horizontal profile and detect peaks
-        Overlay ov = imp.getOverlay(); if (ov == null) throw new IllegalStateException("No lanes overlay");
+        Overlay ov = imp.getOverlay();
+        if (ov == null) {
+            throw new IllegalStateException("No lanes overlay");
+        }
         List<Roi> lanes = Arrays.asList(ov.toArray());
         List<Map<String,Object>> rows = new ArrayList<>();
         int gid = 1;

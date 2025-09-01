@@ -1,0 +1,19 @@
+{
+  "lanes": 6,
+  "detector_called": true,
+  "baseline": {
+    "method": "percentile",
+    "window_px": 0,
+    "window_frac": 0.02
+  },
+  "config_file": "configs/sds.yaml",
+  "status": "lanes_detected",
+  "lane_details": [
+    {"lane_id": "Lane[index=1, xStart=20, xEnd=64]"},
+    {"lane_id": "Lane[index=2, xStart=1044, xEnd=1099]"},
+    {"lane_id": "Lane[index=3, xStart=1517, xEnd=1577]"},
+    {"lane_id": "Lane[index=4, xStart=2027, xEnd=2083]"},
+    {"lane_id": "Lane[index=5, xStart=3033, xEnd=3099]"},
+    {"lane_id": "Lane[index=6, xStart=3535, xEnd=3611]"}
+  ]
+}

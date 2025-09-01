@@ -4,13 +4,13 @@
 > - **Purpose:** Comprehensive catalog with concise summaries of all project documentation
 > - **Scope:** All markdown files across the entire project with categories, summaries, and metadata
 > - **Owner:** @davidnunn
-> - **Last-verified:** 2025-08-30
+> - **Last-verified:** 2025-09-01
 
 ## Overview
 
 This catalog provides a centralized reference for all AutoDense documentation, including concise summaries, categories, word counts, and verification dates. Use this as a starting point to navigate the documentation ecosystem.
 
-**Total Documents:** 85 files across 9 categories
+**Total Documents:** 86 files across 9 categories
 
 ---
 
@@ -128,6 +128,7 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 | **NextSteps/NextSteps_August_29_2025_Detection_Pipeline_Fix.md** | Implementation roadmap and priorities following detection pipeline breakthrough with 4-phase AI optimization plan | 2156 | 2025-08-29 |
 | **NextSteps/NextSteps_August_30_2025_Environment_Documentation.md** | Priority tasks following environment documentation focusing on critical lane detection algorithm fixes and accuracy improvements | 2100 | 2025-08-30 |
 | **NextSteps/NextSteps_August_30_2025_Configuration_Pipeline_Fix.md** | HeadlessException fix priority and full pipeline completion tasks following configuration resolution | 1650 | 2025-08-30 |
+| **NextSteps/NextSteps_September_01_2025_Truth_Preservation_AI_Integration.md** | Comprehensive remediation plan addressing truth inflation, AI orchestration bypass, and detection algorithm failures with 4-phase implementation roadmap | 1638 | 2025-09-01 |
 | **Issues/Issues_August_27_2025.md** | Critical compilation blockers and system issues discovered during toolkit development with priority matrix | 2118 | 2025-08-27 |
 | **Issues/Issues_August_27_2025_Evening.md** | Technical debt and process issues from PMD complexity work including scattered development patterns | 1834 | 2025-08-27 |
 | **Issues/Issues_August_28_2025_CLI_Architecture.md** | Technical debt and unresolved preprocessing rotation issues identified during CLI architecture implementation | 1692 | 2025-08-28 |
