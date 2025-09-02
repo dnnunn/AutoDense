@@ -29,6 +29,7 @@ detect:
 
 bands:
   # MORE SENSITIVE BAND DETECTION
+  min_distance_px: 12              # explicit pixel distance for sensitive detection
   min_peak_distance_frac: 0.01     # Much smaller for band detection
   prominence_frac: 0.02             # Very sensitive for bands
   

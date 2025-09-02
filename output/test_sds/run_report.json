@@ -2,18 +2,45 @@
   "input_hash": "ec3d953e",
   "task": "sds_page",
   "observation": {
-    "ladder_residual_mean": 1,
-    "ladder_linear_r2": 0,
+    "ladder_residual_mean": 0.575,
+    "profile_zero_frac_after": 0.5002480158730159,
+    "ladder_linear_r2": 0.85,
     "detection_confidence": 0.95,
     "count_stability_score": 0.8,
+    "bands": {
+      "min_dist_px_used": 14,
+      "vprofile_zero_frac_after": [
+        0.25,
+        0.25,
+        0.25,
+        0.15,
+        0.15,
+        0.15,
+        0.15
+      ],
+      "counts_per_lane": [
+        4,
+        4,
+        4,
+        3,
+        3,
+        3,
+        3
+      ],
+      "prominence_used": 0.02,
+      "baseline": {},
+      "baseline_window_px_effective": 0
+    },
     "lane_physics_violations": 0,
     "coverage_lanes": 0.35000000000000003,
     "rescue_used": false,
+    "coverage_total_numerator": 4777934,
     "coverage_total": 0.3918662275867137,
     "baseline_pre_med": 0.8205342012293199,
     "polarity": "auto_detect",
     "prominence_frac": 0.06,
     "position_jitter_px": 0.6,
+    "coverage_bands_denominator": 12192768,
     "baseline": {
       "method": "percentile",
       "clamp_min_px": 3,
@@ -28,27 +55,29 @@
     "baseline_post_med": 0,
     "lane_width_mean": 50,
     "analysis_method": "canonical_gel_workflow",
-    "ladder_band_count": 0,
+    "ladder_band_count": 15,
     "lane_spacing_cv": 0.15,
     "signal_to_background_ratio": 0.15428395962428268,
     "band_physics_violations": 0,
     "lane_parallelism_score": 0.8,
-    "coverage_bands": 0,
+    "coverage_bands": 0.24,
     "baseline_post_max": 0.17946579877068014,
     "min_peak_distance_frac": 0.04,
+    "coverage_bands_numerator": 2400,
+    "coverage_total_denominator": 12192768,
     "ladder_physics_score": 0.5,
     "status": "ok"
   },
   "meta": {},
   "diagnostics_png": "overlay.png",
   "metrics": {
-    "bands_reconciled": 0,
+    "bands_reconciled": 24,
     "lanes_reconciled": 7,
     "lane_count": 7,
     "lanes_raw": 7,
-    "band_count": 0,
-    "bands_raw": 0
+    "band_count": 24,
+    "bands_raw": 24
   },
-  "reconciliation_explanation": "Raw detection preserved: 7 (no adjustments needed); Raw detection preserved: 0 (no adjustments needed)",
+  "reconciliation_explanation": "Raw detection preserved: 7 (no adjustments needed); Raw detection preserved: 24 (no adjustments needed)",
   "input_path": "samples/sds_gel.jpg"
 }

@@ -234,8 +234,9 @@ public final class LaneDetector {
         // Baseline: resolve from YAML (ROI-aware, clamped); safe defaults inside fromConfig()
         BaselineParams bp = BaselineParams.fromConfig(config, w);
         
-        // Apply safe baseline removal with logging
-        double[] profForPeaks = BaselineUtils.subtractBaseline(profX, bp, "lanes", System.err);
+        // Apply safe baseline removal with telemetry capture
+        BaselineUtils.BaselineResult laneBaselineResult = BaselineUtils.subtractBaselineWithTelemetry(profX, bp, "lanes", System.err);
+        double[] profForPeaks = laneBaselineResult.profile;
         
         // Peak spacing from config (px or frac vs ROI width), fallback to 0.04*w
         int minDistPx = resolveMinDistPx(config, w);

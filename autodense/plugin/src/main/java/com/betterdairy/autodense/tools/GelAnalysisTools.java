@@ -508,6 +508,34 @@ public class GelAnalysisTools {
         }
     }
 
+    /**
+     * Configuration-aware band detection that uses separate baseline parameters
+     * 
+     * CRITICAL FIX: This method ensures band detection uses bands.baseline config
+     * instead of inheriting lane baseline parameters.
+     * 
+     * @param args Standard band detection arguments
+     * @param config Full configuration map with bands.baseline section
+     * @return JSONObject with band detection results using proper baseline config
+     */
+    public JSONObject detectBandsWithConfig(JSONObject args, java.util.Map<String, Object> config) {
+        ToolSchemaValidator.requireImageHandle(args);
+        try {
+            // Enforce handle discipline first
+            JSONObject disciplineError = enforceHandleDiscipline(args);
+            if (disciplineError != null) return disciplineError;
+            BandDetectionParams params = validateAndPrepareBandDetectionParams(args);
+            List<Lane> lanes = getLanesForBandDetection(args, params.imageHandle);
+            
+            // CRITICAL FIX: Use the overloaded method that accepts full configuration
+            BandDetectionResult result = performBandDetection(lanes, params, config);
+            String overlayHandle = createBandDetectionOverlay(result, params.imageHandle);
+            return formatBandDetectionResponse(result, overlayHandle, params);
+        } catch (Exception e) {
+            return ErrorHandler.handleUnexpectedError("detect_bands_with_config", e, logger, recovery);
+        }
+    }
+
     // Supporting classes for band detection refactoring
     private static class BandDetectionParams {
         final String imageHandle;
@@ -562,14 +590,14 @@ public class GelAnalysisTools {
         double minBandHeight = clamp(args.optDouble("min_band_height", 3.0), 1.0, 20.0);
         double prominence = clamp(args.optDouble("min_prominence", 0.06), 0.01, 0.5);
         double smoothSigma = clamp(args.optDouble("smooth_sigma", 2.0), 1.0, 4.0);
-        double minPeakDistance = clamp(args.optDouble("min_peak_distance", 10.0), 8.0, 15.0);
+        double minPeakDistance = clamp(args.optDouble("min_distance_px", 14.0), 6.0, 32.0);
 
         // Echo parameters back for determinism
         args.put("sensitivity", sensitivity);
         args.put("min_band_height", minBandHeight);
         args.put("min_prominence", prominence);
         args.put("smooth_sigma", smoothSigma);
-        args.put("min_peak_distance", minPeakDistance);
+        args.put("min_distance_px", minPeakDistance);
 
         // Suppress ROI Manager
         IJUtils.silenceRoiManager(img.image);
@@ -596,19 +624,94 @@ public class GelAnalysisTools {
         int totalBands = 0;
         int rawTotalBands = 0;  // Phase 1.2: Track raw detection count
         
+        // Create configuration map from band detection parameters WITH baseline config
+        java.util.Map<String, Object> bandsConfig = new java.util.HashMap<>();
+        bandsConfig.put("min_distance_px", (int) params.minPeakDistance);
+        bandsConfig.put("prominence_frac", params.prominence);
+        
+        // CRITICAL FIX: Add band-specific baseline configuration to prevent lane parameter inheritance
+        java.util.Map<String, Object> bandBaselineConfig = new java.util.HashMap<>();
+        bandBaselineConfig.put("method", "percentile");
+        bandBaselineConfig.put("window_frac", 0.015);  // Gentle 1.5% window for bands
+        bandBaselineConfig.put("quantile", 0.08);      // Lower quantile for bands
+        bandBaselineConfig.put("clamp_min_px", 2);     // Smaller min for bands
+        bandBaselineConfig.put("clamp_max_px", 8);     // Smaller max for bands
+        bandsConfig.put("baseline", bandBaselineConfig);
+        
+        java.util.Map<String, Object> config = new java.util.HashMap<>();
+        config.put("bands", bandsConfig);
+        
         for (int laneIndex = 0; laneIndex < lanes.size(); laneIndex++) {
             Lane lane = lanes.get(laneIndex);
-            List<Band> bands = BandDetector.findBands(img.image, lane);
+            // Use config-aware band detection method
+            List<Band> bands = BandDetector.findBands(img.image, lane, config);
             allBands.add(bands);
             totalBands += bands.size();
             rawTotalBands += bands.size();  // Phase 1.2: For now, same as final (no filtering yet)
             
             // Debug logging for band detection diagnostics
-            logger.fine(String.format("[BANDS] lane i=%d, peaks=%d, prominence>=%.3f, sigma=%.1f", 
-                laneIndex + 1, bands.size(), params.prominence, params.smoothSigma));
+            logger.fine(String.format("[BANDS] lane i=%d, peaks=%d, prominence>=%.3f, sigma=%.1f, min_distance_px=%d", 
+                laneIndex + 1, bands.size(), params.prominence, params.smoothSigma, (int) params.minPeakDistance));
         }
         
         // Phase 1.2: Log raw band detection count for truth preservation
+        logger.info(String.format("[TRUTH_PRESERVED] Raw band detection count: %d (before any adjustments)", rawTotalBands));
+        
+        return new BandDetectionResult(lanes, allBands, totalBands, rawTotalBands);
+    }
+
+    /**
+     * Overloaded performBandDetection that accepts full configuration with band-specific baseline parameters
+     * 
+     * CRITICAL FIX: This method uses the provided config instead of creating its own,
+     * ensuring band baseline parameters are preserved and don't inherit from lane settings.
+     * 
+     * @param lanes List of lanes to detect bands in
+     * @param params Basic band detection parameters
+     * @param fullConfig Full configuration map with bands.baseline section
+     * @return BandDetectionResult with bands detected using proper baseline parameters
+     */
+    private BandDetectionResult performBandDetection(List<Lane> lanes, BandDetectionParams params, java.util.Map<String, Object> fullConfig) {
+        SessionStore.ImageRecord img = store.getImage(params.imageHandle);
+        List<List<Band>> allBands = new ArrayList<>();
+        int totalBands = 0;
+        int rawTotalBands = 0;
+        
+        // CRITICAL FIX: Use provided configuration directly instead of creating new one
+        // This preserves bands.baseline parameters from the optimization config
+        
+        // Log the configuration being used to verify baseline parameters
+        if (fullConfig.containsKey("bands")) {
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> bandsConfig = (java.util.Map<String, Object>) fullConfig.get("bands");
+            if (bandsConfig.containsKey("baseline")) {
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> bandBaseline = (java.util.Map<String, Object>) bandsConfig.get("baseline");
+                System.err.printf("[BASELINE_FIX] performBandDetection using bands.baseline: method=%s window_frac=%s quantile=%s%n",
+                                 bandBaseline.getOrDefault("method", "percentile"),
+                                 bandBaseline.getOrDefault("window_frac", "0.015"), 
+                                 bandBaseline.getOrDefault("quantile", "0.08"));
+            } else {
+                System.err.printf("[BASELINE_FIX] WARNING: No bands.baseline in config, will use detect.baseline fallback%n");
+            }
+        } else {
+            System.err.printf("[BASELINE_FIX] WARNING: No bands section in config%n");
+        }
+        
+        for (int laneIndex = 0; laneIndex < lanes.size(); laneIndex++) {
+            Lane lane = lanes.get(laneIndex);
+            // Use config-aware band detection method with PROVIDED configuration
+            List<Band> bands = BandDetector.findBands(img.image, lane, fullConfig);
+            allBands.add(bands);
+            totalBands += bands.size();
+            rawTotalBands += bands.size();
+            
+            // Debug logging for band detection diagnostics  
+            logger.fine(String.format("[BANDS] lane i=%d, peaks=%d, prominence>=%.3f, sigma=%.1f, min_distance_px=%d", 
+                laneIndex + 1, bands.size(), params.prominence, params.smoothSigma, (int) params.minPeakDistance));
+        }
+        
+        // Log raw band detection count for truth preservation
         logger.info(String.format("[TRUTH_PRESERVED] Raw band detection count: %d (before any adjustments)", rawTotalBands));
         
         return new BandDetectionResult(lanes, allBands, totalBands, rawTotalBands);

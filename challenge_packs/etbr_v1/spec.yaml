@@ -29,3 +29,6 @@ search:
     - file: "configs/etbr.yaml"
       path: "detect.min_peak_distance_frac"
       values: [0.03, 0.035, 0.04]  # Tighter spacing for EtBr bands
+    - file: "configs/etbr.yaml"
+      path: "bands.min_distance_px"
+      values: [10, 12, 14]  # Explicit pixel distances for EtBr band separation

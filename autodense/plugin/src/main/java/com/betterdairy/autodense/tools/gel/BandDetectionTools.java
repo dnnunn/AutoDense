@@ -233,14 +233,18 @@ public class BandDetectionTools extends BaseGelTool {
         double minBandHeight = clamp(args.optDouble("min_band_height", 3.0), 1.0, 20.0);
         double prominence = clamp(args.optDouble("min_prominence", 0.06), 0.01, 0.5);
         double smoothSigma = clamp(args.optDouble("smooth_sigma", 2.0), 1.0, 4.0);
-        double minPeakDistance = clamp(args.optDouble("min_peak_distance", 10.0), 8.0, 15.0);
+        double minPeakDistance = clamp(args.optDouble("min_distance_px", 14.0), 6.0, 32.0);
+
+        // Debug logging for band detection parameters
+        logger.info(String.format("[BAND_PARAMS] min_distance_px=%.1f (from args), clamped to %.1f", 
+            args.optDouble("min_distance_px", 14.0), minPeakDistance));
 
         // Echo parameters back for determinism
         args.put("sensitivity", sensitivity);
         args.put("min_band_height", minBandHeight);
         args.put("min_prominence", prominence);
         args.put("smooth_sigma", smoothSigma);
-        args.put("min_peak_distance", minPeakDistance);
+        args.put("min_distance_px", minPeakDistance);
 
         // Suppress ROI Manager
         IJUtils.silenceRoiManager(img.image);
@@ -266,15 +270,28 @@ public class BandDetectionTools extends BaseGelTool {
         List<List<Band>> allBands = new ArrayList<>();
         int totalBands = 0;
         
+        // Create configuration map from band detection parameters
+        java.util.Map<String, Object> bandsConfig = new java.util.HashMap<>();
+        bandsConfig.put("min_distance_px", (int) params.minPeakDistance);
+        bandsConfig.put("prominence_frac", params.prominence);
+        
+        java.util.Map<String, Object> config = new java.util.HashMap<>();
+        config.put("bands", bandsConfig);
+        
+        // Debug: Log the configuration being passed to BandDetector
+        logger.info(String.format("[BAND_DETECTION_TOOLS] Created config map: bands.min_distance_px=%d", 
+            (int) params.minPeakDistance));
+        
         for (int laneIndex = 0; laneIndex < lanes.size(); laneIndex++) {
             Lane lane = lanes.get(laneIndex);
-            List<Band> bands = BandDetector.findBands(img.image, lane);
+            // Use config-aware band detection method
+            List<Band> bands = BandDetector.findBands(img.image, lane, config);
             allBands.add(bands);
             totalBands += bands.size();
             
             // Debug logging for band detection diagnostics
-            logger.fine(String.format("[BANDS] lane i=%d, peaks=%d, prominence>=%.3f, sigma=%.1f", 
-                laneIndex + 1, bands.size(), params.prominence, params.smoothSigma));
+            logger.fine(String.format("[BANDS] lane i=%d, peaks=%d, prominence>=%.3f, sigma=%.1f, min_distance_px=%d", 
+                laneIndex + 1, bands.size(), params.prominence, params.smoothSigma, (int) params.minPeakDistance));
         }
         
         return new BandDetectionResult(lanes, allBands, totalBands);

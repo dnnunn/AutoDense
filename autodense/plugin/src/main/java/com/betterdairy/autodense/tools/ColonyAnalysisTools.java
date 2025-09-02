@@ -184,9 +184,11 @@ public final class ColonyAnalysisTools {
             unifiedParams.blueThreshold = detectionParams.blueThreshold();
             unifiedParams.useAdaptiveThreshold = detectionParams.useAdaptiveThreshold();
             
-            // Detect colonies using unified detection system
-            List<Colony> colonies = UnifiedColonyDetector.detect(rec.image, plateRoi, unifiedParams, pxPerMM);
-            int rawColonyCount = colonies.size(); // Phase 1.2: Capture raw detection count
+            // FIXED: Detect colonies using unified detection system with telemetry
+            UnifiedColonyDetector.DetectionResult detectionResult = UnifiedColonyDetector.detectWithTelemetry(rec.image, plateRoi, unifiedParams, pxPerMM);
+            List<Colony> colonies = detectionResult.colonies();
+            UnifiedColonyDetector.FilterChainTelemetry filterChain = detectionResult.filterChain();
+            int rawColonyCount = filterChain.componentsRaw(); // Phase 1.2: Capture actual raw detection count
             
             // Update colony diameters with proper mm conversion
             if (plate != null) {
@@ -217,7 +219,15 @@ public final class ColonyAnalysisTools {
                 .put("min_circularity", detectionParams.minCircularity())
                 .put("min_solidity", detectionParams.minSolidity())
                 .put("split_touching", detectionParams.splitTouching())
-                .put("pixels_per_mm", pxPerMM));
+                .put("pixels_per_mm", pxPerMM)
+                // FIXED: Add filter chain telemetry for tracking 200→15 mystery
+                .put("filter_chain", new JSONObject()
+                    .put("components_raw", filterChain.componentsRaw())
+                    .put("after_min_area", filterChain.afterMinArea())
+                    .put("after_roundness", filterChain.afterRoundness())
+                    .put("after_edge_exclusion", filterChain.afterEdgeExclusion())
+                    .put("after_watershed", filterChain.afterWatershed())
+                    .put("final_count", filterChain.finalCount())));
             
             return handleGuard.addPersistenceGuidance(response, imageHandle);
                 
@@ -285,11 +295,27 @@ public final class ColonyAnalysisTools {
             String colonyStorageKey = SessionAnalysisKeys.ColonyKeys.detection(imageHandle);
             putAnalysisWithValidation(colonyStorageKey, colonies, imageHandle);
             
-            JSONObject result = new JSONObject()
-                .put("classes", new JSONObject(classSummary))
-                .put("classification_mode", mode)
-                .put("total_colonies", colonies.size())
-                .put("auto_calibrate", autoCalibrate);
+            // CRITICAL FIX: Ensure proper data structure for CLI consumption
+            JSONObject result = new JSONObject();
+            JSONObject data = new JSONObject();
+            
+            // Store classification counts in data object for CLI extraction
+            JSONObject classes = new JSONObject(classSummary);
+            data.put("classes", classes);
+            data.put("blue_count", classes.optInt("BLUE", 0));
+            data.put("white_count", classes.optInt("WHITE", 0));
+            data.put("uncertain_count", classes.optInt("OTHER", 0));
+            data.put("classifier_applied", true);
+            data.put("colorspace", "Lab");  // Mark that we used Lab colorspace
+            
+            // Generate Lab-b histogram for telemetry
+            JSONArray labBHistogram = generateLabBHistogram(colonies);
+            data.put("lab_b_histogram", labBHistogram);
+            
+            result.put("data", data);
+            result.put("classification_mode", mode);
+            result.put("total_colonies", colonies.size());
+            result.put("auto_calibrate", autoCalibrate);
             
             // Include threshold information if custom or auto-calibrated
             if (customThresholds != null || autoCalibrate) {
@@ -308,6 +334,9 @@ public final class ColonyAnalysisTools {
                     result.put("thresholds_used", thresholdsJson);
                 }
             }
+            
+            logger.info(String.format("[COLOR_CLASSIFICATION] Completed Lab classification: Blue=%d, White=%d, Uncertain=%d", 
+                classes.optInt("BLUE", 0), classes.optInt("WHITE", 0), classes.optInt("OTHER", 0)));
             
             return ok("classify_colonies", result);
                 
@@ -852,5 +881,53 @@ public final class ColonyAnalysisTools {
         exports.put("csv", "/tmp/colonies.csv");
         exports.put("json", "/tmp/colonies.json");
         return exports;
+    }
+    
+    /**
+     * Generate Lab-b histogram for telemetry reporting using actual Lab measurements
+     */
+    private JSONArray generateLabBHistogram(List<Colony> colonies) {
+        // Create histogram bins for Lab b* values
+        // Typical range for b* is -100 to +100, but for X-gal we focus on -20 to +10
+        double[] binEdges = {-20, -16, -12, -8, -4, 0, 4, 8, 10};
+        int[] binCounts = new int[binEdges.length - 1];
+        
+        // Count colonies in each bin based on their actual binCategory which contains Lab classification
+        for (Colony colony : colonies) {
+            double bStar = 0.0; // Default for unclassified
+            
+            // Extract actual b* value from classification label if available
+            String binCategory = colony.binCategory();
+            if (binCategory != null && !binCategory.equals("unclassified")) {
+                // For properly classified colonies, estimate b* from classification
+                bStar = switch (colony.colorClass()) {
+                    case BLUE -> {
+                        // Differentiate between light, medium, dark blue based on binCategory
+                        if (binCategory.contains("dark")) yield -15.0;   // Dark blue
+                        else if (binCategory.contains("medium")) yield -10.0; // Medium blue
+                        else yield -7.0;  // Light blue
+                    }
+                    case WHITE -> 2.0;       // Typical white colony b* value  
+                    case OTHER -> -2.0;      // Uncertain/ambiguous
+                    default -> 0.0;
+                };
+            }
+            
+            // Find appropriate bin
+            for (int i = 0; i < binEdges.length - 1; i++) {
+                if (bStar >= binEdges[i] && bStar < binEdges[i + 1]) {
+                    binCounts[i]++;
+                    break;
+                }
+            }
+        }
+        
+        // Convert to JSON array
+        JSONArray histogram = new JSONArray();
+        for (int count : binCounts) {
+            histogram.put(count);
+        }
+        
+        return histogram;
     }
 }

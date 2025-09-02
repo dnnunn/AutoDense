@@ -8,13 +8,63 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
 import java.awt.Rectangle;
 
 public final class BandDetector {
     private BandDetector() {}
 
+    /**
+     * Find bands with configuration-aware baseline parameters
+     * 
+     * @param imp ImagePlus to analyze
+     * @param lane Lane to detect bands within
+     * @param config Configuration map with bands.baseline settings
+     * @return List of detected bands with proper baseline handling
+     */
+    public static List<Band> findBands(ImagePlus imp, Lane lane, Map<String,Object> config) {
+        // Get band-specific baseline parameters from config
+        int laneWidth = lane.xEnd() - lane.xStart() + 1;
+        BaselineParams bandBaseline = BaselineParams.fromBandConfig(config, laneWidth);
+        
+        // Build vertical profile for this lane
+        float[] laneProfile = buildLaneProfile(imp, lane);
+        
+        // Apply band-specific baseline subtraction
+        double[] laneProfileDouble = new double[laneProfile.length];
+        for (int i = 0; i < laneProfile.length; i++) {
+            laneProfileDouble[i] = laneProfile[i];
+        }
+        
+        // Use band-specific baseline parameters for gentle processing
+        double[] baselineCorrected = BaselineUtils.subtractBaseline(
+            laneProfileDouble, bandBaseline, "bands", System.err);
+        
+        // Convert back to float array for existing peak detection logic
+        float[] correctedProfile = new float[baselineCorrected.length];
+        for (int i = 0; i < baselineCorrected.length; i++) {
+            correctedProfile[i] = (float) baselineCorrected[i];
+        }
+        
+        // Continue with existing band detection logic using corrected profile and config
+        return findBandsFromProfile(imp, lane, correctedProfile, config);
+    }
+
+    /**
+     * Legacy method - uses hardcoded parameters
+     * @deprecated Use findBands(ImagePlus, Lane, Map<String,Object>) instead
+     */
+    @Deprecated
     public static List<Band> findBands(ImagePlus imp, Lane lane) {
-        // Enhanced band detection with local prominence and adaptive parameters
+        // Build lane profile and use existing logic
+        float[] laneProfile = buildLaneProfile(imp, lane);
+        return findBandsFromProfile(imp, lane, laneProfile, null);
+    }
+
+    /**
+     * Extract helper method: build vertical intensity profile for a lane
+     */
+    private static float[] buildLaneProfile(ImagePlus imp, Lane lane) {
         ImageProcessor ip = imp.getProcessor();
         int w = ip.getWidth();
         int h = ip.getHeight();
@@ -33,6 +83,18 @@ public final class BandDetector {
             }
             laneProfile[y] = sum / laneWidth; // mean intensity row-wise in lane
         }
+        
+        return laneProfile;
+    }
+
+    /**
+     * Extract helper method: perform band detection from a lane profile
+     */
+    private static List<Band> findBandsFromProfile(ImagePlus imp, Lane lane, float[] laneProfile, Map<String,Object> config) {
+        ImageProcessor ip = imp.getProcessor();
+        int h = imp.getHeight();
+        int x0 = Math.max(0, lane.xStart());
+        int x1 = Math.min(imp.getWidth() - 1, lane.xEnd());
 
         // Adaptive smoothing based on gel type
         // DNA: smaller features (~6-10 px), SDS: larger features (~8-12 px)
@@ -47,10 +109,8 @@ public final class BandDetector {
             inverted[i] = maxVal - smooth[i];
         }
         
-        // Adaptive parameters based on gel type and lane height
-        GelType gelType = estimateGelType(laneProfile);
-        int minPeakDistance = gelType == GelType.DNA ? 
-            Math.max(6, h / 100) : Math.max(8, h / 80); // DNA: 6-10px, SDS: 8-12px
+        // Get minimum peak distance from configuration or use adaptive fallback
+        int minPeakDistance = getMinPeakDistanceFromConfig(config, laneProfile, h);
         
         double minProminence = 0.05; // 5% relative prominence
         double minHeight = getMean(inverted) + 0.5 * getStd(inverted);
@@ -285,6 +345,53 @@ public final class BandDetector {
             sumSq += (val - mean) * (val - mean);
         }
         return (float)Math.sqrt(sumSq / Math.max(1, array.length - 1));
+    }
+    
+    /**
+     * Extract minimum peak distance from configuration with adaptive fallback
+     */
+    private static int getMinPeakDistanceFromConfig(Map<String,Object> config, float[] laneProfile, int height) {
+        if (config != null) {
+            System.err.printf("[BAND_CONFIG] Received config with keys: %s%n", config.keySet());
+            // Try to get bands section from config
+            Object bandsObj = config.get("bands");
+            System.err.printf("[BAND_CONFIG] bands object type: %s, value: %s%n", 
+                bandsObj != null ? bandsObj.getClass().getSimpleName() : "null", bandsObj);
+            if (bandsObj instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String,Object> bandsConfig = (Map<String,Object>) bandsObj;
+                System.err.printf("[BAND_CONFIG] bands section keys: %s%n", bandsConfig.keySet());
+                
+                // First priority: explicit pixel distance (check both naming conventions)
+                Object minPeakDistancePx = bandsConfig.get("min_peak_distance_px");
+                if (minPeakDistancePx == null) {
+                    minPeakDistancePx = bandsConfig.get("min_distance_px");
+                }
+                if (minPeakDistancePx instanceof Number) {
+                    int pixelDistance = ((Number) minPeakDistancePx).intValue();
+                    // Clamp to reasonable range (6-32px)
+                    int clampedDistance = Math.max(6, Math.min(32, pixelDistance));
+                    System.err.printf("[BAND_CONFIG] Using min_distance_px=%d (clamped from %d)%n", clampedDistance, pixelDistance);
+                    return clampedDistance;
+                }
+                
+                // Second priority: fractional distance of lane height
+                Object minPeakDistanceFrac = bandsConfig.get("min_peak_distance_frac");
+                if (minPeakDistanceFrac instanceof Number) {
+                    double frac = ((Number) minPeakDistanceFrac).doubleValue();
+                    int fracDistance = Math.max(6, (int)(height * frac));
+                    return Math.min(32, fracDistance);
+                }
+            }
+        }
+        
+        // Fallback: adaptive parameters based on gel type and lane height
+        GelType gelType = estimateGelType(laneProfile);
+        int adaptiveDistance = gelType == GelType.DNA ? 
+            Math.max(6, height / 100) : Math.max(8, height / 80); // DNA: 6-10px, SDS: 8-12px
+        System.err.printf("[BAND_CONFIG] Using adaptive fallback min_distance_px=%d (gel_type=%s, height=%d)%n", 
+            adaptiveDistance, gelType, height);
+        return adaptiveDistance;
     }
 
     private static double medianSideBackground(ImageProcessor ip, int x0, int x1, int u, int d, int expand) {

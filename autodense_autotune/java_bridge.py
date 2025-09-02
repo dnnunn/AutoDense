@@ -8,6 +8,11 @@ Java ImageJ-based analysis tools. It handles:
 - Result parsing and validation
 - Error handling and logging
 
+🔴 CRITICAL REQUIREMENT: --no-exit FLAG 🔴
+ALL calls to AutotuneAnalysisCLI MUST include --no-exit flag or the optimization
+loop will quietly die when the Java process terminates. This bridge automatically
+adds --no-exit to all Java CLI invocations.
+
 Usage:
     python -m autodense_autotune.java_bridge <task> --input <image> --config <config> --outdir <output>
 """
@@ -284,14 +289,16 @@ def run_java_analysis(task: str, input_path: str, config_path: str, output_dir: 
     jvm_options.extend(java_opts)
     
     # Construct command based on execution type
+    # CRITICAL: --no-exit flag required for optimizer integration
     cmd = [
         java_exe,
         *jvm_options,
         main_class,
-        task,
-        input_path,
-        config_path,
-        output_dir
+        '--task', task,
+        '--input', input_path,
+        '--config', config_path,
+        '--output', output_dir,
+        '--no-exit'  # CRITICAL: Keeps Java process alive for optimization loops
     ]
     
     # Get timeout from environment
@@ -895,12 +902,15 @@ def preflight(task, input_path, base_config_path, priors=None, outdir=None):
             base_config = yaml.safe_load(f)
         
         # Run Java CLI to get image statistics and initial analysis
+        java_exe = find_java_executable()
+        classpath = build_classpath()
         java_cmd = [
-            'java', '-Xmx4G', '-Djava.awt.headless=true',
-            '-cp', f'{JAR_PATH}:{DEPENDENCY_PATH}',
+            java_exe, '-Xmx4G', '-Djava.awt.headless=true',
+            '-cp', classpath,  # Use dynamic classpath instead of hardcoded paths
             'com.betterdairy.autodense.cli.AutotuneAnalysisCLI',
-            '--detect-only', task, input_path, base_config_path,
-            outdir or '/tmp/preflight', 'true'  # Minimal analysis for preflight
+            '--detect-only', '--task', task, '--input', input_path, 
+            '--config', base_config_path, '--output', outdir or '/tmp/preflight',
+            '--no-exit'  # CRITICAL: Required for optimizer integration
         ]
         
         logger.info(f"Running preflight analysis: {' '.join(java_cmd)}")

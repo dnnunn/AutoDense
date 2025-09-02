@@ -10,6 +10,22 @@
 
 This document consolidates ALL essential information to prevent path/environment assumptions and build errors.
 
+## 🔴 CRITICAL OPTIMIZER WARNING: --no-exit FLAG REQUIRED
+
+**⚠️ BRIGHT RED BOX WARNING ⚠️**
+```
+🚨 FOR OPTIMIZATION/AUTOTUNE INTEGRATION: ALWAYS USE --no-exit FLAG 🚨
+
+When calling AutotuneAnalysisCLI from Python bridge or optimization loops:
+✅ CORRECT: java ... AutotuneAnalysisCLI --task sds --input ... --output ... --no-exit
+❌ WRONG:   java ... AutotuneAnalysisCLI --task sds --input ... --output ... 
+
+WITHOUT --no-exit: Java process terminates and breaks Python-Java bridge
+WITH --no-exit:    Java process stays alive for optimization loop communication
+
+ALL PYTHON BRIDGE CALLS MUST INCLUDE --no-exit OR OPTIMIZER QUIETLY DIES!
+```
+
 ---
 
 ## 📁 ABSOLUTE PATHS (MEMORIZE THESE)
@@ -80,11 +96,14 @@ cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense
 ./build.sh test-detect   # Detection-only mode (faster)
 ```
 
-### Python Bridge Testing
+### Python Bridge Testing (⚠️ REQUIRES --no-exit)
 ```bash
 cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense_autotune
+# 🚨 CRITICAL: Python bridge must pass --no-exit to Java CLI
 python3 -c "from java_bridge import run_sds_page; run_sds_page('/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/samples/sds_gel.jpg', '/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/configs/sds.yaml', '/tmp/test_output')"
 ```
+
+**🔴 MANDATORY**: Verify java_bridge.py passes --no-exit flag to all Java CLI calls
 
 ---
 

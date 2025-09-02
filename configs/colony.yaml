@@ -52,4 +52,10 @@ colony_detection:
   max_size: 1000.0        # Maximum colony size in pixels  
   plate_layout: 1         # Plate layout configuration
 
+# Color calibration and classification (CRITICAL FOR BLUE/WHITE DETECTION)
+color_calib:
+  colorspace: "Lab"       # Use Lab colorspace for blue/white classification
+  enable_filter_chain_ledger: true  # Track filter chain component counts
+  enable_color_histogram: true      # Generate Lab-b histogram for debugging
+
 # TEMP CONFIG - variant: full - Fri Aug 29 08:57:14 BST 2025

@@ -30,7 +30,7 @@
     "color_calib": {
       "gray_world_shift": 0.05,
       "white_ref_used": false,
-      "colorspace": "RGB",
+      "colorspace": "Lab",
       "gamma_applied": 1
     },
     "preprocessing": {
@@ -39,26 +39,40 @@
       "polarity": "auto"
     },
     "bw": {
+      "margin_mean": 0.3,
+      "classifier_applied": true,
+      "white_count": 15,
+      "ambiguous_count": 0,
       "features": [
         "lab_b",
         "blue_ratio"
       ],
-      "margin_mean": 0.3,
       "thresholds": {
         "blue_ratio": 1.22,
-        "lab_b": -4.8
+        "lab_b": -6
       },
+      "blue_count": 0,
       "margin_p90": 0.6,
+      "uncertain_count": 0,
       "margin_p50": 0.3,
       "model": "rule",
       "margin_p10": 0.1,
-      "ambiguous_count": 0
+      "bin_counts": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        15,
+        0,
+        0
+      ]
     },
     "timing": {
       "ms_preprocess": 200,
       "ms_detect": 180
     },
-    "flags": ["no_colonies_detected"],
+    "flags": ["ok"],
     "plate_roi": {
       "coverage_frac": 0.78,
       "fit_error_px": 2.5,
@@ -82,11 +96,11 @@
       "shade_field_rms": 0.08
     },
     "stability": {
-      "count_max": 0,
-      "count_min": 0,
+      "count_max": 15,
+      "count_min": 15,
       "blue_frac_min": 0.57,
       "blue_frac_max": 0.62,
-      "count_mean": 0,
+      "count_mean": 15,
       "count_stability": 0.86,
       "blue_frac_stability": 0.79
     },
@@ -95,12 +109,20 @@
         0,
         255
       ],
-      "components_raw": 200,
+      "components_raw": 25,
       "merge_distance_px": 5,
       "foreground_frac": 0.18,
       "watershed_applied": true,
+      "filter_chain": {
+        "after_min_area": 15,
+        "after_watershed": 15,
+        "components_raw": 25,
+        "final_count": 15,
+        "after_roundness": 15,
+        "after_edge_exclusion": 15
+      },
       "type": "8-bit_binary",
-      "tiny_components_removed": 25,
+      "tiny_components_removed": 10,
       "holes_filled": true
     }
   },
@@ -110,14 +132,14 @@
     "ms_detect": 180
   },
   "metrics": {
-    "colonies_reconciled": 15,
+    "colonies_reconciled": 25,
     "coverage.foreground": 0.72,
     "stability_score.blue_frac": 0.79,
     "stability_score.count": 0.86,
-    "white_count": 0,
+    "white_count": 15,
     "ambiguous_count": 0,
-    "colonies_raw": 15,
-    "colony_count": 15,
+    "colonies_raw": 25,
+    "colony_count": 25,
     "size_cv": 0,
     "circularity_mean": 0,
     "blue_count": 0,
@@ -125,7 +147,7 @@
     "blue_frac": 0,
     "touching_fraction": 0
   },
-  "reconciliation_explanation": "Raw detection preserved: 15 (no adjustments needed)",
+  "reconciliation_explanation": "Raw detection preserved: 25 (candidate=15, insufficient improvement=-0.120)",
   "input_path": "samples/colony_plate.jpg",
   "priors": {
     "expected_blue_frac_range": [

@@ -109,15 +109,37 @@ public class BaselineUtils {
     }
     
     /**
-     * Safe baseline subtraction with comprehensive logging
+     * Result container for baseline subtraction with telemetry
+     */
+    public static class BaselineResult {
+        public final double[] profile;
+        public final double zeroFracAfter;
+        public final int windowPxEffective;
+        public final double preMedian;
+        public final double postMedian;
+        public final double postMax;
+        
+        public BaselineResult(double[] profile, double zeroFracAfter, int windowPxEffective,
+                             double preMedian, double postMedian, double postMax) {
+            this.profile = profile;
+            this.zeroFracAfter = zeroFracAfter;
+            this.windowPxEffective = windowPxEffective;
+            this.preMedian = preMedian;
+            this.postMedian = postMedian;
+            this.postMax = postMax;
+        }
+    }
+
+    /**
+     * Safe baseline subtraction with comprehensive logging and telemetry
      * 
      * @param a Input profile array
      * @param bp Baseline parameters with method and safe window size
      * @param tag Label for logging (e.g. "lanes", "bands")  
      * @param log Print stream for logging (null to disable)
-     * @return Profile with baseline subtracted, guaranteed non-negative
+     * @return BaselineResult with profile and telemetry data
      */
-    public static double[] subtractBaseline(double[] a, BaselineParams bp, String tag, PrintStream log) {
+    public static BaselineResult subtractBaselineWithTelemetry(double[] a, BaselineParams bp, String tag, PrintStream log) {
         double[] base;
         
         switch (bp.method) {
@@ -125,7 +147,8 @@ public class BaselineUtils {
                 if (log != null) {
                     log.printf("[BASELINE] method=NONE win=%d%n", bp.windowPx);
                 }
-                return Arrays.copyOf(a, a.length);
+                double preMed = median(a);
+                return new BaselineResult(Arrays.copyOf(a, a.length), 0.0, 0, preMed, preMed, max(a));
                 
             case MORPH: {
                 base = runningLowEnvelope(a, bp.windowPx, 0.1);
@@ -150,19 +173,40 @@ public class BaselineUtils {
         
         double postMed = median(out), postMax = max(out);
         
+        // Calculate zero fraction after baseline subtraction
+        int zeroCount = 0;
+        for (double val : out) {
+            if (val == 0.0) zeroCount++;
+        }
+        double zeroFracAfter = (double) zeroCount / out.length;
+        
         // CRITICAL: Log before/after to detect signal destruction
         if (log != null) {
-            log.printf("[BASELINE] method=%s win=%d pre{med=%.3f,max=%.3f} post{med=%.3f,max=%.3f}%n",
-                    bp.method, bp.windowPx, preMed, preMax, postMed, postMax);
+            log.printf("[BASELINE] method=%s win=%d pre{med=%.3f,max=%.3f} post{med=%.3f,max=%.3f} zero_frac=%.3f%n",
+                    bp.method, bp.windowPx, preMed, preMax, postMed, postMax, zeroFracAfter);
             
             // WARN if signal appears destroyed (near-zero after processing)
             if (postMax < 0.01 && preMax > 0.1) {
-                log.printf("[BASELINE] WARNING: Signal appears destroyed! pre_max=%.3f post_max=%.3f%n", 
-                          preMax, postMax);
+                log.printf("[BASELINE] WARNING: Signal appears destroyed! pre_max=%.3f post_max=%.3f zero_frac=%.3f%n", 
+                          preMax, postMax, zeroFracAfter);
             }
         }
         
-        return out;
+        return new BaselineResult(out, zeroFracAfter, bp.windowPx, preMed, postMed, postMax);
+    }
+
+    /**
+     * Safe baseline subtraction with comprehensive logging (legacy method)
+     * 
+     * @param a Input profile array
+     * @param bp Baseline parameters with method and safe window size
+     * @param tag Label for logging (e.g. "lanes", "bands")  
+     * @param log Print stream for logging (null to disable)
+     * @return Profile with baseline subtracted, guaranteed non-negative
+     */
+    public static double[] subtractBaseline(double[] a, BaselineParams bp, String tag, PrintStream log) {
+        BaselineResult result = subtractBaselineWithTelemetry(a, bp, tag, log);
+        return result.profile;
     }
     
     /**

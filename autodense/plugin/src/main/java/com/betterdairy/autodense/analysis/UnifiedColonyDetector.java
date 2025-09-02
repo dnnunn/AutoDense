@@ -99,10 +99,30 @@ public final class UnifiedColonyDetector {
     }
     
     /**
-     * Primary detection method with comprehensive parameter support
+     * Detection result with filter chain tracking
      */
-    public static List<Colony> detect(ImagePlus image, OvalRoi plateRoi, 
-                                    DetectionParams params, double pixelsPerMM) {
+    public static record DetectionResult(
+        List<Colony> colonies,
+        FilterChainTelemetry filterChain
+    ) {}
+    
+    /**
+     * Filter chain telemetry for tracking component reduction
+     */
+    public static record FilterChainTelemetry(
+        int componentsRaw,
+        int afterMinArea,
+        int afterRoundness,
+        int afterEdgeExclusion,
+        int afterWatershed,
+        int finalCount
+    ) {}
+    
+    /**
+     * Primary detection method with comprehensive parameter support and filter tracking
+     */
+    public static DetectionResult detectWithTelemetry(ImagePlus image, OvalRoi plateRoi, 
+                                                    DetectionParams params, double pixelsPerMM) {
         
         // Step 1: Prepare working image
         ImagePlus working = image.duplicate();
@@ -132,14 +152,24 @@ public final class UnifiedColonyDetector {
                 applyWatershedSeparation(maskImage);
             }
             
-            // Step 7: Particle analysis with comprehensive filtering
-            List<Colony> colonies = analyzeParticlesAsColonies(maskImage, params, pixelsPerMM);
+            // Step 7: Particle analysis with comprehensive filtering and telemetry
+            ParticleAnalysisResult analysisResult = analyzeParticlesWithTelemetry(maskImage, params, pixelsPerMM);
             
-            return colonies;
+            return new DetectionResult(analysisResult.colonies, analysisResult.filterChain);
             
         } finally {
             working.close();
         }
+    }
+    
+    /**
+     * Primary detection method with comprehensive parameter support (legacy interface)
+     */
+    public static List<Colony> detect(ImagePlus image, OvalRoi plateRoi, 
+                                    DetectionParams params, double pixelsPerMM) {
+        
+        DetectionResult result = detectWithTelemetry(image, plateRoi, params, pixelsPerMM);
+        return result.colonies;
     }
     
     /**
@@ -253,11 +283,18 @@ public final class UnifiedColonyDetector {
     }
     
     /**
-     * Analyze particles and convert to Colony objects with comprehensive measurements
+     * Particle analysis result with filter chain telemetry
      */
-    private static List<Colony> analyzeParticlesAsColonies(ImagePlus maskImage, 
-                                                         DetectionParams params, double pixelsPerMM) {
-        List<Colony> colonies = new ArrayList<>();
+    private static record ParticleAnalysisResult(
+        List<Colony> colonies,
+        FilterChainTelemetry filterChain
+    ) {}
+    
+    /**
+     * Analyze particles with comprehensive filtering and telemetry tracking
+     */
+    private static ParticleAnalysisResult analyzeParticlesWithTelemetry(ImagePlus maskImage, 
+                                                                       DetectionParams params, double pixelsPerMM) {
         
         // Configure comprehensive measurements
         int measurements = ij.measure.Measurements.AREA | 
@@ -267,29 +304,47 @@ public final class UnifiedColonyDetector {
                           ij.measure.Measurements.SHAPE_DESCRIPTORS |
                           ij.measure.Measurements.MEAN;
         
-        // Configure particle analysis options
-        int options = ij.plugin.filter.ParticleAnalyzer.SHOW_NONE | 
-                     ij.plugin.filter.ParticleAnalyzer.CLEAR_WORKSHEET;
-        
-        if (params.removeRimArtifacts) {
-            options |= ij.plugin.filter.ParticleAnalyzer.EXCLUDE_EDGE_PARTICLES;
-        }
+        // First pass: count raw components without any filtering
+        ResultsTable rawRT = new ResultsTable();
+        ij.plugin.filter.ParticleAnalyzer rawCounter = new ij.plugin.filter.ParticleAnalyzer(
+            ij.plugin.filter.ParticleAnalyzer.SHOW_NONE | ij.plugin.filter.ParticleAnalyzer.CLEAR_WORKSHEET,
+            measurements, rawRT,
+            0, Double.POSITIVE_INFINITY, // No size filtering
+            0.0, 1.0  // No circularity filtering
+        );
+        rawCounter.analyze(maskImage);
+        int componentsRaw = rawRT.getCounter();
         
         // Convert diameter constraints to area
         double minAreaPx = Math.PI * Math.pow(params.minDiameterPx / 2.0, 2);
         double maxAreaPx = Math.PI * Math.pow(params.maxDiameterPx / 2.0, 2);
         
-        // Run particle analysis
+        // Configure particle analysis options with filtering
+        int options = ij.plugin.filter.ParticleAnalyzer.SHOW_NONE | 
+                     ij.plugin.filter.ParticleAnalyzer.CLEAR_WORKSHEET;
+        
+        boolean excludeEdges = params.removeRimArtifacts;
+        if (excludeEdges) {
+            options |= ij.plugin.filter.ParticleAnalyzer.EXCLUDE_EDGE_PARTICLES;
+        }
+        
+        // Run particle analysis with area filtering
         ResultsTable rt = new ResultsTable();
         ij.plugin.filter.ParticleAnalyzer pa = new ij.plugin.filter.ParticleAnalyzer(
             options, measurements, rt,
             minAreaPx, maxAreaPx,
-            params.minCircularity, 1.0
+            0.0, 1.0  // No circularity filtering yet - we'll do it manually to track counts
         );
         
         pa.analyze(maskImage);
+        int afterMinArea = rt.getCounter();
         
-        // Convert results to Colony objects
+        // Manual filtering with count tracking
+        List<Colony> colonies = new ArrayList<>();
+        int afterRoundness = 0;
+        int afterEdgeExclusion = 0;
+        
+        // Convert results to Colony objects with step-by-step filtering
         for (int i = 0; i < rt.getCounter(); i++) {
             // Extract basic measurements
             double x = rt.getValue("X", i);
@@ -299,36 +354,76 @@ public final class UnifiedColonyDetector {
             double solidity = rt.getValue("Solidity", i);
             double meanIntensity = rt.getValue("Mean", i);
             
-            // Quality filtering
+            // Step 1: Roundness/circularity filtering
             if (circularity >= params.minCircularity && solidity >= params.minSolidity) {
-                // Calculate derived measurements
-                double diameterPx = 2.0 * Math.sqrt(area / Math.PI);
-                double diameterMM = diameterPx / pixelsPerMM;
+                afterRoundness++;
                 
-                // Determine size class
-                ColonySize sizeClass = determineSizeClass(diameterMM);
+                // Step 2: Edge exclusion (if enabled and not already done by ParticleAnalyzer)
+                boolean nearEdge = false;
+                if (!excludeEdges) { // Only check manually if ParticleAnalyzer didn't already exclude
+                    // Check if colony is near image edge
+                    int imageWidth = maskImage.getWidth();
+                    int imageHeight = maskImage.getHeight();
+                    double edgeBuffer = params.minDiameterPx; // Use min diameter as buffer
+                    nearEdge = (x < edgeBuffer || y < edgeBuffer || 
+                               x > imageWidth - edgeBuffer || y > imageHeight - edgeBuffer);
+                }
                 
-                // Create Colony object
-                Colony colony = new Colony(
-                    i + 1,                          // index
-                    x, y,                           // centroid coordinates
-                    area,                           // area in pixels
-                    diameterPx,                     // diameter in pixels
-                    diameterMM,                     // diameter in mm
-                    circularity,                    // circularity
-                    solidity,                       // solidity
-                    meanIntensity,                  // mean intensity
-                    ColonyColor.OTHER,              // color class (to be determined by classifier)
-                    0.0,                           // color confidence (to be determined)
-                    sizeClass,                      // size class
-                    "unclassified"                  // bin category (to be determined)
-                );
-                
-                colonies.add(colony);
+                if (!nearEdge) {
+                    afterEdgeExclusion++;
+                    
+                    // Calculate derived measurements
+                    double diameterPx = 2.0 * Math.sqrt(area / Math.PI);
+                    double diameterMM = diameterPx / pixelsPerMM;
+                    
+                    // Determine size class
+                    ColonySize sizeClass = determineSizeClass(diameterMM);
+                    
+                    // Create Colony object
+                    Colony colony = new Colony(
+                        colonies.size() + 1,            // index
+                        x, y,                           // centroid coordinates
+                        area,                           // area in pixels
+                        diameterPx,                     // diameter in pixels
+                        diameterMM,                     // diameter in mm
+                        circularity,                    // circularity
+                        solidity,                       // solidity
+                        meanIntensity,                  // mean intensity
+                        ColonyColor.OTHER,              // color class (to be determined by classifier)
+                        0.0,                           // color confidence (to be determined)
+                        sizeClass,                      // size class
+                        "unclassified"                  // bin category (to be determined)
+                    );
+                    
+                    colonies.add(colony);
+                }
             }
         }
         
-        return colonies;
+        // Step 3: Watershed count (colonies count doesn't change after watershed, just shapes)
+        int afterWatershed = colonies.size(); // Watershed modifies shapes but not count
+        int finalCount = colonies.size();
+        
+        // Create filter chain telemetry
+        FilterChainTelemetry filterChain = new FilterChainTelemetry(
+            componentsRaw,
+            afterMinArea,
+            afterRoundness,
+            afterEdgeExclusion,
+            afterWatershed,
+            finalCount
+        );
+        
+        return new ParticleAnalysisResult(colonies, filterChain);
+    }
+    
+    /**
+     * Analyze particles and convert to Colony objects (legacy interface)
+     */
+    private static List<Colony> analyzeParticlesAsColonies(ImagePlus maskImage, 
+                                                         DetectionParams params, double pixelsPerMM) {
+        ParticleAnalysisResult result = analyzeParticlesWithTelemetry(maskImage, params, pixelsPerMM);
+        return result.colonies;
     }
     
     /**

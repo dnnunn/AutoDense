@@ -15,8 +15,8 @@ pre:
 
 detect:
   # AUDITOR'S SAFE BASELINE SYSTEM: EtBr-specific config
-  min_peak_distance_frac: 0.035     # slightly tighter spacing for EtBr vs SDS
-  prominence_frac: 0.06              # lenient for fluorescent bands (was 0.10)
+  min_peak_distance_frac: 0.028     # relaxed for more lanes (was 0.035)
+  prominence_frac: 0.045             # relaxed for more lanes (was 0.06)
   rescue_enabled: true
   
   baseline:
@@ -28,13 +28,18 @@ detect:
     quantile: 0.08                  # lower quantile for fluorescent baseline
 
 bands:
+  # Band detection parameters for EtBr gels
+  min_distance_px: 12              # explicit pixel distance between bands
+  min_peak_distance_frac: 0.025    # fraction-based fallback
+  prominence_frac: 0.03             # sensitive for EtBr bands
+  
   baseline:
     method: "percentile"            # gentle baseline for EtBr band detection
-    window_frac: 0.012              # 1.2% of ROI width for band detection (tighter than lane)
+    window_frac: 0.01               # 1% window to prevent profile zeroing
     window_px: 0                    # 0 = use fraction; else explicit px
     clamp_min_px: 2                 # Hard minimum bound for bands
     clamp_max_px: 6                 # Hard maximum bound for bands (tighter for fluorescent)
-    quantile: 0.06                  # 6th percentile for fluorescent band baseline
+    quantile: 0.12                  # raised from 0.06 to prevent zeroing baseline
 
 # Legacy parameters (for backward compatibility)
 expected_lanes: 12

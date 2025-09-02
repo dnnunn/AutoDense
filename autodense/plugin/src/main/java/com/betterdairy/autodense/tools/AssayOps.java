@@ -3,6 +3,7 @@ package com.betterdairy.autodense.tools;
 import com.betterdairy.autodense.session.SessionStore;
 import com.betterdairy.autodense.session.SessionRecovery;
 import com.betterdairy.autodense.model.Models.*;
+import com.betterdairy.autodense.analysis.ColonyClassifier;
 import com.betterdairy.autodense.util.ErrorHandler;
 import com.betterdairy.autodense.util.ImageJResourceManager;
 import ij.IJ;
@@ -381,11 +382,14 @@ public class AssayOps {
     }
     
     /**
-     * Robust X-gal blue colony detection addressing plate lighting, plastic, and media issues
+     * Robust X-gal blue colony detection using proper Lab colorspace classification
      */
     private List<Colony> detectXGalColonies(ImagePlus imp, double minSize, double maxSize) {
         List<Colony> colonies = new ArrayList<>();
         ImagePlus balanced = null;
+        
+        // Track filter chain for telemetry
+        FilterChainTelemetry telemetry = new FilterChainTelemetry();
         
         try {
             // Step 1: White-balance using plate blank region (or automatic gray-world)
@@ -400,70 +404,131 @@ public class AssayOps {
             
             // Step 5: Create binary mask and morphological operations
             ij.process.ImageProcessor mask = createBinaryMask(blueIndex, threshold);
-            morphologicalOpen(mask);  // Remove dust
-            fillHoles(mask);
             
-            // Step 6: Analyze particles -> ROIs
+            // Track raw components before filtering
+            telemetry.componentsRaw = countComponents(mask);
+            logger.info(String.format("[FILTER_CHAIN] Raw components: %d", telemetry.componentsRaw));
+            
+            morphologicalOpen(mask);  // Remove dust
+            telemetry.afterMinArea = countComponents(mask);
+            logger.info(String.format("[FILTER_CHAIN] After morphological open: %d", telemetry.afterMinArea));
+            
+            fillHoles(mask);
+            telemetry.afterRoundness = countComponents(mask);
+            logger.info(String.format("[FILTER_CHAIN] After fill holes: %d", telemetry.afterRoundness));
+            
+            // Step 6: Analyze particles with comprehensive filtering -> ROIs
             ij.measure.ResultsTable rt = new ij.measure.ResultsTable();
             ij.plugin.frame.RoiManager rm = new ij.plugin.frame.RoiManager(false);
             
             ij.plugin.filter.ParticleAnalyzer pa = new ij.plugin.filter.ParticleAnalyzer(
-                ij.plugin.filter.ParticleAnalyzer.ADD_TO_MANAGER,
+                ij.plugin.filter.ParticleAnalyzer.ADD_TO_MANAGER | 
+                ij.plugin.filter.ParticleAnalyzer.EXCLUDE_EDGE_PARTICLES,  // Add edge exclusion
                 ij.measure.Measurements.AREA + ij.measure.Measurements.CIRCULARITY + ij.measure.Measurements.MEAN,
                 rt, minSize, maxSize, 0.3, 1.0);
             
             ij.plugin.filter.ParticleAnalyzer.setRoiManager(rm);
             pa.analyze(new ImagePlus("mask", mask));
             
-            // Step 7: Compute BI per ROI and create colony objects with annotations
-            ij.gui.Overlay ov = new ij.gui.Overlay();
+            // Track after edge exclusion
+            telemetry.afterEdgeExclusion = rm.getCount();
+            logger.info(String.format("[FILTER_CHAIN] After edge exclusion: %d", telemetry.afterEdgeExclusion));
             
+            // Step 7: Create initial colony objects for proper Lab classification
+            List<com.betterdairy.autodense.model.Models.Colony> initialColonies = new ArrayList<>();
             for (int i = 0; i < rm.getCount(); i++) {
                 ij.gui.Roi r = rm.getRoi(i);
-                
-                // Compute blue index within ROI from original blueIndex image
-                double bi = meanWithinROI(blueIndex, r);
                 double area = rt.getValue("Area", i);
                 double circularity = rt.getValue("Circ.", i);
                 
-                // Assign size and blue bins
-                String sizeBin = binSize(area);
-                String blueBin = binBlue(bi);
-                
-                // Create colony object with all required fields
                 java.awt.Rectangle bounds = r.getBounds();
                 double centerX = bounds.getCenterX();
                 double centerY = bounds.getCenterY();
-                double diameter = Math.sqrt(4 * area / Math.PI);  // Equivalent diameter
+                double diameter = Math.sqrt(4 * area / Math.PI);
                 double diameterMm = diameter * 0.1;  // Convert to mm (placeholder scale)
                 
                 Colony colony = new Colony(
-                    i,                                    // index
-                    centerX, centerY,                     // x, y coordinates
-                    area,                                 // area
-                    diameter,                             // diameter in pixels
-                    diameterMm,                           // diameter in mm
-                    circularity,                          // circularity
-                    1.0,                                  // solidity (placeholder)
-                    bi,                                   // meanIntensity (using blue index)
-                    blueBin.equals("blue") ? ColonyColor.BLUE : ColonyColor.WHITE,
-                    Math.abs(bi),                         // colorConfidence (using absolute blue index)
-                    sizeBin.equals("large") ? ColonySize.LARGE : 
-                        sizeBin.equals("medium") ? ColonySize.MEDIUM : ColonySize.SMALL,
-                    sizeBin + "_" + blueBin               // binCategory
+                    i + 1,                              // index
+                    centerX, centerY,                   // x, y coordinates
+                    area,                               // area
+                    diameter,                           // diameter in pixels
+                    diameterMm,                         // diameter in mm
+                    circularity,                        // circularity
+                    1.0,                               // solidity (placeholder)
+                    0.0,                               // meanIntensity (to be calculated)
+                    ColonyColor.OTHER,                  // color class (to be classified)
+                    0.0,                               // colorConfidence (to be calculated)
+                    diameter < 20 ? ColonySize.SMALL : diameter < 40 ? ColonySize.MEDIUM : ColonySize.LARGE,
+                    "unclassified"                     // binCategory (to be updated)
                 );
                 
-                colonies.add(colony);
+                initialColonies.add(colony);
+            }
+            
+            telemetry.afterWatershed = initialColonies.size();
+            logger.info(String.format("[FILTER_CHAIN] After watershed (pre-classification): %d", telemetry.afterWatershed));
+            
+            // Step 8: CRITICAL FIX - Apply proper Lab colorspace classification
+            // Use original color image for Lab classification, not the balanced version
+            com.betterdairy.autodense.analysis.ColonyClassifier.XGalColorThresholds thresholds = 
+                com.betterdairy.autodense.analysis.ColonyClassifier.XGalColorThresholds.defaults();
+            
+            // Apply Lab classification using original color image
+            com.betterdairy.autodense.analysis.ColonyClassifier.classifyLab(
+                imp,  // Use original color image, not balanced
+                initialColonies, 
+                null,  // plateRoi - would need to pass if available
+                "xgal",
+                false,  // autoCalibrate
+                thresholds
+            );
+            
+            telemetry.finalCount = initialColonies.size();
+            telemetry.classifierApplied = true;
+            
+            // Count blue/white classifications
+            int blueCount = 0, whiteCount = 0, uncertainCount = 0;
+            for (Colony colony : initialColonies) {
+                switch (colony.colorClass()) {
+                    case BLUE -> blueCount++;
+                    case WHITE -> whiteCount++;
+                    case OTHER -> uncertainCount++;
+                }
+            }
+            
+            logger.info(String.format("[COLOR_CLASSIFICATION] Blue: %d, White: %d, Uncertain: %d", 
+                blueCount, whiteCount, uncertainCount));
+            
+            // Step 9: Create proper overlay with Lab-based classification colors
+            ij.gui.Overlay ov = new ij.gui.Overlay();
+            for (int i = 0; i < rm.getCount(); i++) {
+                ij.gui.Roi r = rm.getRoi(i);
+                Colony colony = initialColonies.get(i);
                 
-                // Annotate ROI following Overlay + ROI Manager pattern
-                r.setStrokeColor(biToColor(bi));  // Deeper blue → darker stroke
+                // Set stroke color based on Lab classification
+                Color strokeColor = switch (colony.colorClass()) {
+                    case BLUE -> Color.BLUE;
+                    case WHITE -> Color.WHITE;
+                    case PINK -> Color.PINK;
+                    case YELLOW -> Color.YELLOW;
+                    case GREEN -> Color.GREEN;
+                    case OTHER -> Color.ORANGE;
+                };
+                
+                r.setStrokeColor(strokeColor);
                 r.setStrokeWidth(2);
-                r.setName(String.format("c%03d  BI=%.2f  size=%s", i + 1, bi, sizeBin));
+                r.setName(String.format("c%03d %s diam=%.1fmm", 
+                    colony.index(), colony.colorClass().toString().toLowerCase(), colony.diameterMm()));
                 ov.add(r);
             }
             
-            // Apply overlay to image (never modify pixel data)
+            // Apply overlay to image
             imp.setOverlay(ov);
+            
+            // Store telemetry for reporting
+            storeTelemetry(telemetry, blueCount, whiteCount, uncertainCount);
+            
+            colonies = initialColonies;
             
         } catch (IllegalArgumentException e) {
             logger.log(java.util.logging.Level.WARNING, "Invalid parameters for X-gal detection", e);
@@ -701,11 +766,60 @@ public class AssayOps {
     }
     
     private String binBlue(double blueIndex) {
-        // Assign blue intensity bins
+        // Assign blue intensity bins (legacy method - now superseded by Lab classification)
         if (blueIndex < 0.2) return "pale";
         else if (blueIndex < 0.5) return "moderate";
         else return "deep";
     }
+    
+    /**
+     * Filter chain telemetry tracking class
+     */
+    private static class FilterChainTelemetry {
+        int componentsRaw = 0;
+        int afterMinArea = 0;
+        int afterRoundness = 0;
+        int afterEdgeExclusion = 0;
+        int afterWatershed = 0;
+        int finalCount = 0;
+        boolean classifierApplied = false;
+        List<Double> labBHistogram = new ArrayList<>();
+    }
+    
+    /**
+     * Count connected components in binary mask
+     */
+    private int countComponents(ij.process.ImageProcessor mask) {
+        // Create temporary image for connected components analysis
+        ImagePlus temp = new ImagePlus("temp_mask", mask.duplicate());
+        
+        // Use ImageJ's particle analyzer to count components without size restrictions
+        ij.measure.ResultsTable rt = new ij.measure.ResultsTable();
+        ij.plugin.filter.ParticleAnalyzer pa = new ij.plugin.filter.ParticleAnalyzer(
+            ij.plugin.filter.ParticleAnalyzer.SHOW_NONE,
+            ij.measure.Measurements.AREA,
+            rt, 1.0, Double.MAX_VALUE, 0.0, 1.0  // Minimal filtering to count all components
+        );
+        
+        pa.analyze(temp);
+        temp.close();
+        
+        return rt.getCounter();
+    }
+    
+    /**
+     * Store telemetry data for later reporting
+     */
+    private void storeTelemetry(FilterChainTelemetry telemetry, int blueCount, int whiteCount, int uncertainCount) {
+        // Store telemetry in a way that can be accessed by the CLI reporting system
+        // This could be stored in SessionStore or as static field for access during reporting
+        this.lastTelemetry = telemetry;
+        this.lastClassificationCounts = new int[]{blueCount, whiteCount, uncertainCount};
+    }
+    
+    // Store telemetry for CLI access
+    private FilterChainTelemetry lastTelemetry;
+    private int[] lastClassificationCounts = new int[3]; // blue, white, uncertain
     
     private Color biToColor(double blueIndex) {
         // Map blue index to stroke color: deeper blue → darker stroke

@@ -227,7 +227,7 @@ public final class ColonyClassifier {
     }
     
     /**
-     * Classify colonies with optional auto-calibration
+     * Classify colonies with optional auto-calibration - MODIFIES LIST IN PLACE
      */
     public static void classifyLab(ImagePlus image, List<Colony> colonies, 
                                   OvalRoi plateRoi, String mode, boolean autoCalibrate,
@@ -325,13 +325,14 @@ public final class ColonyClassifier {
     }
     
     /**
-     * X-gal classification with custom thresholds
+     * X-gal classification with custom thresholds - MODIFIES LIST IN PLACE
      */
     private static void classifyXGalWithRules(ImagePlus image, List<Colony> colonies, 
                                             OvalRoi plateRoi, XGalColorThresholds thresholds) {
         ImageProcessor proc = image.getProcessor();
         
-        for (Colony colony : colonies) {
+        for (int i = 0; i < colonies.size(); i++) {
+            Colony colony = colonies.get(i);
             double colonyRadius = colony.diameter() / 2.0;
             
             // Sample colony interior (central region)
@@ -381,11 +382,28 @@ public final class ColonyClassifier {
                 confidence = calculateXGalNegativeConfidence(bDelta, dE76, snrL);
             }
             
-            // Store classification result (would update mutable colony or use classification map)
+            // FIXED: Store classification result by creating new Colony with updated fields
             Classification result = new Classification(label, confidence, colonyLab, backgroundLab, bDelta, snrL);
             
-            // For now, we can't directly update immutable Colony records
-            // In practice, would use a separate classification results structure
+            // Map classification label to ColonyColor enum
+            ColonyColor colorClass = mapToColonyColor(label);
+            
+            // Create new Colony with updated classification
+            Colony updatedColony = new Colony(
+                colony.index(),
+                colony.x(), colony.y(),
+                colony.area(),
+                colony.diameter(), colony.diameterMm(),
+                colony.circularity(), colony.solidity(),
+                colony.meanIntensity(),
+                colorClass,           // FIXED: Update color classification
+                confidence,           // FIXED: Update confidence score
+                colony.sizeClass(),
+                label                 // FIXED: Update bin category with classification label
+            );
+            
+            // Replace colony in list with classified version
+            colonies.set(i, updatedColony);
         }
     }
     
@@ -417,23 +435,45 @@ public final class ColonyClassifier {
         // Find which cluster has the most negative b* values (likely X-gal+)
         int xgalPositiveCluster = findMostNegativeBCluster(abValues, clusterAssignments, clusters);
         
-        // Assign labels based on cluster assignments
+        // FIXED: Assign labels and update Colony objects in place
         for (int i = 0; i < colonies.size(); i++) {
+            Colony colony = colonies.get(i);
             int cluster = clusterAssignments.get(i);
             String label;
+            ColonyColor colorClass;
             
             if (cluster == xgalPositiveCluster) {
                 label = "xgal_pos";
+                colorClass = ColonyColor.BLUE;
             } else if (clusters == 2) {
                 label = "xgal_neg";
+                colorClass = ColonyColor.WHITE;
             } else {
                 label = "cluster_" + cluster;
+                colorClass = ColonyColor.OTHER;
             }
             
-            // Store classification result
+            // Store classification result by creating new Colony with updated fields
             double confidence = 0.7; // k-means confidence
             Classification result = new Classification(label, confidence, colonyColors.get(i), 
                                                      null, colonyColors.get(i).b, 0.0);
+            
+            // Create new Colony with updated classification
+            Colony updatedColony = new Colony(
+                colony.index(),
+                colony.x(), colony.y(),
+                colony.area(),
+                colony.diameter(), colony.diameterMm(),
+                colony.circularity(), colony.solidity(),
+                colony.meanIntensity(),
+                colorClass,           // Updated color classification
+                confidence,           // Updated confidence score
+                colony.sizeClass(),
+                label                 // Updated bin category with classification label
+            );
+            
+            // Replace colony in list with classified version
+            colonies.set(i, updatedColony);
         }
     }
     
@@ -1132,14 +1172,15 @@ public final class ColonyClassifier {
     }
     
     /**
-     * Generate summary statistics for classified colonies
+     * Generate summary statistics for classified colonies by color class
      */
     public static Map<String, Integer> summary(List<Colony> colonies) {
         Map<String, Integer> counts = new HashMap<>();
         
         for (Colony colony : colonies) {
-            String classification = colony.binCategory();
-            counts.put(classification, counts.getOrDefault(classification, 0) + 1);
+            // Count by ColonyColor enum, not binCategory
+            String colorName = colony.colorClass().name();
+            counts.put(colorName, counts.getOrDefault(colorName, 0) + 1);
         }
         
         return counts;

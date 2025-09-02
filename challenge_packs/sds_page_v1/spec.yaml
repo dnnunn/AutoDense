@@ -27,3 +27,6 @@ search:
     - file: "configs/sds.yaml"
       path: "detect.min_peak_distance_frac"
       values: [0.03, 0.04, 0.05]
+    - file: "configs/sds.yaml"
+      path: "bands.min_distance_px"
+      values: [12, 14, 16]  # Explicit pixel distances for band separation

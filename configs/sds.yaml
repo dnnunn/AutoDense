@@ -28,6 +28,11 @@ detect:
     quantile: 0.10                  # 10th percentile for baseline
 
 bands:
+  # Band detection parameters
+  min_distance_px: 14              # explicit pixel distance between bands (default for SDS-PAGE)
+  min_peak_distance_frac: 0.01     # fraction-based fallback if px not specified
+  prominence_frac: 0.02             # Very sensitive for bands
+  
   baseline:
     method: "percentile"            # "none" | "percentile" | "morph" 
     window_frac: 0.015              # 1.5% of ROI width for band detection (tighter than lane detection)
