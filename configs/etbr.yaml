@@ -48,10 +48,33 @@ constant_spacing: false
 background_subtraction: false  # FIXED: Disable to avoid multiple background removal
 peak_detection_method: "fluorescence"
 
-# EtBr-specific detection parameters (WHAT THE JAVA CODE ACTUALLY READS!)
+# SCHEMA UNIFIED: Execution parameters for optimization system
+# This solves parameter isolation - both optimization and execution now read from workflow:
+workflow:
+  # EtBr-specific execution parameters
+  expected_lanes: 20              # EtBr gels typically have more lanes
+  sensitivity: 0.8                # Good sensitivity for fluorescent bands  
+  constant_spacing: false         # EtBr gels often have irregular spacing
+  background_method: "rolling_ball"
+  
+  # Detection algorithm parameters (can be optimized)
+  min_peak_distance_frac: 0.028   # relaxed for more lanes (was 0.035)
+  prominence_frac: 0.045          # relaxed for more lanes (was 0.06)
+  rescue_enabled: true
+  
+  # Baseline parameters (EtBr-specific)
+  baseline:
+    method: "percentile"          # Good for fluorescent baseline
+    window_frac: 0.015            # Tighter for EtBr fluorescence
+    window_px: 0
+    clamp_min_px: 3
+    clamp_max_px: 12
+    quantile: 0.08                # Lower quantile for fluorescent baseline
+
+# EtBr-specific detection parameters (LEGACY - for backward compatibility)
 etbr_detection:
   expected_lanes: 20              # EtBr gels typically have more lanes
-  sensitivity: 0.6                # Good sensitivity for fluorescent bands  
+  sensitivity: 0.8                # Good sensitivity for fluorescent bands  
   constant_spacing: false         # EtBr gels often have irregular spacing
   background_subtraction: false   # Disable to avoid multiple background removal
   peak_detection_method: "fluorescence"  # EtBr-specific detection method

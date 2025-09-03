@@ -284,6 +284,11 @@
             <arg>-Xlint:all</arg>
             <arg>-Xlint:-processing</arg>
           </compilerArgs>
+          <fork>true</fork>
+          <options>
+            <option>--add-opens=java.base/sun.misc=ALL-UNNAMED</option>
+            <option>--add-opens=java.base/java.lang=ALL-UNNAMED</option>
+          </options>
         </configuration>
       </plugin>
     </plugins>

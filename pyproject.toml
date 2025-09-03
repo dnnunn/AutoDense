@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "autodense-coach"
+version = "0.1.0"
+description = "Situational guidance engine for AutoDense (SDS-PAGE, EtBr, colony counting)."
+authors = [{name="Better Dairy R&D"}]
+readme = "README.md"
+requires-python = ">=3.11"
+
+dependencies = [
+    "fastapi>=0.110,<0.120",
+    "uvicorn[standard]>=0.29,<0.32",
+    "pydantic>=2.6,<3",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+select = ["E", "F", "I"]
+ignore = ["E501"]  # let black handle line length

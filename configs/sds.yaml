@@ -41,7 +41,33 @@ bands:
     clamp_max_px: 8                 # Hard maximum bound for bands (tighter than lanes)
     quantile: 0.08                  # 8th percentile for band baseline (more sensitive)
 
+# SCHEMA UNIFIED: Execution parameters for optimization system
+# This solves parameter isolation - both optimization and execution now read from workflow:
+workflow:
+  # Execution control parameters
+  expected_lanes: 8
+  sensitivity: 1.0
+  constant_spacing: false
+  background_method: "rolling_ball"
+  
+  # Detection algorithm parameters (can be optimized)
+  min_peak_distance_frac: 0.04     # fraction of ROI width for lane spacing
+  prominence_frac: 0.06             # peak prominence threshold
+  rescue_enabled: true
+  
+  # Baseline parameters (can be optimized)
+  baseline:
+    method: "percentile"            # "none" | "percentile" | "morph" 
+    window_frac: 0.02               # 2% of ROI width
+    window_px: 0                    # 0 = use fraction
+    clamp_min_px: 3                 # Hard minimum bound
+    clamp_max_px: 12                # Hard maximum bound
+    quantile: 0.10                  # 10th percentile for baseline
+
 # Legacy parameters (for backward compatibility)
 detection:
   min_width: 12     # pixels
   prominence: 0.30  # 0..1 relative
+  expected_lanes: 8
+  sensitivity: 1.0
+  constant_spacing: false

@@ -45,7 +45,30 @@ segmentation:
 post:
   merge_distance_px: 5  # pixels
 
-# Colony-specific detection parameters (WHAT THE JAVA CODE ACTUALLY READS!)
+# SCHEMA UNIFIED: Execution parameters for optimization system
+# This solves parameter isolation - both optimization and execution now read from workflow:
+workflow:
+  # Colony-specific execution parameters
+  stain: "x-gal"          # Stain type for colony analysis
+  min_size: 5.0           # Minimum colony size in pixels
+  max_size: 1000.0        # Maximum colony size in pixels  
+  plate_layout: 1         # Plate layout configuration
+  
+  # Detection algorithm parameters (can be optimized)
+  min_peak_distance_frac: 0.05     # larger spacing for colonies vs lanes
+  prominence_frac: 0.08             # lower for colony detection
+  rescue_enabled: true
+  
+  # Baseline parameters (gentle for colonies)
+  baseline:
+    method: "none"                  # Baseline mostly disabled for colonies
+    window_frac: 0.005              # Very gentle if enabled
+    window_px: 0
+    clamp_min_px: 3
+    clamp_max_px: 12
+    quantile: 0.05
+
+# Colony-specific detection parameters (LEGACY - for backward compatibility)
 colony_detection:
   stain: "x-gal"          # Stain type for colony analysis
   min_size: 5.0           # Minimum colony size in pixels

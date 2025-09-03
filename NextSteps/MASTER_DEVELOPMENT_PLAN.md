@@ -18,6 +18,7 @@ This master plan integrates seven phases of AutoDense development, transitioning
 |-------|--------|---------|------------------|
 | **I** | ✅ **COMPLETE** | Truth Preservation | Dual reporting (raw vs reconciled), no measurement overrides |
 | **II** | ✅ **COMPLETE** | Flight Recorder Telemetry | Comprehensive metrics without pixels for AI optimization |
+| **IIa** | 🎯 **NEW** | Real-Time Quality Coach | Live analysis guidance with one-click parameter fixes |
 | **III** | ✅ **COMPLETE** | Parameter Independence | Separated band/lane configs, configurable detection parameters |
 | **IV** | 🚧 **PLANNED** | Vision-Assist Hybrid | Limited pixel access for parameter optimization on failures |
 | **V** | 🚧 **PLANNED** | User-Triggered Control | Natural language interface, feedback-driven optimization |
@@ -50,6 +51,33 @@ This master plan integrates seven phases of AutoDense development, transitioning
 - ✅ Stability metrics: count/classification jitter detection
 
 **Validation**: Current runs show comprehensive telemetry (EtBr: 11 lanes/2 bands, SDS: 7 lanes/24 bands, Colony: 15 with Lab classification)
+
+### **Phase IIa: Real-Time Quality Coach** ⭐ *NEW*
+**Principle**: Provide immediate, actionable guidance during analysis to prevent measurement errors
+
+**Integration Features**:
+- ✅ **Coach Rules Engine**: Stateless rule evaluation for SDS-PAGE, EtBr, and Colony analysis
+- ✅ **Real-time Hints**: Confidence-scored suggestions (error/warn/info) based on telemetry
+- ✅ **One-click Fixes**: Reversible parameter adjustments with immediate re-analysis
+- ✅ **Measurement Integrity**: Focus on quantification accuracy over workflow convenience
+- ✅ **Clone-based Safety**: Never modify original user data during optimization
+
+**Implementation Status**:
+- ✅ `autodense/coach_rules.py` - Rule engine with SDS/EtBr/Colony quality detection
+- ✅ `ui/CoachBanner.tsx` - React component with sticky banner and action buttons
+- ✅ `backend/app.py` - FastAPI endpoints for `/api/coach/hints` and `/api/coach/rerun`
+- ✅ Coach integration guide with step-by-step workflow instructions
+
+**Coach Quality Rules**:
+- **SDS-PAGE**: Saturation detection (>1.5% pixels clipped), lane-wise background assessment, ladder fit validation (R² < 0.985)
+- **EtBr Gels**: Smear vs discrete band detection, exposure optimization, mode switching to mass-only
+- **Colony Plates**: Illumination correction, touching colony separation, adaptive thresholding
+
+**Success Metrics**:
+- Hint acceptance rate >70% for high-confidence suggestions
+- Measurable quality improvement (R² +0.01, band count +1, F1 score +0.1)
+- User engagement: coach usage frequency across analysis types
+- Error reduction: decreased analysis failures post-coaching
 
 ### **Phase III: Parameter Independence**
 **Principle**: Complete separation of detection parameter domains
@@ -103,14 +131,21 @@ vision:
 - **Coverage problems**: `coverage_total < 0.2` OR `count_stability_score < 0.7`
 - **Colony issues**: `final_count << components_raw` OR classifier not applied
 
+#### **Coach Integration Points** 🎯
+**Real-time Monitoring**: Coach evaluates metrics after each analysis step
+- Monitor lane detection failures → suggest parameter relaxation
+- Detect baseline issues → recommend lane-wise background correction
+- Track band detection problems → propose prominence/distance adjustments
+- Watch for saturation → trigger exposure compensation workflows
+
 #### **Implementation Plan**
-**Day 1**: Core modules + mock advisor
+**Day 1**: Core modules + mock advisor + **coach monitoring integration**
 - `autodense_autotune/vision/cropper.py` - ROI detection, scrubbing
 - `autodense_autotune/vision/allowlist.py` - bounds validation  
 - `autodense_autotune/vision/gating.py` - trigger logic
 - Mock advisor for end-to-end testing
 
-**Day 2**: Gemini integration + validation
+**Day 2**: Gemini integration + validation + **coach hint generation pipeline**
 - `autodense_autotune/vision/advisor.py` - real API calls
 - Physics validation (coverage/stability improvement)
 - Test cases: EtBr baseline fix, SDS min_distance optimization, Colony Lab classification
@@ -160,8 +195,14 @@ user_feedback:
     bands.min_peak_distance_px: [8, 16]
 ```
 
+#### **Coach Enhancement for Phase V** 🎯
+**Natural Language Coach**: Extend coach to understand user intent and provide contextual guidance
+- *"Be more sensitive"* → Coach suggests specific prominence/threshold adjustments
+- *"Missing small bands"* → Coach proposes min_distance reduction with confidence scores
+- *"Ladder looks off"* → Coach validates R² and suggests re-detection strategies
+
 #### **Implementation Plan**
-**Day 1**: NL parser + feedback ingestion
+**Day 1**: NL parser + feedback ingestion + **coach natural language interpretation**
 **Day 2**: Intent-to-patch conversion with lexicon
 **Day 3**: Integration testing with real lab phrases
 
@@ -182,8 +223,14 @@ user_feedback:
 - Blue/white classification override
 - Batch reclassification with learning
 
+#### **Coach Integration for Interactive Tools** 🎯
+**Interactive Coach Guidance**: Real-time coaching during manual refinement
+- **BandAssist**: Coach validates band propagation confidence, suggests refinements
+- **ColonyAssist**: Coach monitors classification changes, warns of systematic bias
+- **Quality Feedback Loop**: Coach learns from user interactions to improve suggestions
+
 #### **Implementation Plan**
-**Day 1-2**: BandAssist confidence scoring and validation
+**Day 1-2**: BandAssist confidence scoring and validation + **integrated coach feedback**
 **Day 3-4**: ColonyAssist interactive classification system
 
 ### **Phase VII: Production Lab Workflows**  
@@ -234,8 +281,20 @@ challenge_packs/
 └── colony_assist_v1/spec.yaml
 ```
 
+#### **Coach Production Integration** 🎯
+**Workflow-Specific Coaching**: Specialized guidance for production analytical workflows
+- **Protein Quantification**: Coach validates curve fitting, warns of standard outliers
+- **Lane Comparison**: Coach ensures proper MW binning, statistical validity
+- **Semi-qPCR**: Coach monitors housekeeping stability, target amplification quality
+- **Time-Series**: Coach tracks registration quality, growth curve validity
+
+**QC Gate Integration**: Coach hints become part of formal QC gate evaluation
+- Error-level hints block workflow progression until resolved
+- Warn-level hints require user acknowledgment or fixing
+- Info-level hints provide optional optimization suggestions
+
 #### **Implementation Plan**
-**Day 1**: Protein quantification + lane comparison workflows
+**Day 1**: Protein quantification + lane comparison workflows + **integrated coach QC gates**
 **Day 2**: Semi-qPCR + BandAssist workflows  
 **Day 3**: Colony time-series + ColonyAssist workflows
 **Day 4**: Integration testing across all workflows
@@ -256,6 +315,7 @@ challenge_packs/
 - ✅ **--no-exit flag**: Fixed in java_bridge.py with prominent warnings
 - ✅ **Band/lane independence**: Verified with separate baseline processing  
 - ✅ **Comprehensive telemetry**: Flight recorder metrics implemented
+- ✅ **Real-time coach**: Quality guidance system with measurement integrity focus
 - 🔄 **Vision privacy**: EXIF stripping, text blurring in Phase IV
 - 🔄 **User control**: Natural language safety bounds in Phase V
 
@@ -265,6 +325,7 @@ challenge_packs/
 - **Physics**: Ladder R², geometry sanity preserved
 - **Bounds**: All parameters within allowlist ranges
 - **Reproducibility**: Deterministic re-runs with same config
+- **Coach Validation**: Error-level hints must be resolved before workflow completion
 
 ---
 
@@ -299,9 +360,13 @@ challenge_packs/
 - SDS: 7 lanes, 24 bands (was 0-2)  
 - Colony: 15 colonies with Lab classification (was RGB/broken)
 
+**Immediate (This week)**:
+- **Days 1-2**: Phase IIa Coach integration into existing telemetry system
+- **Days 3-5**: Coach frontend integration and testing with current workflows
+
 **Near-term (Next 2 weeks)**:
-- **Week 1**: Phase IV Vision-Assist implementation
-- **Week 2**: Phase V Natural Language interface
+- **Week 1**: Phase IV Vision-Assist implementation + Coach monitoring integration
+- **Week 2**: Phase V Natural Language interface + Coach NL interpretation
 
 **Medium-term (Following month)**:
 - **Week 3**: Phase VI Interactive assist tools  
@@ -325,8 +390,9 @@ challenge_packs/
 1. **Input**: Images + configuration + optional user feedback
 2. **Analysis**: Deterministic Java pipeline execution  
 3. **Telemetry**: Comprehensive metrics extraction
-4. **AI Optimization**: Bounded parameter suggestions (vision + NL)
-5. **Validation**: Physics and safety checks
-6. **Output**: Truth-preserved results + optimization reports
+4. **Real-time Coaching**: Quality assessment and hint generation
+5. **AI Optimization**: Bounded parameter suggestions (vision + NL + coach)
+6. **Validation**: Physics and safety checks + coach error resolution
+7. **Output**: Truth-preserved results + optimization reports + quality coaching
 
 **Master principle maintained throughout**: **Gemini advises, AutoDense measures, users guide, science decides.**

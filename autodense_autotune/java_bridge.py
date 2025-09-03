@@ -18,6 +18,7 @@ Usage:
 """
 
 import argparse
+import copy
 import json
 import subprocess
 import sys
@@ -29,6 +30,11 @@ import time
 from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+# Timeout constants (in seconds)
+DEFAULT_ANALYSIS_TIMEOUT = 300  # 5 minutes for full analysis
+DEFAULT_DISCOVERY_TIMEOUT = 30  # 30 seconds for ImageJ discovery
+PREFLIGHT_TIMEOUT = 120  # 2 minutes for preflight detection
 
 class JavaBridgeError(Exception):
     """Exception raised when Java analysis fails"""
@@ -77,7 +83,7 @@ def ensure_maven_build() -> bool:
             cwd=pom_dir,
             capture_output=True,
             text=True,
-            timeout=300
+            timeout=DEFAULT_ANALYSIS_TIMEOUT
         )
         
         if result.returncode != 0:
@@ -113,7 +119,7 @@ def discover_fiji_installation() -> Optional[str]:
                 [sys.executable, str(discovery_script), '--json'],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=DEFAULT_DISCOVERY_TIMEOUT
             )
             
             if result.returncode == 0:
@@ -302,7 +308,7 @@ def run_java_analysis(task: str, input_path: str, config_path: str, output_dir: 
     ]
     
     # Get timeout from environment
-    timeout = int(os.environ.get('ANALYSIS_TIMEOUT', '300'))
+    timeout = int(os.environ.get('ANALYSIS_TIMEOUT', str(DEFAULT_ANALYSIS_TIMEOUT)))
     
     logger.info(f"Executing {executable_type} analysis with timeout {timeout}s")
     logger.debug(f"Command: {' '.join(cmd[:5])}... ({len(cmd)} args total)")
@@ -316,7 +322,7 @@ def run_java_analysis(task: str, input_path: str, config_path: str, output_dir: 
             cmd,
             capture_output=True,
             text=True,
-            timeout=300,  # 5 minute timeout
+            timeout=DEFAULT_ANALYSIS_TIMEOUT,  # 5 minute timeout
             check=False  # Don't raise exception on non-zero exit
         )
         
@@ -722,8 +728,8 @@ def validate_parameter_bounds(config: dict, task: str = "sds_page") -> dict:
     # Define parameter bounds per external audit recommendations
     PARAMETER_BOUNDS = {
         "detect": {
-            "prominence_frac": {"min": 0.02, "max": 0.12, "default": 0.06},
-            "min_peak_distance_frac": {"min": 0.01, "max": 0.08, "default": 0.04},
+            "prominence_frac": {"min": 0.001, "max": 1.0, "default": 0.06},  # Aligned with Java MIN/MAX_PROMINENCE_FRAC
+            "min_peak_distance_frac": {"min": 0.001, "max": 0.2, "default": 0.04},  # Relaxed to allow broader optimization
             "baseline": {
                 "quantile": {"min": 0.05, "max": 0.25, "default": 0.1},
                 "window_frac": {"min": 0.01, "max": 0.05, "default": 0.02},
@@ -909,18 +915,21 @@ def preflight(task, input_path, base_config_path, priors=None, outdir=None):
             '-cp', classpath,  # Use dynamic classpath instead of hardcoded paths
             'com.betterdairy.autodense.cli.AutotuneAnalysisCLI',
             '--detect-only', '--task', task, '--input', input_path, 
-            '--config', base_config_path, '--output', outdir or '/tmp/preflight',
+            '--config', base_config_path, '--output', outdir or str(Path.home() / 'tmp' / 'autodense_preflight'),
             '--no-exit'  # CRITICAL: Required for optimizer integration
         ]
         
         logger.info(f"Running preflight analysis: {' '.join(java_cmd)}")
         
+        # Set working directory to project root for consistent execution
+        project_root = Path(__file__).parent.parent
+        
         result = subprocess.run(
             java_cmd, 
             capture_output=True, 
             text=True, 
-            timeout=120,  # Shorter timeout for preflight
-            cwd=JAVA_PROJECT_ROOT
+            timeout=PREFLIGHT_TIMEOUT,  # Shorter timeout for preflight
+            cwd=str(project_root)
         )
         
         if result.returncode != 0:
