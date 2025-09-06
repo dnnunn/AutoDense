@@ -97,6 +97,52 @@ test_detect_only() {
          --outdir "$output"
 }
 
+# Function: Test vision-assist optimized configurations
+test_optimized_config() {
+    local task="${1:-etbr_agarose}"
+    local input="${2:-samples/etbr_gel.jpg}" 
+    local config="${3:-configs/etbr_optimized.yaml}"
+    local output="${4:-output/test_optimized_${task}}"
+    
+    echo "🎯 Testing vision-assist optimized config: $task using $config"
+    
+    # Ensure config exists
+    if [ ! -f "$config" ]; then
+        echo "❌ Optimized config not found: $config"
+        echo "   Vision-assist system should generate this file first"
+        return 1
+    fi
+    
+    # Create output directory
+    mkdir -p "$output"
+    
+    # Execute with Python environment activated and --no-exit flag for optimizer integration
+    java -Djava.awt.headless=true \
+         -cp "$PLUGIN_DIR/target/classes:$(cat $PLUGIN_DIR/target/runtime-classpath.txt)" \
+         com.betterdairy.autodense.cli.AutotuneAnalysisCLI \
+         --no-exit "$task" "$input" "$config" "$output"
+}
+
+# Function: Direct Java execution wrapper with proper environment
+run_java_with_env() {
+    local task="$1"
+    local input="$2" 
+    local config="$3"
+    local output="$4"
+    local extra_args="${5:-}"
+    
+    echo "☕ Direct Java execution: $task $input $config -> $output"
+    
+    # Ensure output directory exists
+    mkdir -p "$output"
+    
+    # Execute with proper classpath and environment
+    java -Djava.awt.headless=true \
+         -cp "$PLUGIN_DIR/target/classes:$(cat $PLUGIN_DIR/target/runtime-classpath.txt)" \
+         com.betterdairy.autodense.cli.AutotuneAnalysisCLI \
+         $extra_args "$task" "$input" "$config" "$output"
+}
+
 # Main command handling
 case "${1:-build}" in
     "build")
@@ -128,8 +174,24 @@ case "${1:-build}" in
         test_etbr  
         test_colony
         ;;
+    "test-optimized")
+        activate_python
+        task="${2:-etbr_agarose}"
+        input="${3:-samples/etbr_gel.jpg}"
+        config="${4:-configs/${task}_optimized.yaml}"
+        output="${5:-output/test_optimized_${task}}"
+        test_optimized_config "$task" "$input" "$config" "$output"
+        ;;
+    "run-java")
+        activate_python
+        if [ $# -lt 5 ]; then
+            echo "Usage: ./build.sh run-java <task> <input> <config> <output> [extra_args]"
+            exit 1
+        fi
+        run_java_with_env "$2" "$3" "$4" "$5" "${6:-}"
+        ;;
     *)
-        echo "Usage: ./build.sh [build|test-sds|test-etbr|test-colony|test-detect|test-all]"
+        echo "Usage: ./build.sh [build|test-sds|test-etbr|test-colony|test-detect|test-all|test-optimized|run-java]"
         echo ""
         echo "Commands:"
         echo "  build        - Build Java components (default)"
@@ -138,5 +200,11 @@ case "${1:-build}" in
         echo "  test-colony  - Test colony counting pipeline"
         echo "  test-detect  - Test detect-only mode (known working)"
         echo "  test-all     - Run all pipeline tests"
+        echo "  test-optimized [task] [input] [config] [output] - Test vision-assist optimized configs"
+        echo "  run-java <task> <input> <config> <output> [extra_args] - Direct Java execution wrapper"
+        echo ""
+        echo "Vision-assist examples:"
+        echo "  ./build.sh test-optimized etbr_agarose samples/etbr_gel.jpg configs/etbr_optimized.yaml"
+        echo "  ./build.sh run-java sds_page samples/sds_gel.jpg configs/sds_optimized.yaml output/test --no-exit"
         ;;
 esac

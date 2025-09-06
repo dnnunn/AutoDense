@@ -1,14 +1,29 @@
-# DEFINITIVE BUILD & STRUCTURE REFERENCE
+# ⚠️ DEPRECATED - Build Reference Document
 
 > **Doc Meta**
-> - **Purpose:** Single source of truth for ALL AutoDense build, compile, test, and configuration operations
-> - **Scope:** Complete directory structure, environments, classpaths, samples, configs, testing, startup procedures
+> - **Purpose:** Consolidated build reference (DEPRECATED)
+> - **Scope:** Build system information (now consolidated)
 > - **Owner:** @davidnunn  
-> - **Last-verified:** 2025-08-31
+> - **Last-verified:** 2025-09-03
+> - **Status:** DEPRECATED - consolidated into BUILD_GUIDE.md
 
-## 🚨 CRITICAL: READ THIS BEFORE ANY BUILD/COMPILE/TEST OPERATION
+---
 
-This document consolidates ALL essential information to prevent path/environment assumptions and build errors.
+## 🔴 DEPRECATION NOTICE
+
+**This document is DEPRECATED as of September 3, 2025.**
+
+**Superseded by:** [BUILD_GUIDE.md](BUILD_GUIDE.md) - Consolidated build and troubleshooting guide
+
+**Reason for deprecation:** Content has been merged into BUILD_GUIDE.md to eliminate overlapping build documentation. The consolidated guide includes:
+
+- ✅ Critical --no-exit flag warnings
+- ✅ Comprehensive troubleshooting section  
+- ✅ Complete validation checklist
+- ✅ Directory structure reference
+- ✅ Standardized on `./build.sh all` command
+
+**All build, test, and troubleshooting information is now available in the consolidated BUILD_GUIDE.md.**
 
 ## 🔴 CRITICAL OPTIMIZER WARNING: --no-exit FLAG REQUIRED
 

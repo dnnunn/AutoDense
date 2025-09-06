@@ -1,0 +1,68 @@
+pre:
+  invert_polarity: auto
+  clip_percentiles:
+  - 1.0
+  - 99.0
+  normalize_intensity: true
+  gaussian_sigma: 1.0
+  background_removal_radius: 0.0
+  enable_deskew: false
+  deskew_angle_threshold: 0.5
+  enable_debug_logging: true
+  clahe:
+    enabled: false
+    clip_limit: 2.0
+    tile_grid:
+    - 8
+    - 8
+detect:
+  min_peak_distance_frac: 0.015
+  prominence_frac: 0.025
+  rescue_enabled: true
+  baseline:
+    method: percentile
+    window_frac: 0.015
+    window_px: 0
+    clamp_min_px: 3
+    clamp_max_px: 10
+    quantile: 0.08
+bands:
+  min_distance_px: 12
+  min_peak_distance_frac: 0.025
+  prominence_frac: 0.03
+  baseline:
+    method: percentile
+    window_frac: 0.01
+    window_px: 0
+    clamp_min_px: 2
+    clamp_max_px: 6
+    quantile: 0.12
+expected_lanes: 12
+sensitivity: 0.4
+constant_spacing: false
+background_subtraction: false
+peak_detection_method: fluorescence
+workflow:
+  expected_lanes: 20
+  sensitivity: 0.8
+  constant_spacing: false
+  background_method: rolling_ball
+  min_peak_distance_frac: 0.028
+  prominence_frac: 0.045
+  rescue_enabled: true
+  baseline:
+    method: percentile
+    window_frac: 0.015
+    window_px: 0
+    clamp_min_px: 3
+    clamp_max_px: 12
+    quantile: 0.08
+etbr_detection:
+  expected_lanes: 20
+  sensitivity: 0.8
+  constant_spacing: false
+  background_subtraction: false
+  peak_detection_method: fluorescence
+lanes:
+  prominence_frac: 0.03
+  min_peak_distance_frac: 0.015

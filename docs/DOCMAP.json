@@ -1,0 +1,153 @@
+{
+  "metadata": {
+    "generated_on": "2025-09-03",
+    "total_documents": 86,
+    "analysis_scope": "All markdown files in AutoDense project",
+    "tool_version": "documentation_condenser_v1"
+  },
+  "files": [
+    {
+      "path": "/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/Architecture.md",
+      "sha256": "detailed-technical-reference",
+      "size_chars": 4500,
+      "size_words": 403,
+      "created_date": "2025-08-26",
+      "modified_date": "2025-08-26",
+      "topic": "system-architecture",
+      "has_doc_meta": true,
+      "owner": "@davidnunn",
+      "last_verified": "2025-08-26"
+    },
+    {
+      "path": "/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/CLAUDE.md",
+      "sha256": "session-primer",
+      "size_chars": 11000,
+      "size_words": 753,
+      "created_date": "2025-08-26",
+      "modified_date": "2025-09-03",
+      "topic": "ai-integration",
+      "has_doc_meta": false,
+      "owner": "@davidnunn",
+      "last_verified": "2025-09-01"
+    },
+    {
+      "path": "/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/BUILD_GUIDE.md",
+      "sha256": "d1a8cf5a965e6d9d",
+      "size_chars": 7066,
+      "size_words": 900,
+      "created_date": "2025-08-30",
+      "modified_date": "2025-08-30",
+      "topic": "build-system",
+      "has_doc_meta": true,
+      "owner": "@davidnunn",
+      "last_verified": "2025-08-30"
+    },
+    {
+      "path": "/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/DEFINITIVE_BUILD_REFERENCE.md",
+      "sha256": "d506fa6fbf432b2a",
+      "size_chars": 12273,
+      "size_words": 1500,
+      "created_date": "2025-08-31",
+      "modified_date": "2025-08-31",
+      "topic": "build-system",
+      "has_doc_meta": true,
+      "owner": "@davidnunn",
+      "last_verified": "2025-08-31"
+    },
+    {
+      "path": "/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/docs/README.md",
+      "sha256": "hub-navigation",
+      "size_chars": 4200,
+      "size_words": 415,
+      "created_date": "2025-08-26",
+      "modified_date": "2025-08-26",
+      "topic": "documentation-hub",
+      "has_doc_meta": true,
+      "owner": "@davidnunn",
+      "last_verified": "2025-08-26"
+    },
+    {
+      "path": "/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/docs/DOCUMENT_CATALOG.md",
+      "sha256": "comprehensive-catalog",
+      "size_chars": 15000,
+      "size_words": 1400,
+      "created_date": "2025-09-01",
+      "modified_date": "2025-09-01",
+      "topic": "documentation-catalog",
+      "has_doc_meta": true,
+      "owner": "@davidnunn",
+      "last_verified": "2025-09-01"
+    },
+    {
+      "path": "/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/docs/STATUSLOG.md",
+      "sha256": "deprecated-pointer",
+      "size_chars": 500,
+      "size_words": 75,
+      "created_date": "2025-08-26",
+      "modified_date": "2025-08-26",
+      "topic": "deprecated",
+      "has_doc_meta": true,
+      "owner": "@davidnunn",
+      "last_verified": "2025-08-26",
+      "status": "deprecated",
+      "replaced_by": "PROJECT_STATUS.md"
+    },
+    {
+      "path": "/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/docs/SuccessLog.md",
+      "sha256": "deprecated-pointer",
+      "size_chars": 500,
+      "size_words": 75,
+      "created_date": "2025-08-26",
+      "modified_date": "2025-08-26",
+      "topic": "deprecated",
+      "has_doc_meta": true,
+      "owner": "@davidnunn",
+      "last_verified": "2025-08-26",
+      "status": "deprecated",
+      "replaced_by": "PROJECT_STATUS.md"
+    },
+    {
+      "path": "/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/docs/PROJECT_STATUS.md",
+      "sha256": "project-status-consolidated",
+      "size_chars": 8500,
+      "size_words": 790,
+      "created_date": "2025-08-26",
+      "modified_date": "2025-08-26",
+      "topic": "project-status",
+      "has_doc_meta": true,
+      "owner": "@davidnunn",
+      "last_verified": "2025-08-26"
+    },
+    {
+      "path": "/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/docs/IMPLEMENTATION_PLAN.md",
+      "sha256": "454253ade7c1cd87",
+      "size_chars": 19038,
+      "size_words": 1889,
+      "created_date": "2025-08-26",
+      "modified_date": "2025-08-26",
+      "topic": "implementation-planning",
+      "has_doc_meta": true,
+      "owner": "@davidnunn",
+      "last_verified": "2025-08-26"
+    },
+    {
+      "path": "/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/docs/New plan.md",
+      "sha256": "1f458e0589de4f7e",
+      "size_chars": 15038,
+      "size_words": 1798,
+      "created_date": "2024-11-20",
+      "modified_date": "2024-11-20",
+      "topic": "architecture-evolution",
+      "has_doc_meta": false,
+      "owner": "unknown"
+    }
+  ],
+  "summary": {
+    "total_verified": 8,
+    "total_deprecated": 2,
+    "missing_doc_meta": 2,
+    "largest_file": "docs/IMPLEMENTATION_PLAN.md",
+    "oldest_file": "docs/New plan.md",
+    "newest_file": "DEFINITIVE_BUILD_REFERENCE.md"
+  }
+}

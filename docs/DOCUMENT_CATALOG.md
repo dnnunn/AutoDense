@@ -4,13 +4,13 @@
 > - **Purpose:** Comprehensive catalog with concise summaries of all project documentation
 > - **Scope:** All markdown files across the entire project with categories, summaries, and metadata
 > - **Owner:** @davidnunn
-> - **Last-verified:** 2025-09-01
+> - **Last-verified:** 2025-09-03
 
 ## Overview
 
 This catalog provides a centralized reference for all AutoDense documentation, including concise summaries, categories, word counts, and verification dates. Use this as a starting point to navigate the documentation ecosystem.
 
-**Total Documents:** 86 files across 9 categories
+**Total Documents:** 94 files across 9 categories
 
 ---
 
@@ -65,6 +65,8 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 | **docs/DEPENDENCY_STRATEGY.md** | Library management strategy for maintaining minimal, secure, and stable dependencies | 979 | - |
 | **docs/DEMO_SYSTEM.md** | Testing framework and demonstration system for validating analysis workflows | 870 | - |
 | **docs/TOOL_VALIDATION_SYSTEM.md** | Quality assurance system for tool validation and response verification | 861 | 2025-08-26 |
+| **BUILD_GUIDE.md** | **ENHANCED** - Consolidated build and troubleshooting guide with --no-exit warnings and comprehensive validation | ~7,500 | 2025-09-03 |
+| **DEFINITIVE_BUILD_REFERENCE.md** | **DEPRECATED** - Build reference consolidated into BUILD_GUIDE.md | ~12,000 | 2025-09-03 |
 | **build.sh** | Unified build script eliminating directory confusion with automatic environment setup and simple test commands | 142 | 2025-08-30 |
 
 ## 📚 Documentation & Project Management
@@ -78,6 +80,11 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 | **docs/ARCHITECTURAL_DEBT.md** | Known technical debt and issues requiring future cleanup and refactoring | 440 | - |
 | **docs/NEW_DOC_TEMPLATE.md** | Standard template for creating new documentation with required Doc Meta blocks | 61 | - |
 | **docs/DEPRECATED_TEMPLATE.md** | Template for tombstoning deprecated documents with proper redirection | 98 | 2025-08-26 |
+| **docs/CONSOLIDATION_PLAN.md** | **NEW** - Documentation consolidation strategy from doc-condenser analysis | ~4,500 | 2025-09-03 |
+| **docs/CONTRADICTIONS.md** | **NEW** - Content contradiction analysis and resolution recommendations | ~1,200 | 2025-09-03 |
+| **docs/DOCMAP.json** | **NEW** - Complete documentation inventory with metadata and change tracking | JSON | 2025-09-03 |
+| **docs/OVERLAP.md** | **NEW** - Content overlap analysis with consolidation recommendations | ~800 | 2025-09-03 |
+| **docs/DEPRECATIONS.md** | **NEW** - Deprecation registry for historical tracking | ~600 | 2025-09-03 |
 
 ## 🗂️ Legacy & Historical Documents
 
@@ -85,7 +92,7 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 |----------|---------|--------|---------------|
 | **docs/IMPLEMENTATION_PLAN.md** | Historical planning document for Fiji integration architecture (superseded by current docs) | 1889 | - |
 | **docs/Instructions.md** | Legacy workflow documentation describing shipping strategy and component integration | 2627 | - |
-| **docs/New plan.md** | Architecture evolution planning document outlining the path to current handle-based system | 1798 | - |
+| **docs/New plan.md** | **DEPRECATED** - Legacy architecture planning superseded by current implementation | 1798 | 2025-09-03 |
 | **docs/Bundle and Ship.md** | Distribution strategy document detailing what to bundle vs fetch for deployment | 1872 | 2025-08-26 |
 | **docs/More Fiji imports.md** | Pre-analysis image preprocessing guide for orientation and framing operations | 2555 | 2025-08-26 |
 | **docs/STATUSLOG.md** | **DEPRECATED** - Consolidated into PROJECT_STATUS.md | 75 | 2025-08-26 |
@@ -122,6 +129,7 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 | **SessionSummaries/Session_summary_August_29_2025_Detection_Pipeline_Fix.md** | Breakthrough session resolving core detection failure with aggressive baseline removal fix and AI optimization roadmap | 1847 | 2025-08-29 |
 | **SessionSummaries/Session_summary_August_30_2025_Environment_Documentation.md** | Critical environment documentation session preventing session time waste and diagnosing fundamental lane detection algorithm flaws | 2400 | 2025-08-30 |
 | **SessionSummaries/Session_summary_August_30_2025_Configuration_Pipeline_Fix.md** | Configuration handoff resolution and build system organization with HeadlessException diagnosis | 1850 | 2025-08-30 |
+| **SessionSummaries/Session_summary_September_03_2025_Documentation_Consolidation.md** | **NEW** - Documentation consolidation session implementing doc-condenser recommendations | ~3,000 | 2025-09-03 |
 | **NextSteps/NextSteps_August_27_2025.md** | Priority tasks for LLM toolkit deployment, colony counting fixes, and consensus audit implementation | 1654 | 2025-08-27 |
 | **NextSteps/NextSteps_August_27_2025_Evening.md** | Focused priority tasks for completing PMD complexity refactoring and error handling standardization | 1456 | 2025-08-27 |
 | **NextSteps/NextSteps_August_28_2025_CLI_Architecture.md** | Priority debugging tasks for systematic YAML-controlled preprocessing parameter testing and root cause analysis | 1521 | 2025-08-28 |
@@ -129,15 +137,18 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 | **NextSteps/NextSteps_August_30_2025_Environment_Documentation.md** | Priority tasks following environment documentation focusing on critical lane detection algorithm fixes and accuracy improvements | 2100 | 2025-08-30 |
 | **NextSteps/NextSteps_August_30_2025_Configuration_Pipeline_Fix.md** | HeadlessException fix priority and full pipeline completion tasks following configuration resolution | 1650 | 2025-08-30 |
 | **NextSteps/NextSteps_September_01_2025_Truth_Preservation_AI_Integration.md** | Comprehensive remediation plan addressing truth inflation, AI orchestration bypass, and detection algorithm failures with 4-phase implementation roadmap | 1638 | 2025-09-01 |
+| **NextSteps/NextSteps_September_03_2025_Documentation_Consolidation.md** | **NEW** - Phase 2 consolidation roadmap targeting colony analysis mega-consolidation and migration guide unification | ~2,800 | 2025-09-03 |
 | **Issues/Issues_August_27_2025.md** | Critical compilation blockers and system issues discovered during toolkit development with priority matrix | 2118 | 2025-08-27 |
 | **Issues/Issues_August_27_2025_Evening.md** | Technical debt and process issues from PMD complexity work including scattered development patterns | 1834 | 2025-08-27 |
 | **Issues/Issues_August_28_2025_CLI_Architecture.md** | Technical debt and unresolved preprocessing rotation issues identified during CLI architecture implementation | 1692 | 2025-08-28 |
 | **Issues/Issues_August_29_2025_Detection_Pipeline_Fix.md** | Issues identified during detection pipeline breakthrough including resolved baseline removal bug and remaining tasks | 2034 | 2025-08-29 |
 | **Issues/Issues_August_30_2025_Environment_Documentation.md** | Critical issues discovered during environment documentation including severe lane detection algorithm under-performance and biased targeting | 2800 | 2025-08-30 |
 | **Issues/Issues_August_30_2025_Configuration_Pipeline_Fix.md** | HeadlessException blocking and process improvements needed following configuration handoff resolution | 1550 | 2025-08-30 |
+| **Issues/Issues_September_03_2025_Documentation_Consolidation.md** | **NEW** - Quality observations and recommendations from documentation consolidation session | ~2,200 | 2025-09-03 |
 | **StructureDocs/Structure_August_29_2025_Evening.md** | Complete project structure snapshot following detection pipeline breakthrough with 54 directories and 196 files | 2247 | 2025-08-29 |
 | **StructureDocs/Structure_August_30_2025_Environment_Fix.md** | Critical environment procedures documentation to prevent session time waste with exact Python venv, Maven build, and CLI testing procedures | 2847 | 2025-08-30 |
 | **StructureDocs/Structure_August_30_2025_Configuration_Pipeline_Fix.md** | Project structure snapshot with unified build system and resolved configuration infrastructure | 1400 | 2025-08-30 |
+| **StructureDocs/Structure_September_03_2025_Evening_Documentation_Consolidation.md** | **NEW** - Project structure after documentation consolidation with archive system and wrap-up documentation | ~3,200 | 2025-09-03 |
 | **ChatGPT/Cleanup.md** | Comprehensive documentation cleanup strategy and quality improvement guidelines | 4306 | 2025-08-26 |
 | **ChatGPT/What to fix (surgical and minimal).md** | Targeted fix list for preset wiring and band detection issues | 1955 | - |
 | **docs/DOCUMENTATION.md** | Comprehensive documentation overview and navigation guide | 2531 | 2025-08-26 |
@@ -155,12 +166,12 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 
 ## 📈 Catalog Statistics
 
-- **Total Documents:** 76 files  
-- **Total Word Count:** ~91,544 words
-- **Verified Documents:** 41 (53.9%)
+- **Total Documents:** 94 files  
+- **Total Word Count:** ~108,000 words (estimated)
+- **Verified Documents:** 53 (56.4%)
 - **Categories:** 9 major categories
-- **Deprecated/Tombstoned:** 3 documents
-- **Average Document Size:** 1,204 words
+- **Deprecated/Tombstoned:** 4 documents
+- **Average Document Size:** 1,149 words
 
 ## 🔄 Maintenance Instructions
 
@@ -180,4 +191,4 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 
 ---
 
-*Last updated: 2025-08-29 | Maintained via WRAPUP.md session procedures*
+*Last updated: 2025-09-03 | Maintained via WRAPUP.md session procedures*

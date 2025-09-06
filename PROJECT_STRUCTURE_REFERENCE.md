@@ -14,7 +14,7 @@
 
 ```bash
 # Build everything (from project root)
-./build.sh build
+./build.sh all
 
 # Test specific pipelines
 ./build.sh test-sds       # SDS-PAGE analysis
@@ -297,7 +297,7 @@ java -Djava.awt.headless=true \
 cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense
 
 # 2. Build everything (auto-activates Python venv)
-./build.sh build
+./build.sh all
 
 # 3. Verify build success
 ls -la autodense/plugin/target/autodense-plugin-0.1.0-SNAPSHOT.jar
@@ -332,7 +332,7 @@ cd autodense/plugin && mvn --version
 ### Building Components
 ```bash
 # Complete build (recommended)
-./build.sh build
+./build.sh all
 
 # Manual Java build (if needed)
 cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin
@@ -402,7 +402,7 @@ python -m autodense_autotune.java_bridge sds_page \
 cd some/wrong/dir && mvn compile
 
 # ✅ CORRECT: Use build.sh or absolute paths
-./build.sh build
+./build.sh all
 # OR
 cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin && mvn compile
 ```
@@ -507,7 +507,7 @@ TESTS_DIR="$PROJECT_ROOT/tests"
 ### Command Templates
 ```bash
 # Standard build command
-./build.sh build
+./build.sh all
 
 # CLI execution template
 java -Djava.awt.headless=true \
@@ -550,7 +550,7 @@ python -m autodense_autotune.java_bridge [PIPELINE] \
 1. **Verify Environment:**
    ```bash
    cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense
-   ./build.sh build
+   ./build.sh all
    ./build.sh test-detect  # Confirm baseline works
    ```
 
@@ -566,7 +566,7 @@ python -m autodense_autotune.java_bridge [PIPELINE] \
    ```
 
 ### For Build Operations
-- Always use `./build.sh build` (not manual Maven)
+- Always use `./build.sh all` (not manual Maven)
 - Verify JAR and classpath files generated
 - Test with known working mode first
 
@@ -592,7 +592,7 @@ java --version  # Must be Java 17
 # Clean rebuild
 cd autodense/plugin
 mvn clean
-cd ../.. && ./build.sh build
+cd ../.. && ./build.sh all
 
 # Check for missing dependencies
 mvn dependency:tree

@@ -6,6 +6,22 @@
 > - **Owner:** @davidnunn
 > - **Last-verified:** 2025-08-30
 
+## 🚨 CRITICAL: Optimization Integration Warning
+
+**⚠️ FOR OPTIMIZATION/AUTOTUNE INTEGRATION: ALWAYS USE --no-exit FLAG ⚠️**
+```
+🚨 CRITICAL: When calling AutotuneAnalysisCLI from Python bridge or optimization loops:
+✅ CORRECT: java ... AutotuneAnalysisCLI --task sds --input ... --output ... --no-exit
+❌ WRONG:   java ... AutotuneAnalysisCLI --task sds --input ... --output ... 
+
+WITHOUT --no-exit: Java process terminates and breaks Python-Java bridge
+WITH --no-exit:    Java process stays alive for optimization loop communication
+
+ALL PYTHON BRIDGE CALLS MUST INCLUDE --no-exit OR OPTIMIZER QUIETLY DIES!
+```
+
+---
+
 ## 🎯 Quick Start (One Command Solution)
 
 ```bash
@@ -163,6 +179,53 @@ make tune-sds-ij INPUT=samples/sds_gel.jpg
 make tune-etbr-ij INPUT=samples/etbr_gel.jpg
 ```
 
+## 🔧 Comprehensive Troubleshooting
+
+### Critical Path Issues
+
+#### Config File Not Found
+**Problem**: `Config file not found: /path/to/config`
+**Solution**: Use EXACT paths and filenames:
+```bash
+# ❌ WRONG
+/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/configs/sds_page_basic.yaml
+# ✅ CORRECT  
+/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/configs/sds.yaml
+```
+
+#### Image Loading Failures
+**Problem**: `Failed to load image: /path/to/image`
+**Solution**: Use exact sample paths:
+```bash
+# ❌ WRONG
+./challenge_packs/sds_page_v1/sample_data/gel_001.tiff
+# ✅ CORRECT
+/Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/samples/sds_gel.jpg
+```
+
+#### ClassNotFoundException Issues
+**Problem**: `java.lang.NoClassDefFoundError: org/json/JSONObject`
+**Solution**: 
+```bash
+cd autodense/plugin
+mvn dependency:build-classpath -Dmdep.outputFile=target/classpath.txt
+```
+
+#### HeadlessException Issues
+**Problem**: `java.awt.HeadlessException`
+**Solution**: Use headless-safe alternatives to `IJ.run()` calls
+- **Status**: Fixed in main preprocessing pipeline
+- **Remaining**: Some calls across multiple files still need replacement
+
+#### ImageJ Patcher Warning (EXPECTED - NOT AN ERROR)
+**Message**: `ImageJ patcher not found - some ImageJ features may not work with Java 17+`
+**Explanation**: This warning is **EXPECTED and HARMLESS**
+- AutoDense uses **SCIFIO** (ImageJ2 modern I/O) instead of ImageJ1
+- SCIFIO has built-in Java 17+ compatibility and headless operation
+- No patcher needed - this is actually BETTER architecture than ImageJ1+patcher
+- AutoDense has 10+ ImageJ/image processing JARs (scifio, imageio-*, common-image)
+**Action**: IGNORE this warning - it's informational only
+
 ## ⚠️ Common Issues and Solutions
 
 ### "Python venv not activated"
@@ -223,6 +286,54 @@ source .venv/bin/activate && ./build.sh all
 5. **Directory Independence**: Works from any directory (changes to correct locations)
 6. **Error Recovery**: Specific commands for fixing common issues
 7. **Production Ready**: Includes packaging for distribution
+
+## ✅ Validation Checklist
+
+Before claiming "build works" or "test passes", verify:
+
+- [ ] JAR exists: `autodense/plugin/target/autodense-plugin-0.1.0-SNAPSHOT.jar`
+- [ ] Classpath exists: `autodense/plugin/target/classpath.txt`  
+- [ ] Config loads: Using exact filename `sds.yaml` not `sds_page_basic.yaml`
+- [ ] Sample loads: Using exact path `samples/sds_gel.jpg`
+- [ ] No ClassNotFoundException in logs
+- [ ] No "file not found" errors in logs
+- [ ] run_report.json generated with observation data
+- [ ] Python bridge passes --no-exit flag to Java CLI
+
+## 📁 Complete Directory Structure
+
+```
+AutoDense/
+├── build.sh                        # 🔨 UNIFIED BUILD SCRIPT - USE THIS
+├── .venv/                          # Python virtual environment
+│   ├── bin/activate                # Auto-activated by build.sh  
+│   └── lib/python3.13/             # Python packages
+├── autodense/
+│   └── plugin/                     # 🎯 MAVEN PROJECT ROOT
+│       ├── pom.xml                 
+│       ├── src/main/java/          # Java source
+│       │   └── com/betterdairy/autodense/cli/
+│       │       └── AutotuneAnalysisCLI.java  # Main CLI class
+│       └── target/                 # 🔧 BUILD OUTPUT
+│           ├── classes/            # Compiled classes
+│           ├── autodense-plugin-0.1.0-SNAPSHOT.jar
+│           ├── classpath.txt       # 📋 REQUIRED FOR JAVA BRIDGE
+│           └── runtime-classpath.txt
+├── autodense_autotune/             # 🐍 PYTHON OPTIMIZATION ENGINE
+│   ├── java_bridge.py              # Python-Java bridge (MUST use --no-exit)
+│   ├── config_manager.py           
+│   └── [optimization modules]
+├── challenge_packs/                # Task optimization configs
+├── configs/                        # 📋 YAML CONFIGS - USE EXACT NAMES
+│   ├── sds.yaml                    # ✅ SDS-PAGE config
+│   ├── colony.yaml                 # ✅ Colony config  
+│   └── etbr.yaml                   # ✅ EtBr config
+├── samples/                        # 🖼️ TEST IMAGES - USE EXACT PATHS
+│   ├── sds_gel.jpg                 # Main SDS test
+│   ├── colony_plate.jpg            # Main colony test
+│   └── etbr_gel.jpg                # Main EtBr test
+└── output/                         # Analysis results
+```
 
 ## 🏁 Next Steps
 
