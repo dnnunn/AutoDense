@@ -7,7 +7,7 @@ every session.
 
 ## Project Summary
 
-AutoDense is a Mac-native Fiji/ImageJ2 application for laboratory image analysis. As of August 2025, 
+AutoDense is a pure Python scientific application for laboratory image analysis. As of September 2025, 
 AutoDense has undergone a **fundamental paradigm shift** in how Google Gemini is utilized - transitioning
 from a rigid tool orchestrator to an **intelligent parameter optimizer** with feedback loops.
 
@@ -29,7 +29,7 @@ full potential instead of handicapping it with rigid orchestration.
 * **Parameter Grids:** Constrained search spaces for safe parameter exploration
 * **Helper Critic System:** Second-opinion validation of proposed parameter changes
 * **RunReport Schema:** Standardized metrics reporting for performance feedback
-* **Python-Java Bridge:** Python optimization engine communicating with Java/ImageJ execution
+* **Python Vision Pipeline:** Pure Python image analysis using numpy, scipy, scikit-image
 
 ### Dual Operation Modes
 
@@ -62,7 +62,7 @@ full potential instead of handicapping it with rigid orchestration.
 
 ### Legacy Architecture (Backwards Compatible)
 * **GeminiOrchestrator** → Builds JSON tool plans from user commands.
-* **ImageJ tools** → Execute all image operations deterministically.
+* **Python vision tools** → Execute all image operations using scientific Python stack.
 * **SessionStore** → Persists state (images, overlays, analyses).
 * **Handle system** → All references by IDs only.
 * **SessionLogger** → Logs conversations, tool calls, results, API interactions.
@@ -79,7 +79,7 @@ full potential instead of handicapping it with rigid orchestration.
 
 1. Gemini **never** processes pixels or describes images. *(unchanged)*
 2. Gemini **can** emit structured tool calls OR parameter optimization proposals.
-3. ImageJ **executes** tools; Python **optimizes** parameters; Gemini **orchestrates** both.
+3. Python **executes** analysis; optimization engine **tunes** parameters; Gemini **orchestrates** workflow.
 4. State **always** persists in SessionStore via handles. *(unchanged)*
 5. Optimization loop allows iterative parameter refinement with safety gates.
 

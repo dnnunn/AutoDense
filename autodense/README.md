@@ -6,7 +6,7 @@
 > - **Owner:** @davidnunn
 > - **Last-verified:** 2025-08-26
 
-AI-powered gel densitometry application built as a Mac-native Fiji/ImageJ2 app with Google Gemini
+AI-powered gel densitometry application built as a pure Python scientific app with Google Gemini
 integration for natural language control.
 
 ## Quick Start
@@ -34,7 +34,7 @@ mvn -q -f plugin/pom.xml exec:java \
 AutoDense uses a **handle-based architecture** where:
 
 - **Gemini** acts as the planner, emitting tool calls in natural language
-- **ImageJ/Fiji** executes all image analysis operations
+- **Python vision stack** executes all image analysis operations
 - **SessionStore** maintains state via handles (no pixels passed to LLM)
 
 ### Core Components
@@ -42,7 +42,7 @@ AutoDense uses a **handle-based architecture** where:
 - **plugin/**: ImageJ2 plugin with analysis engine and UI
   - `SessionStore`: Handle-based state management
   - `GelAnalysisTools`: Tool implementations for Gemini
-  - `GeminiOrchestrator`: Coordinates AI planning with ImageJ execution
+  - `GeminiOrchestrator`: Coordinates AI planning with Python execution
   - Analysis classes: Lane/band detection, quantification, calibration
 
 - **nl/**: *(Removed - local LLM support discontinued)*
@@ -69,9 +69,9 @@ AutoDense uses a **handle-based architecture** where:
 ## Key Features
 
 - **AI-Guided Analysis**: Natural language control via Gemini Vision
-- **Full Fiji Integration**: Complete ImageJ2/Fiji functionality available
+- **Full Scientific Stack**: Complete numpy/scipy/scikit-image functionality available
 - **Handle-Based Architecture**: Persistent state across AI commands
-- **Expert Quantification**: Fiji-compatible band measurement algorithms
+- **Expert Quantification**: Scientific Python band measurement algorithms
 - **Flexible Export**: CSV, JSON, PNG with overlays
 - **Mac-Native**: Standalone app bundle with code signing
 
