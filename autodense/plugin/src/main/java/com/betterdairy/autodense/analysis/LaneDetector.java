@@ -10,6 +10,19 @@ import java.util.Map;
 import java.util.logging.Logger;
 import com.betterdairy.autodense.model.Models.Lane;
 
+/**
+ * DEPRECATED: Legacy Java lane detection - replaced by Python bridge in Phase III heart transplant.
+ * 
+ * This class is maintained for backward compatibility only. New code should use:
+ * com.betterdairy.autodense.service.AnalysisService with Python bridge for superior
+ * computer vision analysis.
+ * 
+ * Migration: Replace LaneDetector.detectLanes() calls with:
+ * AnalysisService.analyzeGel(image, config) or AnalysisService.getDefaultConfig("gel")
+ * 
+ * @deprecated Since AutoDense v3.0 (Phase III). Use AnalysisService instead.
+ */
+@Deprecated
 public final class LaneDetector {
     private LaneDetector() {}
     

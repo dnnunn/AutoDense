@@ -17,8 +17,14 @@ import java.util.List;
  * Pure functional colony detection using native ImageJ operations.
  * Implements LoG blob detection and watershed splitting.
  * 
- * @deprecated Use {@link UnifiedColonyDetector} instead. This class will be removed in a future version.
- *             UnifiedColonyDetector provides better accuracy and consistency.
+ * @deprecated Legacy Java colony detection - replaced by Python bridge in Phase III heart transplant.
+ * 
+ * This class is maintained for backward compatibility only. New code should use:
+ * com.betterdairy.autodense.service.AnalysisService with Python bridge for superior
+ * computer vision analysis.
+ * 
+ * Migration: Replace ColonyDetector.detect() calls with:
+ * AnalysisService.analyzeColony(image, config) which provides better accuracy and consistency.
  */
 @Deprecated
 public final class ColonyDetector {

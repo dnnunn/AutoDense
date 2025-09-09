@@ -12,6 +12,19 @@ import java.util.Map;
 import java.awt.Rectangle;
 import autodense.sds.FluorescenceOps;
 
+/**
+ * DEPRECATED: Legacy Java band detection - replaced by Python bridge in Phase III heart transplant.
+ * 
+ * This class is maintained for backward compatibility only. New code should use:
+ * com.betterdairy.autodense.service.AnalysisService with Python bridge for superior
+ * computer vision analysis.
+ * 
+ * Migration: Replace BandDetector.findBands() calls with:
+ * AnalysisService.analyzeGel(image, config) which includes both lane and band detection
+ * 
+ * @deprecated Since AutoDense v3.0 (Phase III). Use AnalysisService instead.
+ */
+@Deprecated
 public final class BandDetector {
     private BandDetector() {}
 

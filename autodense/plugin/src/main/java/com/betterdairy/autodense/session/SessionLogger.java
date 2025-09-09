@@ -312,14 +312,14 @@ public class SessionLogger {
     }
     
     /**
-     * Log Gemini API interaction details
+     * Log LLM API interaction details (OpenAI, Gemini, etc.)
      */
-    public void logGeminiApiCall(String endpoint, JSONObject request, JSONObject response, 
+    public void logLlmApiCall(String endpoint, JSONObject request, JSONObject response, 
                                 int statusCode, long responseTimeMs) {
         if (!isActive) return;
         
         JSONObject entry = new JSONObject()
-            .put("type", "gemini_api")
+            .put("type", "llm_api")
             .put("timestamp", getCurrentTimestamp())
             .put("session_id", sessionId)
             .put("endpoint", endpoint)

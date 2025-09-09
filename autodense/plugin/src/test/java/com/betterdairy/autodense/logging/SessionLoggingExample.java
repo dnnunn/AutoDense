@@ -1,6 +1,6 @@
 package com.betterdairy.autodense.logging;
 
-import com.betterdairy.autodense.orchestrator.GeminiOrchestrator;
+import com.betterdairy.autodense.orchestrator.OpenAiOrchestrator;
 import com.betterdairy.autodense.session.SessionLogger;
 import ij.IJ;
 import ij.ImagePlus;
@@ -20,19 +20,19 @@ public class SessionLoggingExample {
     public static void main(String[] args) {
         System.out.println("=== AutoDense Session Logging Demo ===");
         
-        // Check if Gemini API key is available
-        String apiKey = System.getProperty("GEMINI_API_KEY", System.getenv("GEMINI_API_KEY"));
+        // Check if OpenAI API key is available
+        String apiKey = System.getProperty("OPENAI_API_KEY", System.getenv("OPENAI_API_KEY"));
         if (apiKey == null || apiKey.isEmpty()) {
-            System.out.println("⚠️  GEMINI_API_KEY not found - running basic logging demo without API calls");
+            System.out.println("⚠️  OPENAI_API_KEY not found - running basic logging demo without API calls");
             runBasicLoggingDemo();
         } else {
-            System.out.println("✓ GEMINI_API_KEY found - running full orchestration demo");
+            System.out.println("✓ OPENAI_API_KEY found - running full orchestration demo");
             runFullOrchestrationDemo(apiKey);
         }
     }
     
     /**
-     * Demonstrates basic session logging without Gemini API calls
+     * Demonstrates basic session logging without OpenAI API calls
      */
     private static void runBasicLoggingDemo() {
         // Create a session logger
@@ -45,7 +45,7 @@ public class SessionLoggingExample {
             logger.logConversation("user", "Detect 12 lanes in this gel", 
                 new JSONObject().put("demo_mode", true));
                 
-            logger.logConversation("gemini", "I can see this is a protein gel. I'll detect the lanes for you.", 
+            logger.logConversation("assistant", "I can see this is a protein gel. I'll detect the lanes for you.", 
                 new JSONObject()
                     .put("image_type", "gel")
                     .put("confidence", 0.95)
@@ -91,7 +91,7 @@ public class SessionLoggingExample {
      * Demonstrates full orchestration with session logging
      */
     private static void runFullOrchestrationDemo(String apiKey) {
-        GeminiOrchestrator orchestrator = new GeminiOrchestrator(apiKey);
+        OpenAiOrchestrator orchestrator = new OpenAiOrchestrator(apiKey);
         
         try {
             System.out.println("\n1. Testing full orchestration with logging...");
@@ -126,7 +126,7 @@ public class SessionLoggingExample {
                     System.out.println("✓ Async command completed: " + result.success);
                 });
                 
-            System.out.println("✓ Async command submitted - this would normally call Gemini API");
+            System.out.println("✓ Async command submitted - this would normally call OpenAI API");
             
             // Get session info
             JSONObject sessionInfo = orchestrator.getSessionInfo();

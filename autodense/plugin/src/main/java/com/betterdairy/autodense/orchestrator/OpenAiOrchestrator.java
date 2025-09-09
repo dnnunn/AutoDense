@@ -13,7 +13,6 @@ import org.json.JSONObject;
 import org.json.JSONArray;
 import org.scijava.Context;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -188,11 +187,11 @@ public class OpenAiOrchestrator {
     }
     
     /**
-     * Execute tool call directly with logging - delegates to GeminiOrchestrator logic
+     * Execute tool call directly with logging
      * This maintains backward compatibility with existing tool execution
      */
     public JSONObject executeTool(String toolName, JSONObject parameters) {
-        // For now, we'll use a temporary GeminiOrchestrator instance to handle tool execution
+        // Execute tool using the integrated tool execution logic
         // This ensures we don't duplicate all the complex tool routing logic
         // TODO: Extract tool execution logic into a shared service class
         
@@ -201,7 +200,7 @@ public class OpenAiOrchestrator {
         JSONObject result = null;
         
         try {
-            // Handle injection logic similar to GeminiOrchestrator
+            // Handle injection logic for required tool parameters
             if (!parameters.has("image_handle") || parameters.isNull("image_handle")) {
                 String injectedHandle = injectLastActiveImageHandle(toolName);
                 if (injectedHandle != null) {
@@ -219,7 +218,7 @@ public class OpenAiOrchestrator {
                 }
             }
             
-            // Execute the tool using the same logic as GeminiOrchestrator
+            // Execute the tool using the integrated analysis tools
             result = executeToolInternal(toolName, parameters);
             
             // Record last active image handle if returned by tool
@@ -326,7 +325,7 @@ public class OpenAiOrchestrator {
             
         } finally {
             // Log API call (using generic term instead of "gemini")
-            sessionLogger.logGeminiApiCall("analyzeGel", requestData, responseData, 
+            sessionLogger.logLlmApiCall("analyzeGel", requestData, responseData, 
                 statusCode, System.currentTimeMillis() - startTime);
         }
     }
@@ -526,7 +525,7 @@ public class OpenAiOrchestrator {
     
     // For now, implement a simplified version of the complex tool execution logic
     private JSONObject executeToolInternal(String toolName, JSONObject parameters) {
-        // This is a simplified version - the full logic from GeminiOrchestrator should be extracted
+        // This is a simplified version - extract to shared service if needed
         // to a shared service class to avoid code duplication
         
         switch (toolName) {

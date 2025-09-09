@@ -333,19 +333,19 @@ public class EnhancedImageJLauncher {
     
     private static void initializeAutoDense(org.scijava.Context context) {
         // Check API key before initializing
-        String apiKey = loadGeminiApiKey();
+        String apiKey = loadOpenAiApiKey();
         if (!isValidApiKey(apiKey)) {
-            IJ.log("⚠️ ⚠️ ⚠️  GEMINI API KEY ISSUE  ⚠️ ⚠️ ⚠️");
-            IJ.log("❌ Invalid or missing Gemini API key detected!");
+            IJ.log("⚠️ ⚠️ ⚠️  OPENAI API KEY ISSUE  ⚠️ ⚠️ ⚠️");
+            IJ.log("❌ Invalid or missing OpenAI API key detected!");
             IJ.log("📋 TO FIX THIS:");
-            IJ.log("   1. Get API key: https://makersuite.google.com/app/apikey");
-            IJ.log("   2. Set environment: export GEMINI_API_KEY=your_actual_key");
-            IJ.log("   3. Or system property: -DGEMINI_API_KEY=your_actual_key");
+            IJ.log("   1. Get API key: https://platform.openai.com/api-keys");
+            IJ.log("   2. Set environment: export OPENAI_API_KEY=your_actual_key");
+            IJ.log("   3. Or system property: -DOPENAI_API_KEY=your_actual_key");
             IJ.log("   4. Restart AutoDense");
             IJ.log("⚠️  AI features will fail without valid key!");
             IJ.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         } else {
-            IJ.log("✅ Valid Gemini API key detected");
+            IJ.log("✅ Valid OpenAI API key detected");
         }
         
         // Initialize AutoDense plugin with enhanced context
@@ -376,23 +376,23 @@ public class EnhancedImageJLauncher {
     }
     
     /**
-     * Load Gemini API key from multiple sources in priority order:
-     * 1. System property: -DGEMINI_API_KEY=key
-     * 2. Environment variable: GEMINI_API_KEY=key  
+     * Load OpenAI API key from multiple sources in priority order:
+     * 1. System property: -DOPENAI_API_KEY=key
+     * 2. Environment variable: OPENAI_API_KEY=key  
      * 3. Configuration file: api-config.properties
      */
-    private static String loadGeminiApiKey() {
+    private static String loadOpenAiApiKey() {
         // Priority 1: System property
-        String apiKey = System.getProperty("GEMINI_API_KEY");
+        String apiKey = System.getProperty("OPENAI_API_KEY");
         if (apiKey != null && !apiKey.trim().isEmpty()) {
-            IJ.log("🔑 Using Gemini API key from system property");
+            IJ.log("🔑 Using OpenAI API key from system property");
             return apiKey.trim();
         }
         
         // Priority 2: Environment variable
-        apiKey = System.getenv("GEMINI_API_KEY");
+        apiKey = System.getenv("OPENAI_API_KEY");
         if (apiKey != null && !apiKey.trim().isEmpty()) {
-            IJ.log("🔑 Using Gemini API key from environment variable");
+            IJ.log("🔑 Using OpenAI API key from environment variable");
             return apiKey.trim();
         }
         
@@ -403,9 +403,9 @@ public class EnhancedImageJLauncher {
                 java.util.Properties props = new java.util.Properties();
                 try (java.io.FileInputStream fis = new java.io.FileInputStream(configFile)) {
                     props.load(fis);
-                    apiKey = props.getProperty("GEMINI_API_KEY");
+                    apiKey = props.getProperty("OPENAI_API_KEY");
                     if (apiKey != null && !apiKey.trim().isEmpty()) {
-                        IJ.log("🔑 Using Gemini API key from api-config.properties");
+                        IJ.log("🔑 Using OpenAI API key from api-config.properties");
                         return apiKey.trim();
                     }
                 }
@@ -414,9 +414,9 @@ public class EnhancedImageJLauncher {
             IJ.log("⚠️  Failed to read api-config.properties: " + e.getMessage());
         }
         
-        IJ.log("❌ No Gemini API key found in any location:");
-        IJ.log("   • System property: -DGEMINI_API_KEY=key");
-        IJ.log("   • Environment: export GEMINI_API_KEY=key");
+        IJ.log("❌ No OpenAI API key found in any location:");
+        IJ.log("   • System property: -DOPENAI_API_KEY=key");
+        IJ.log("   • Environment: export OPENAI_API_KEY=key");
         IJ.log("   • Config file: api-config.properties");
         return null;
     }

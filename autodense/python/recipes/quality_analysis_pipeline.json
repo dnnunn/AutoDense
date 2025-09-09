@@ -1,0 +1,44 @@
+{
+  "name": "Quality Analysis Pipeline",
+  "description": "Custom pipeline for quality control and outlier detection",
+  "steps": [
+    {
+      "operation": "quality_filter",
+      "parameters": {
+        "max_cv": 30.0,
+        "min_val": 50.0
+      },
+      "input_source": "previous",
+      "step_id": "filtered"
+    },
+    {
+      "operation": "normalize_to_control",
+      "parameters": {
+        "control_idx": 0
+      },
+      "input_source": "filtered",
+      "step_id": "normalized"
+    },
+    {
+      "operation": "outlier_detection",
+      "parameters": {
+        "method": "iqr",
+        "threshold": 1.5
+      },
+      "input_source": "normalized",
+      "step_id": "outliers"
+    },
+    {
+      "operation": "statistical_summary",
+      "parameters": {},
+      "input_source": "normalized",
+      "step_id": null
+    }
+  ],
+  "metadata": {
+    "built_in": false,
+    "custom": true,
+    "saved_at": "2025-09-09T09:05:02.736778"
+  },
+  "created_at": "2025-09-09T09:05:02.736760"
+}
