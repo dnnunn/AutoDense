@@ -1,1 +1,0 @@
-{"class":"net.imagej.ImageJ","values":{"type":"org.scijava.Gateway"}}{"class":"net.imagej.app.ToplevelImageJApp","values":{"name":"ImageJ2","priority":101.0,"type":"org.scijava.app.App"}}

@@ -84,3 +84,9 @@ if run_btn and uploaded:
                     if b.confidence >= conf_min:
                         rows.append({"lane": ln.index, "band": b.index, "confidence": round(b.confidence,3), "intensity": round(b.intensity or 0.0,2)})
             st.table(rows)
+
+def main():
+    """Entry point for autodense-ui console command"""
+    import subprocess
+    import sys
+    subprocess.run([sys.executable, "-m", "streamlit", "run", __file__])

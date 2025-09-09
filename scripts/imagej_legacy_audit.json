@@ -1,0 +1,2438 @@
+[
+  {
+    "file": "cspell.json",
+    "line": 5,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "\"AutoDense\",\"ImageJ\",\"Coomassie\",\"BandAssist\",\"Rf\","
+  },
+  {
+    "file": "cspell.json",
+    "line": 7,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "\"densitometry\",\"Fiji\",\"ImageJ2\",\"JSONL\",\"LLOQ\","
+  },
+  {
+    "file": "autodense/pom.xml",
+    "line": 18,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "<id>scijava.public</id>"
+  },
+  {
+    "file": "autodense/pom.xml",
+    "line": 20,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "<url>https://maven.scijava.org/content/groups/public</url>"
+  },
+  {
+    "file": "autodense/packaging/scripts/build_llama_universal.sh",
+    "line": 19,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "mkdir -p ../resources/Fiji.app/Contents/Resources/bin"
+  },
+  {
+    "file": "autodense/packaging/scripts/build_llama_universal.sh",
+    "line": 19,
+    "label": "Bundled ImageJ binary",
+    "pattern": "(?:ImageJ\\.app|Fiji\\.app|ij\\.jar|ImageJ-linux64|ImageJ-win64\\.exe)",
+    "snippet": "mkdir -p ../resources/Fiji.app/Contents/Resources/bin"
+  },
+  {
+    "file": "autodense/packaging/scripts/build_llama_universal.sh",
+    "line": 20,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "mv llama-server-universal ../resources/Fiji.app/Contents/Resources/bin/llama-server"
+  },
+  {
+    "file": "autodense/packaging/scripts/build_llama_universal.sh",
+    "line": 20,
+    "label": "Bundled ImageJ binary",
+    "pattern": "(?:ImageJ\\.app|Fiji\\.app|ij\\.jar|ImageJ-linux64|ImageJ-win64\\.exe)",
+    "snippet": "mv llama-server-universal ../resources/Fiji.app/Contents/Resources/bin/llama-server"
+  },
+  {
+    "file": "autodense/packaging/scripts/build_llama_universal.sh",
+    "line": 21,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "chmod +x ../resources/Fiji.app/Contents/Resources/bin/llama-server"
+  },
+  {
+    "file": "autodense/packaging/scripts/build_and_package.sh",
+    "line": 47,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "echo \"   \ud83d\udd38 SHADING: Jackson, Gson, OkHttp, Apache Commons (avoid Fiji conflicts)\""
+  },
+  {
+    "file": "autodense/packaging/scripts/build_and_package.sh",
+    "line": 52,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "-DexcludeGroupIds=\"net.imagej,org.scijava,org.scijava.plugins,net.imglib2,org.jdom\" \\"
+  },
+  {
+    "file": "autodense/packaging/scripts/build_and_package.sh",
+    "line": 160,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "echo \"  \u2705 AVOID: Fiji built-ins (ImageJ, SciJava, ImgLib2)\""
+  },
+  {
+    "file": "autodense/packaging/scripts/build_and_package.sh",
+    "line": 160,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "echo \"  \u2705 AVOID: Fiji built-ins (ImageJ, SciJava, ImgLib2)\""
+  },
+  {
+    "file": "autodense/plugin/pom.xml",
+    "line": 22,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "<groupId>net.imagej</groupId>"
+  },
+  {
+    "file": "autodense/plugin/pom.xml",
+    "line": 32,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "<groupId>net.imagej</groupId>"
+  },
+  {
+    "file": "autodense/plugin/pom.xml",
+    "line": 36,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "<groupId>net.imagej</groupId>"
+  },
+  {
+    "file": "autodense/plugin/pom.xml",
+    "line": 40,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "<groupId>org.scijava</groupId>"
+  },
+  {
+    "file": "autodense/plugin/pom.xml",
+    "line": 41,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "<artifactId>scijava-common</artifactId>"
+  },
+  {
+    "file": "autodense/plugin/src/test/java/com/betterdairy/autodense/tools/ColonyAnalysisToolsTest.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/test/java/com/betterdairy/autodense/tools/ColonyAnalysisToolsTest.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ByteProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/test/java/com/betterdairy/autodense/tools/GelAnalysisToolsTest.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/test/java/com/betterdairy/autodense/tools/GelAnalysisToolsTest.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ByteProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/test/java/com/betterdairy/autodense/util/ResourceLeakTest.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/test/java/com/betterdairy/autodense/util/ResourceLeakTest.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ByteProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/test/java/com/betterdairy/autodense/performance/PerformanceBenchmark.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/test/java/com/betterdairy/autodense/performance/PerformanceBenchmark.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.FloatProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/test/java/com/betterdairy/autodense/logging/SessionLoggingExample.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/test/java/com/betterdairy/autodense/logging/SessionLoggingExample.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/test/java/com/betterdairy/autodense/logging/SessionLoggingExample.java",
+    "line": 159,
+    "label": "ImageJ IJ.* static call",
+    "pattern": "\\bIJ\\.[A-Za-z_]",
+    "snippet": "ImagePlus imp = IJ.createImage(\"Test Gel\", \"8-bit\", width, height, 1);"
+  },
+  {
+    "file": "autodense/plugin/src/test/java/com/betterdairy/autodense/session/SessionStoreTest.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/test/java/com/betterdairy/autodense/session/SessionStoreTest.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/test/java/com/betterdairy/autodense/session/SessionStoreTest.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ByteProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/sds/FluorescenceOps.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/sds/FluorescenceOps.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Line;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/sds/FluorescenceOps.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/sds/FluorescenceOps.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/sds/FluorescenceOps.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.measure.Measurements;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/sds/SdsOps.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/sds/SdsOps.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Line;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/sds/SdsOps.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/sds/SdsOps.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/sds/SdsOps.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.measure.Measurements;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/sds/SdsCalib.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/sds/SdsCalib.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/sds/SdsCalib.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/sds/SdsCalib.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/sds/SdsCalib.java",
+    "line": 8,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.TextRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/util/OverlayExporter.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/util/OverlayExporter.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/util/OverlayExporter.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/util/OverlayExporter.java",
+    "line": 14,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "* Utility for exporting ImageJ overlays to PNG files"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/color/HsvOps.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ColorProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/agarose/AgaroseOps.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/agarose/AgaroseOps.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/agarose/AgaroseOps.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/agarose/AgaroseOps.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/autodense/agarose/AgaroseOps.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/PlateAnalysisTools.java",
+    "line": 10,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/PlateAnalysisTools.java",
+    "line": 11,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/PlateAnalysisTools.java",
+    "line": 12,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/PlateAnalysisTools.java",
+    "line": 13,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.measure.ResultsTable;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/PlateAnalysisTools.java",
+    "line": 14,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.plugin.ImageCalculator;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/GelAnalysisTools.java",
+    "line": 17,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/GelAnalysisTools.java",
+    "line": 18,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/GelAnalysisTools.java",
+    "line": 19,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/GelAnalysisTools.java",
+    "line": 20,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/GelAnalysisTools.java",
+    "line": 21,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.TextRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/ColonyAnalysisTools.java",
+    "line": 12,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/ColonyAnalysisTools.java",
+    "line": 13,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.OvalRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/AssayOps.java",
+    "line": 9,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/AssayOps.java",
+    "line": 10,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/AssayOps.java",
+    "line": 11,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/AssayOps.java",
+    "line": 12,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/AssayOps.java",
+    "line": 13,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/GelAnalysisToolsNew.java",
+    "line": 8,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/GelAnalysisToolsNew.java",
+    "line": 9,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/GelAnalysisToolsNew.java",
+    "line": 137,
+    "label": "ImageJ IJ.* static call",
+    "pattern": "\\bIJ\\.[A-Za-z_]",
+    "snippet": "ImagePlus imp = IJ.openImage(path);"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/GelAnalysisToolsNew.java",
+    "line": 144,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "imp.show(); // Display in ImageJ"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/GelAnalysisToolsNew.java",
+    "line": 281,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "* Refresh the web canvas overlay after ImageJ operations"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/BandDetectionTools.java",
+    "line": 11,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/BandDetectionTools.java",
+    "line": 12,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/BandDetectionTools.java",
+    "line": 13,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.TextRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/LaneDetectionTools.java",
+    "line": 9,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/LaneDetectionTools.java",
+    "line": 10,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/LaneDetectionTools.java",
+    "line": 11,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.TextRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/GelExportTools.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/GelExportTools.java",
+    "line": 8,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/GelExportTools.java",
+    "line": 9,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/GelExportTools.java",
+    "line": 10,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/tools/gel/GelExportTools.java",
+    "line": 11,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/capabilities/AnalysisCapabilityRegistry.java",
+    "line": 225,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "\"Identifies individual bacterial colonies using ImageJ ParticleAnalyzer with configurable size limits, circularity thresholds, and watershed splitting for touching colonies.\","
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyNormalizer.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyNormalizer.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.OvalRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyNormalizer.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyVisualizer.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyVisualizer.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyVisualizer.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.OvalRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyVisualizer.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.TextRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ImageProcessingBugFixesTest.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ImageProcessingBugFixesTest.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ColorProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ImageProcessingBugFixesTest.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PlateAlignment.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PlateAlignment.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PlateAlignment.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PlateAlignment.java",
+    "line": 1580,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "* Uses ImageJ's built-in transformations instead of manual pixel operations"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PlateAlignment.java",
+    "line": 1584,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "// Create transformed image using ImageJ's affine transformation"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/BandDetector.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/BandDetector.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/BandDetector.java",
+    "line": 469,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "* Quantifies a single band using advanced Fiji algorithms."
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/BandDetector.java",
+    "line": 473,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "ImagePlus imp, ij.gui.Roi roi,"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/BandDetector.java",
+    "line": 483,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "ij.IJ.run(imp, \"RGB Weights...\","
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PlateDetector.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PlateDetector.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PlateDetector.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.OvalRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PlateDetector.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.measure.ResultsTable;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PlateDetector.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.plugin.ImageCalculator;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ResourceAwareImagePreprocessor.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/StreamlinedColonyClassifier.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/StreamlinedColonyClassifier.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/StreamlinedColonyClassifier.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/StreamlinedColonyClassifier.java",
+    "line": 118,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "ij.plugin.filter.GaussianBlur blur = new ij.plugin.filter.GaussianBlur();"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/StreamlinedColonyClassifier.java",
+    "line": 122,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "ij.plugin.ImageCalculator calc = new ij.plugin.ImageCalculator();"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PetriColonyMask.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PetriColonyMask.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PetriColonyMask.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PetriColonyMask.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.measure.ResultsTable;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/PetriColonyMask.java",
+    "line": 42,
+    "label": "ImageJ IJ.* static call",
+    "pattern": "\\bIJ\\.[A-Za-z_]",
+    "snippet": "IJ.run(blueIndexImage, \"Options...\", \"iterations=2 count=1 black do=Open\");"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyOverlay.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyOverlay.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.OvalRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyOverlay.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.TextRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyBinner.java",
+    "line": 111,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "public static ij.gui.Overlay createVisualOverlay(List<MutableColony> colonies, double pxPerMM, boolean showLegend) {"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyBinner.java",
+    "line": 118,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "public static void applyVisualOverlay(ij.ImagePlus image, List<MutableColony> colonies, double pxPerMM, boolean showLegend) {"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AnnulusBackground.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AnnulusBackground.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AnnulusBackground.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.FloatProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyClassifier.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyClassifier.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.OvalRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyClassifier.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ColorProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyClassifier.java",
+    "line": 8,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/BandQuantification.java",
+    "line": 7,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "* Represents the quantification results for a single band using proven Fiji algorithms."
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/BandQuantification.java",
+    "line": 8,
+    "label": "ImageJ macro file",
+    "pattern": "\\.ijm\\b",
+    "snippet": "* Based on _BandPeakQuantification.ijm by Kenji OHGANE (University of Tokyo)."
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/BandQuantification.java",
+    "line": 31,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "LUMINANCE(0.299, 0.587, 0.114);  // ImageJ standard"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/BandQuantification.java",
+    "line": 46,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "// Core quantification results (Fiji standard)"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/BandQuantification.java",
+    "line": 145,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "* Creates a CSV header line compatible with Fiji exports"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/LaneDetector.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/LaneDetector.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/LaneDetector.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/XGalBluenessAnalyzer.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/XGalBluenessAnalyzer.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/XGalBluenessAnalyzer.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ColorProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/TimeSeriesColonyTracker.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/TimeSeriesColonyTracker.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/StreamlinedColonyTools.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/StreamlinedColonyTools.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/StreamlinedColonyTools.java",
+    "line": 11,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "* Streamlined colony analysis tools using robust ImageJ-based detection"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ImagePreprocessor.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ImagePreprocessor.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ImagePreprocessor.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ImagePreprocessor.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.plugin.filter.GaussianBlur;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ImagePreprocessor.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.plugin.ContrastEnhancer;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AssistBandTool.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AssistBandTool.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AssistBandTool.java",
+    "line": 8,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.ImageCanvas;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AssistBandTool.java",
+    "line": 9,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AssistBandTool.java",
+    "line": 126,
+    "label": "ImageJ IJ.* static call",
+    "pattern": "\\bIJ\\.[A-Za-z_]",
+    "snippet": "IJ.showMessage(\"BandAssist\", \"No operations to undo.\");"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/Profiles.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/Profiles.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AsyncImageProcessor.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/Quant.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/Quant.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/OverlayRenderer.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/OverlayRenderer.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/OverlayRenderer.java",
+    "line": 8,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.OvalRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/OverlayRenderer.java",
+    "line": 9,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.TextRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/OverlayRenderer.java",
+    "line": 32,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "// These fonts work consistently across headless vs GUI ImageJ environments"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/RobustColonyDetector.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/RobustColonyDetector.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/RobustColonyDetector.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.measure.ResultsTable;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/RobustColonyDetector.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.plugin.filter.ParticleAnalyzer;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/RobustColonyDetector.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.AutoThresholder;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/RobustPlateDetector.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/RobustPlateDetector.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/RobustPlateDetector.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/RobustPlateDetector.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.measure.Calibration;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/RobustPlateDetector.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.measure.ResultsTable;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AssistColonyTool.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AssistColonyTool.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.OvalRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AssistColonyTool.java",
+    "line": 8,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AssistColonyTool.java",
+    "line": 9,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/AssistColonyTool.java",
+    "line": 10,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ByteProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/UnifiedColonyDetector.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/UnifiedColonyDetector.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/UnifiedColonyDetector.java",
+    "line": 8,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.OvalRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/UnifiedColonyDetector.java",
+    "line": 9,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.measure.ResultsTable;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/UnifiedColonyDetector.java",
+    "line": 10,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyDetector.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyDetector.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyDetector.java",
+    "line": 8,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.OvalRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyDetector.java",
+    "line": 9,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.measure.ResultsTable;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ColonyDetector.java",
+    "line": 10,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.plugin.filter.EDM;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/ParameterConverter.java",
+    "line": 122,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "String thresholdMethod,     // ImageJ threshold method name"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/FijiBandDetector.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/FijiBandDetector.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/FijiBandDetector.java",
+    "line": 11,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "* Enhanced band detector with Fiji's proven quantification algorithms."
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/FijiBandDetector.java",
+    "line": 12,
+    "label": "ImageJ macro file",
+    "pattern": "\\.ijm\\b",
+    "snippet": "* Implements methods from _BandPeakQuantification.ijm by Kenji OHGANE (University of Tokyo)."
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/analysis/FijiBandDetector.java",
+    "line": 19,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "* Quantifies a single band using Fiji's proven algorithms."
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/SyntheticImageGenerator.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/SyntheticImageGenerator.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.FloatProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/SyntheticImageGenerator.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/SyntheticImageGenerator.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/SyntheticImageGenerator.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.OvalRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ResourceLeakDetector.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ImagePreprocessor.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ImagePreprocessor.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ImagePreprocessor.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.FloatProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ImagePreprocessor.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ImagePreprocessor.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ErrorHandler.java",
+    "line": 129,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "* Handle ImageJ/ImagePlus related errors"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ErrorHandler.java",
+    "line": 138,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "* Handle ImageJ/ImagePlus related errors"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ErrorHandler.java",
+    "line": 361,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "// ImageJ errors"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ImageJResourceManager.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ImageJResourceManager.java",
+    "line": 8,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "* Utility class for managing ImageJ resources to prevent memory leaks."
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ImageJResourceManager.java",
+    "line": 10,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "* <p>This class provides safe cleanup methods for ImageJ objects like ImagePlus"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ResourceManager.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/ResourceManager.java",
+    "line": 9,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "* Utility for managing ImageJ resources and preventing memory leaks."
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/GenerateSyntheticImages.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/util/GenerateSyntheticImages.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.io.FileSaver;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/OpenAnalyzeCommand.java",
+    "line": 3,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "import net.imagej.ImageJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/OpenAnalyzeCommand.java",
+    "line": 3,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "import net.imagej.ImageJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/OpenAnalyzeCommand.java",
+    "line": 4,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "import org.scijava.Context;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/OpenAnalyzeCommand.java",
+    "line": 5,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "import org.scijava.command.Command;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/OpenAnalyzeCommand.java",
+    "line": 6,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "import org.scijava.plugin.Parameter;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/OpenAiApiClient.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/OpenAiApiClient.java",
+    "line": 16,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "import org.scijava.Context;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/OpenAiApiClient.java",
+    "line": 249,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "- Return a JSON response that will trigger the appropriate ImageJ analysis"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/OpenAiApiClient.java",
+    "line": 335,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "public String action;        // Action to execute in ImageJ"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/ClasspathAudit.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/ClasspathAudit.java",
+    "line": 14,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "* - Version conflicts between AutoDense and Fiji dependencies"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/ClasspathAudit.java",
+    "line": 24,
+    "label": "ImageJ IJ.* static call",
+    "pattern": "\\bIJ\\.[A-Za-z_]",
+    "snippet": "IJ.log(\"\ud83d\udd0d Running AutoDense Classpath Audit...\");"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/ClasspathAudit.java",
+    "line": 25,
+    "label": "ImageJ IJ.* static call",
+    "pattern": "\\bIJ\\.[A-Za-z_]",
+    "snippet": "IJ.log(\"==========================================\");"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/ClasspathAudit.java",
+    "line": 35,
+    "label": "ImageJ IJ.* static call",
+    "pattern": "\\bIJ\\.[A-Za-z_]",
+    "snippet": "IJ.log(\"==========================================\");"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/EnhancedImageJLauncher.java",
+    "line": 3,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "import net.imagej.ImageJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/EnhancedImageJLauncher.java",
+    "line": 3,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "import net.imagej.ImageJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/EnhancedImageJLauncher.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/EnhancedImageJLauncher.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/EnhancedImageJLauncher.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.ProfilePlot;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/GelUI.java",
+    "line": 3,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "import org.scijava.Context;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/GelUI.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/GelUI.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/GelUI.java",
+    "line": 31,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "* - Drag-drop image loading with ImageJ integration"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/plugin/GelUI.java",
+    "line": 348,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "// Load image using ImageJ"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/cli/AutotuneAnalysisCLI.java",
+    "line": 26,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.IJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/cli/AutotuneAnalysisCLI.java",
+    "line": 30,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "import net.imagej.ImageJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/cli/AutotuneAnalysisCLI.java",
+    "line": 30,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "import net.imagej.ImageJ;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/cli/AutotuneAnalysisCLI.java",
+    "line": 31,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "import org.scijava.Context;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/cli/AutotuneAnalysisCLI.java",
+    "line": 32,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "import org.scijava.ui.UIService;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/img/LaneWiseBackground.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/img/LaneWiseBackground.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/img/IJUtils.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/img/IJUtils.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/img/IJUtils.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.plugin.frame.RoiManager;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/img/IJUtils.java",
+    "line": 8,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "* ImageJ utilities for overlay management and ROI Manager suppression."
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/imageio/ColorChannelProcessor.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/imageio/ColorChannelProcessor.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImageStack;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/imageio/ColorChannelProcessor.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ColorProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/imageio/ColorChannelProcessor.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ByteProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/imageio/FormatNormalizer.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/imageio/FormatNormalizer.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/imageio/FormatNormalizer.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ColorProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/imageio/FormatNormalizer.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ByteProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/imageio/FormatNormalizer.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ShortProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/viz/GelViz.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/viz/GelViz.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/viz/ColonyViz.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/viz/ColonyViz.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/workflow/GelFormatDetector.java",
+    "line": 143,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "// This would interface with actual ImageJ lane detection"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/workflow/GelFormatDetector.java",
+    "line": 149,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "// Simulate lane detection (in real implementation, this would call ImageJ)"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/workflow/GelFormatDetector.java",
+    "line": 244,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "* Simulate lane detection (replace with actual ImageJ call)"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/workflow/GelFormatDetector.java",
+    "line": 247,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "// This would be replaced with actual ImageJ lane detection"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/registry/CapabilityRegistry.java",
+    "line": 6,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "import org.scijava.Context;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/registry/CapabilityRegistry.java",
+    "line": 7,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "import org.scijava.plugin.PluginService;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/registry/CapabilityRegistry.java",
+    "line": 8,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "import org.scijava.command.Command;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/registry/CapabilityRegistry.java",
+    "line": 9,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "import org.scijava.command.CommandService;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/registry/CapabilityRegistry.java",
+    "line": 10,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "import org.scijava.module.ModuleService;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/service/AnalysisServiceDemo.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/service/AnalysisServiceDemo.java",
+    "line": 18,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "* - ImageJ integration for visualization"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/service/AnalysisService.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/service/AnalysisService.java",
+    "line": 8,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/service/AnalysisService.java",
+    "line": 9,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Roi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/service/AnalysisService.java",
+    "line": 36,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "* - ImageJ integration for overlays and ROI management"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/service/AnalysisService.java",
+    "line": 390,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "* ImageJ Integration - Display Overlay"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/performance/PerformanceOptimizer.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/performance/PerformanceOptimizer.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ImageProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/performance/PerformanceOptimizer.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.FloatProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/performance/PerformanceOptimizer.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ByteProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/performance/PerformanceOptimizer.java",
+    "line": 64,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "// Use ImageJ's built-in scaling (bicubic interpolation)"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/IsoformProfilingDemo.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/IsoformProfilingDemo.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ByteProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/ProteaseDigestKineticsDemo.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/ProteaseDigestKineticsDemo.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ByteProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/DephosphorylationShiftDemo.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/DephosphorylationShiftDemo.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ByteProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/HcpCompositionDemo.java",
+    "line": 6,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/HcpCompositionDemo.java",
+    "line": 7,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ByteProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/performance/SyntheticGelTest.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/demos/performance/SyntheticGelTest.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.FloatProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/orchestrator/OpenAiOrchestrator.java",
+    "line": 11,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/orchestrator/OpenAiOrchestrator.java",
+    "line": 14,
+    "label": "ImageJ/Scijava stack",
+    "pattern": "(?:net\\.imagej|imagej-legacy|scifio|scijava)",
+    "snippet": "import org.scijava.Context;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/orchestrator/OpenAiOrchestrator.java",
+    "line": 23,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "* Coordinates between ChatGPT Vision AI planning and ImageJ tool execution"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/orchestrator/OpenAiOrchestrator.java",
+    "line": 472,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "- No vision analysis. Do not infer from image pixels; call ImageJ tools to measure, segment, annotate, or export."
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/orchestrator/OpenAiOrchestrator.java",
+    "line": 476,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "- You are an ImageJ/Fiji expert: prefer ImageJ tools for image operations; rely on preset workflows when applicable."
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/SessionStore.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/SessionStore.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/SessionStore.java",
+    "line": 88,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "* Overlay record with handle and ImageJ Overlay"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/ThreadSafeSessionStore.java",
+    "line": 10,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/ThreadSafeSessionStore.java",
+    "line": 11,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/ThreadSafetyValidationTest.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/ThreadSafetyValidationTest.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.process.ColorProcessor;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/ThreadSafetyValidationTest.java",
+    "line": 89,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "store.putOverlay(img1.getOverlay() != null ? img1.getOverlay() : new ij.gui.Overlay(), handle1);"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/ConcurrentAccessTester.java",
+    "line": 3,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.ImagePlus;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/ConcurrentAccessTester.java",
+    "line": 4,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.Overlay;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/ConcurrentAccessTester.java",
+    "line": 5,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "import ij.gui.OvalRoi;"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/ConcurrentAccessTester.java",
+    "line": 620,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "new ij.process.ByteProcessor(width, height));"
+  },
+  {
+    "file": "autodense/plugin/src/main/java/com/betterdairy/autodense/session/ConcurrentAccessTester.java",
+    "line": 623,
+    "label": "Java 'ij.*' package usage",
+    "pattern": "\\bij\\.[A-Za-z_]",
+    "snippet": "ij.process.ImageProcessor proc = img.getProcessor();"
+  },
+  {
+    "file": "scripts/golden_xgal.ijm",
+    "line": 5,
+    "label": "ImageJ macro call",
+    "pattern": "(?:IJ\\.run|run\\(\\s*\\\"[^\\\"]+\\\"\\s*\\))",
+    "snippet": "run(\"8-bit\");"
+  },
+  {
+    "file": "scripts/golden_xgal.ijm",
+    "line": 8,
+    "label": "ImageJ macro call",
+    "pattern": "(?:IJ\\.run|run\\(\\s*\\\"[^\\\"]+\\\"\\s*\\))",
+    "snippet": "run(\"Convert to Mask\");"
+  },
+  {
+    "file": "scripts/golden_xgal.ijm",
+    "line": 9,
+    "label": "ImageJ macro call",
+    "pattern": "(?:IJ\\.run|run\\(\\s*\\\"[^\\\"]+\\\"\\s*\\))",
+    "snippet": "run(\"Open\"); run(\"Fill Holes\");"
+  },
+  {
+    "file": "scripts/discover_imagej.py",
+    "line": 3,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "Fiji/ImageJ Discovery and Classpath Management for AutoDense"
+  },
+  {
+    "file": "scripts/discover_imagej.py",
+    "line": 3,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "Fiji/ImageJ Discovery and Classpath Management for AutoDense"
+  },
+  {
+    "file": "scripts/discover_imagej.py",
+    "line": 5,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "This script provides intelligent discovery and caching of Fiji/ImageJ installations"
+  },
+  {
+    "file": "scripts/discover_imagej.py",
+    "line": 5,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "This script provides intelligent discovery and caching of Fiji/ImageJ installations"
+  },
+  {
+    "file": "scripts/discover_imagej.py",
+    "line": 9,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "- Automatic Fiji/ImageJ installation discovery across platforms"
+  },
+  {
+    "file": "scripts/package_codebase.py",
+    "line": 74,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "\"packaging/resources/Fiji.app\","
+  },
+  {
+    "file": "scripts/package_codebase.py",
+    "line": 74,
+    "label": "Bundled ImageJ binary",
+    "pattern": "(?:ImageJ\\.app|Fiji\\.app|ij\\.jar|ImageJ-linux64|ImageJ-win64\\.exe)",
+    "snippet": "\"packaging/resources/Fiji.app\","
+  },
+  {
+    "file": "scripts/golden_sds.ijm",
+    "line": 4,
+    "label": "ImageJ macro call",
+    "pattern": "(?:IJ\\.run|run\\(\\s*\\\"[^\\\"]+\\\"\\s*\\))",
+    "snippet": "run(\"8-bit\");"
+  },
+  {
+    "file": "scripts/env_check.py",
+    "line": 8,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "- Fiji/ImageJ discovery and validation"
+  },
+  {
+    "file": "scripts/env_check.py",
+    "line": 8,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "- Fiji/ImageJ discovery and validation"
+  },
+  {
+    "file": "scripts/env_check.py",
+    "line": 105,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "# Check Java version compatibility (Java 11+ required for modern ImageJ)"
+  },
+  {
+    "file": "scripts/env_check.py",
+    "line": 156,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "\"\"\"Validate Fiji/ImageJ environment\"\"\""
+  },
+  {
+    "file": "scripts/env_check.py",
+    "line": 156,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "\"\"\"Validate Fiji/ImageJ environment\"\"\""
+  },
+  {
+    "file": "scripts/build_classpath.sh",
+    "line": 71,
+    "label": "Direct java/CLASSPATH invocation",
+    "pattern": "(?:java\\s+-cp|^classpath\\s*=)",
+    "snippet": "if java -cp \"$FULL_CLASSPATH\" com.betterdairy.autodense.cli.AutotuneAnalysisCLI 2>/dev/null; then"
+  },
+  {
+    "file": "scripts/test_env.sh",
+    "line": 15,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "# Set Fiji directory"
+  },
+  {
+    "file": "scripts/test_env.sh",
+    "line": 16,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "export FIJI_DIR=/Applications/Fiji"
+  },
+  {
+    "file": "autodense_autotune/java_bridge.py",
+    "line": 2,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "Python-Java bridge for calling AutoDense ImageJ analysis from the autotune system."
+  },
+  {
+    "file": "autodense_autotune/java_bridge.py",
+    "line": 5,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "Java ImageJ-based analysis tools. It handles:"
+  },
+  {
+    "file": "autodense_autotune/java_bridge.py",
+    "line": 36,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "DEFAULT_DISCOVERY_TIMEOUT = 30  # 30 seconds for ImageJ discovery"
+  },
+  {
+    "file": "autodense_autotune/java_bridge.py",
+    "line": 99,
+    "label": "ImageJ reference",
+    "pattern": "\\bImageJ\\b",
+    "snippet": "\"\"\"Discover Fiji/ImageJ installation using environment or auto-discovery\"\"\""
+  },
+  {
+    "file": "autodense_autotune/java_bridge.py",
+    "line": 99,
+    "label": "Fiji reference",
+    "pattern": "\\bFiji\\b",
+    "snippet": "\"\"\"Discover Fiji/ImageJ installation using environment or auto-discovery\"\"\""
+  }
+]
