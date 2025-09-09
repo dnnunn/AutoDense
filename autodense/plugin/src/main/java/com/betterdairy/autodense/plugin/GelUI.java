@@ -37,11 +37,11 @@ import com.betterdairy.autodense.model.Models.Lane;
 import com.betterdairy.autodense.model.Models.Band;
 import com.betterdairy.autodense.workflow.WorkflowPreset;
 import com.betterdairy.autodense.workflow.WorkflowPresetManager;
-import com.betterdairy.autodense.orchestrator.GeminiOrchestrator;
+import com.betterdairy.autodense.orchestrator.OpenAiOrchestrator;
 
 /** AI-Powered Gel Analysis Interface with Natural Language Control */
 public class GelUI {
-    // Note: This class is being deprecated in favor of GeminiOrchestrator
+    // Note: This class now uses OpenAiOrchestrator for ChatGPT Vision integration
     // Keeping minimal implementation for backward compatibility
     private JFrame frame;
     private JTextArea chatArea;
@@ -50,8 +50,8 @@ public class GelUI {
     private JLabel statusLabel;
     private HttpClient httpClient;
     private ImagePlus currentImage;
-    private GeminiOrchestrator orchestrator;
-    // Removed: lastGeminiAnalysis (no longer used after UI cleanup)
+    private OpenAiOrchestrator orchestrator;
+    // Removed: lastOpenAIAnalysis (no longer used after UI cleanup)
     // Conversation history for context
     private List<String> conversationHistory = new ArrayList<>();
     private static final int MAX_HISTORY = 10; // Keep last 10 exchanges
@@ -74,13 +74,13 @@ public class GelUI {
             .connectTimeout(Duration.ofSeconds(10))
             .build();
         
-        // Initialize GeminiOrchestrator (proper architecture)
-        String geminiApiKey = loadGeminiApiKey();
-        if (geminiApiKey != null && !geminiApiKey.isEmpty()) {
-            this.orchestrator = new GeminiOrchestrator(geminiApiKey);
-            System.out.println("✓ GeminiOrchestrator initialized with handle-based architecture");
+        // Initialize OpenAiOrchestrator (proper architecture)
+        String openaiApiKey = loadOpenAiApiKey();
+        if (openaiApiKey != null && !openaiApiKey.isEmpty()) {
+            this.orchestrator = new OpenAiOrchestrator(openaiApiKey);
+            System.out.println("✓ OpenAiOrchestrator initialized with handle-based architecture");
         } else {
-            System.out.println("⚠ GEMINI_API_KEY not found - AI features not available");
+            System.out.println("⚠ OPENAI_API_KEY not found - AI features not available");
         }
         
         // Initialize workflow preset manager
@@ -456,12 +456,12 @@ public class GelUI {
         System.out.println("DEBUG: Request body created, length: " + requestBody.length());
         System.out.flush();
         
-        // Use GeminiOrchestrator for proper handle-based architecture
-        System.out.println("DEBUG: Using GeminiOrchestrator for command processing");
+        // Use OpenAiOrchestrator for proper handle-based architecture
+        System.out.println("DEBUG: Using OpenAiOrchestrator for command processing");
         System.out.flush();
         
         if (orchestrator == null) {
-            return "❌ GeminiOrchestrator not available. Please check API key configuration.";
+            return "❌ OpenAiOrchestrator not available. Please check API key configuration.";
         }
         
         // Get current image (can be null for text-only commands)
@@ -481,7 +481,7 @@ public class GelUI {
             System.out.flush();
             
             if (orchestrationResult.success) {
-                // ARCHITECTURAL FIX: Show tool results as primary response, not Gemini's orchestration plan
+                // ARCHITECTURAL FIX: Show tool results as primary response, not OpenAI's orchestration plan
                 String fullResponse = "";
                 
                 if (orchestrationResult.toolResult != null && !orchestrationResult.toolResult.optBoolean("error", false)) {
@@ -501,7 +501,7 @@ public class GelUI {
                             int colonies = orchestrationResult.toolResult.optInt("total_colonies", 0);
                             fullResponse = "✅ Counted " + colonies + " colonies";
                         } else if (orchestrationResult.toolResult.has("success")) {
-                            String action = orchestrationResult.geminiResponse.action;
+                            String action = orchestrationResult.openaiResponse.action;
                             fullResponse = "✅ " + action.replace("_", " ") + " completed successfully";
                         } else {
                             fullResponse = "✅ Tool executed successfully";
@@ -538,8 +538,8 @@ public class GelUI {
                         fullResponse += details.toString();
                     }
                 } else {
-                    // Fallback to Gemini's orchestration message only if no tool results
-                    fullResponse = orchestrationResult.geminiResponse.analysis;
+                    // Fallback to OpenAI's orchestration message only if no tool results
+                    fullResponse = orchestrationResult.openaiResponse.analysis;
                 }
                 
                 // Add AI response to history
@@ -553,7 +553,7 @@ public class GelUI {
             }
             
         } catch (Exception e) {
-            System.out.println("DEBUG: GeminiOrchestrator processing failed: " + e.getMessage());
+            System.out.println("DEBUG: OpenAiOrchestrator processing failed: " + e.getMessage());
             System.out.flush();
             e.printStackTrace();
             
@@ -591,13 +591,13 @@ public class GelUI {
             @Override
             protected Boolean doInBackground() throws Exception {
                 try {
-                    // Check if Gemini API key is available
-                    String apiKey = loadGeminiApiKey();
+                    // Check if OpenAI API key is available
+                    String apiKey = loadOpenAiApiKey();
                     if (apiKey == null || apiKey.trim().isEmpty()) {
                         return false;
                     }
                     
-                    // Test GeminiOrchestrator availability
+                    // Test OpenAiOrchestrator availability
                     return orchestrator != null;
                 } catch (Exception e) {
                     return false;
@@ -609,13 +609,13 @@ public class GelUI {
                 try {
                     boolean connected = get();
                     if (connected) {
-                        statusLabel.setText("🟢 Gemini AI Connected - Ready for analysis");
+                        statusLabel.setText("🟢 OpenAI ChatGPT Connected - Ready for analysis");
                         statusLabel.setForeground(new Color(0, 120, 0));
                     } else {
-                        statusLabel.setText("🔴 Gemini API not available - Check configuration");
+                        statusLabel.setText("🔴 OpenAI API not available - Check configuration");
                         statusLabel.setForeground(Color.RED);
-                        appendToChatArea("⚠️  GeminiOrchestrator not available. Please check:\n");
-                        appendToChatArea("   • GEMINI_API_KEY environment variable is set\n");
+                        appendToChatArea("⚠️  OpenAiOrchestrator not available. Please check:\n");
+                        appendToChatArea("   • OPENAI_API_KEY environment variable is set\n");
                         appendToChatArea("   • Internet connection is working\n\n");
                     }
                 } catch (Exception e) {
@@ -768,7 +768,7 @@ public class GelUI {
     }
     
     
-    // Removed old AI analysis methods - now using Gemini directly
+    // Removed old AI analysis methods - now using OpenAI directly
     /*
     private AIAnalysisResult analyzeGelWithAI(ImagePlus imp) throws Exception {
         // Save image temporarily for AI analysis
@@ -890,7 +890,7 @@ public class GelUI {
         return result;
     }
     
-    // Helper class for AI analysis results - REMOVED - now using Gemini
+    // Helper class for AI analysis results - REMOVED - now using OpenAI
     */
     
     
@@ -1558,12 +1558,12 @@ public class GelUI {
         System.out.println("DEBUG: Current image found: " + currentImg.getTitle() + 
                           " (Width: " + currentImg.getWidth() + ", Height: " + currentImg.getHeight() + ")");
         
-        // Use GeminiOrchestrator for proper handle-based processing
+        // Use OpenAiOrchestrator for proper handle-based processing
         System.out.println("DEBUG: orchestrator != null: " + (orchestrator != null));
         System.out.flush();
         if (orchestrator != null) {
             try {
-                System.out.println("DEBUG: Using GeminiOrchestrator for analysis");
+                System.out.println("DEBUG: Using OpenAiOrchestrator for analysis");
                 System.out.flush();
                 var futureResult = orchestrator.processCommand(userCommand, currentImg);
                 var result = futureResult.get();
@@ -1571,24 +1571,24 @@ public class GelUI {
                 System.out.flush();
                 
                 if (result.success) {
-                    return result.geminiResponse.analysis + "\n\n✅ " + result.toolResult.optString("message", "Processing completed");
+                    return result.openaiResponse.analysis + "\n\n✅ " + result.toolResult.optString("message", "Processing completed");
                 } else {
                     return "❌ Processing failed: " + result.errorMessage;
                 }
                 
             } catch (Exception e) {
-                System.out.println("DEBUG: GeminiOrchestrator failed: " + e.getMessage());
+                System.out.println("DEBUG: OpenAiOrchestrator failed: " + e.getMessage());
                 System.out.flush();
                 return "❌ Command processing failed: " + e.getMessage();
             }
         }
         
         // No orchestrator available
-        System.out.println("DEBUG: No GeminiOrchestrator available");
-        return "❌ GeminiOrchestrator not initialized - check API key configuration";
+        System.out.println("DEBUG: No OpenAiOrchestrator available");
+        return "❌ OpenAiOrchestrator not initialized - check API key configuration";
     }
     
-    // Method removed - using GeminiOrchestrator handle-based architecture
+    // Method removed - using OpenAiOrchestrator handle-based architecture
     
     private String executeLaneDetectionWithParams(String command, ImagePlus imp, Map<String, Object> params) {
         try {
@@ -2357,10 +2357,10 @@ public class GelUI {
             • 🦠 Colony counting and classification
             • 🎤 Voice input support (experimental)
             • 📄 Document upload integration
-            • 🤖 Gemini AI-powered analysis
+            • 🤖 OpenAI ChatGPT-powered analysis
             
             Developed by BetterDairy
-            Built with ImageJ2 and Gemini AI
+            Built with ImageJ2 and OpenAI ChatGPT
             """;
         
         JOptionPane.showMessageDialog(frame, aboutText, 
@@ -2433,22 +2433,22 @@ public class GelUI {
     
     /**
      * Load Gemini API key from multiple sources in priority order:
-     * 1. System property: -DGEMINI_API_KEY=key
-     * 2. Environment variable: GEMINI_API_KEY=key  
+     * 1. System property: -DOPENAI_API_KEY=key
+     * 2. Environment variable: OPENAI_API_KEY=key  
      * 3. Configuration file: api-config.properties
      */
-    private String loadGeminiApiKey() {
+    private String loadOpenAiApiKey() {
         // Priority 1: System property
-        String apiKey = System.getProperty("GEMINI_API_KEY");
+        String apiKey = System.getProperty("OPENAI_API_KEY");
         if (apiKey != null && !apiKey.trim().isEmpty()) {
-            System.out.println("🔑 Using Gemini API key from system property");
+            System.out.println("🔑 Using OpenAI API key from system property");
             return apiKey.trim();
         }
         
         // Priority 2: Environment variable
-        apiKey = System.getenv("GEMINI_API_KEY");
+        apiKey = System.getenv("OPENAI_API_KEY");
         if (apiKey != null && !apiKey.trim().isEmpty()) {
-            System.out.println("🔑 Using Gemini API key from environment variable");
+            System.out.println("🔑 Using OpenAI API key from environment variable");
             return apiKey.trim();
         }
         
@@ -2459,9 +2459,9 @@ public class GelUI {
                 java.util.Properties props = new java.util.Properties();
                 try (java.io.FileInputStream fis = new java.io.FileInputStream(configFile)) {
                     props.load(fis);
-                    apiKey = props.getProperty("GEMINI_API_KEY");
+                    apiKey = props.getProperty("OPENAI_API_KEY");
                     if (apiKey != null && !apiKey.trim().isEmpty()) {
-                        System.out.println("🔑 Using Gemini API key from api-config.properties");
+                        System.out.println("🔑 Using OpenAI API key from api-config.properties");
                         return apiKey.trim();
                     }
                 }
@@ -2470,9 +2470,9 @@ public class GelUI {
             System.err.println("⚠️  Failed to read api-config.properties: " + e.getMessage());
         }
         
-        System.err.println("❌ No Gemini API key found in any location:");
-        System.err.println("   • System property: -DGEMINI_API_KEY=key");
-        System.err.println("   • Environment: export GEMINI_API_KEY=key");
+        System.err.println("❌ No OpenAI API key found in any location:");
+        System.err.println("   • System property: -DOPENAI_API_KEY=key");
+        System.err.println("   • Environment: export OPENAI_API_KEY=key");
         System.err.println("   • Config file: api-config.properties");
         return null;
     }

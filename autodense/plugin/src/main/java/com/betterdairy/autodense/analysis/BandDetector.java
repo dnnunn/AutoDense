@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 import java.awt.Rectangle;
+import autodense.sds.FluorescenceOps;
 
 public final class BandDetector {
     private BandDetector() {}
@@ -23,6 +24,13 @@ public final class BandDetector {
      * @return List of detected bands with proper baseline handling
      */
     public static List<Band> findBands(ImagePlus imp, Lane lane, Map<String,Object> config) {
+        // BREAKTHROUGH: Check if fluorescence detection is enabled
+        if (config != null && isFluorescenceMode(config)) {
+            System.err.println("[FLUORESCENCE_BREAKTHROUGH] Using advanced fluorescence detection algorithms");
+            return findFluorescenceBands(imp, lane, config);
+        }
+        
+        // Standard gel detection pathway (existing logic)
         // Get band-specific baseline parameters from config
         int laneWidth = lane.xEnd() - lane.xStart() + 1;
         BaselineParams bandBaseline = BaselineParams.fromBandConfig(config, laneWidth);
@@ -102,24 +110,33 @@ public final class BandDetector {
             Math.max(2, h / 300) : Math.max(3, h / 200);
         float[] smooth = smoothProfile(laneProfile, radius);
 
-        // Invert profile for dark bands (typical in gels)
-        float[] inverted = new float[h];
-        float maxVal = getMax(smooth);
-        for (int i = 0; i < h; i++) {
-            inverted[i] = maxVal - smooth[i];
+        // CRITICAL FIX: Check for fluorescence mode to avoid incorrect inversion
+        float[] processed;
+        if (config != null && isFluorescenceMode(config)) {
+            // FLUORESCENCE: Use bright peaks directly (NO inversion)
+            processed = smooth.clone();
+            System.err.println("[FLUORESCENCE_FIX] Using direct bright peak detection - NO inversion");
+        } else {
+            // Standard gel: Invert profile for dark bands (typical in gels)
+            processed = new float[h];
+            float maxVal = getMax(smooth);
+            for (int i = 0; i < h; i++) {
+                processed[i] = maxVal - smooth[i];
+            }
+            System.err.println("[STANDARD_GEL] Using inverted profile for dark band detection");
         }
         
         // Get minimum peak distance from configuration or use adaptive fallback
         int minPeakDistance = getMinPeakDistanceFromConfig(config, laneProfile, h);
         
         double minProminence = 0.05; // 5% relative prominence
-        double minHeight = getMean(inverted) + 0.5 * getStd(inverted);
+        double minHeight = getMean(processed) + 0.5 * getStd(processed);
 
         // Enhanced peak detection with local prominence and width validation
-        List<BandCandidate> candidates = findBandCandidates(inverted, minHeight, minProminence, minPeakDistance);
+        List<BandCandidate> candidates = findBandCandidates(processed, minHeight, minProminence, minPeakDistance);
         
         // Width prior: reject spikes (< 2 px) and smeared blobs (> 1.5× median width)
-        candidates = filterByWidth(candidates, inverted);
+        candidates = filterByWidth(candidates, processed);
         
         // Convert candidates to bands with refined measurements
         List<Band> bands = new ArrayList<>();
@@ -127,9 +144,9 @@ public final class BandDetector {
         for (BandCandidate candidate : candidates) {
             // Refine peak position with adaptive window
             int refinedPeak = refinePeakPosition(laneProfile, candidate.peak, 5);
-            int L = Peaks.leftValley(inverted, refinedPeak);
-            int R = Peaks.rightValley(inverted, refinedPeak);
-            double apex = Peaks.subpixelApex(inverted, refinedPeak);
+            int L = Peaks.leftValley(processed, refinedPeak);
+            int R = Peaks.rightValley(processed, refinedPeak);
+            double apex = Peaks.subpixelApex(processed, refinedPeak);
             double snr = Quant.snr(laneProfile, refinedPeak, L, R);
             
             // Width validation
@@ -528,5 +545,183 @@ public final class BandDetector {
             case MEAN:
             default: return stats.mean;
         }
+    }
+    
+    // ==================== FLUORESCENCE DETECTION METHODS ====================
+    
+    /**
+     * Check if fluorescence detection mode is enabled in configuration.
+     */
+    private static boolean isFluorescenceMode(Map<String, Object> config) {
+        if (config == null) return false;
+        
+        // Check multiple possible fluorescence indicators
+        
+        // 1. Explicit fluorescence flag in workflow section
+        @SuppressWarnings("unchecked")
+        Map<String, Object> workflow = (Map<String, Object>) config.get("workflow");
+        if (workflow != null && Boolean.TRUE.equals(workflow.get("use_fluorescence_ops"))) {
+            return true;
+        }
+        
+        // 2. Peak detection method indicator
+        String peakMethod = (String) config.get("peak_detection_method");
+        if (peakMethod != null && peakMethod.contains("fluorescence")) {
+            return true;
+        }
+        
+        // 3. Fluorescence section in config
+        @SuppressWarnings("unchecked")
+        Map<String, Object> fluorescence = (Map<String, Object>) config.get("fluorescence");
+        if (fluorescence != null && Boolean.TRUE.equals(fluorescence.get("enable_advanced_detection"))) {
+            return true;
+        }
+        
+        // 4. Check pre-processing polarity (fluorescence should have invert_polarity: false)
+        @SuppressWarnings("unchecked")
+        Map<String, Object> pre = (Map<String, Object>) config.get("pre");
+        if (pre != null) {
+            Object invertPolarityObj = pre.get("invert_polarity");
+            Boolean invertPolarity = null;
+            if (invertPolarityObj instanceof Boolean) {
+                invertPolarity = (Boolean) invertPolarityObj;
+            } else if (invertPolarityObj instanceof String) {
+                String invertPolarityStr = (String) invertPolarityObj;
+                if ("true".equalsIgnoreCase(invertPolarityStr)) {
+                    invertPolarity = true;
+                } else if ("false".equalsIgnoreCase(invertPolarityStr)) {
+                    invertPolarity = false;
+                }
+                // For "auto" or other strings, leave as null
+            }
+            if (Boolean.FALSE.equals(invertPolarity)) {
+                // Could be fluorescence, but not definitive - check other indicators
+                if (peakMethod != null && (peakMethod.contains("etbr") || peakMethod.contains("fluoresc"))) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Advanced fluorescence band detection using FluorescenceOps algorithms.
+     */
+    private static List<Band> findFluorescenceBands(ImagePlus imp, Lane lane, Map<String, Object> config) {
+        try {
+            // Create a lane-specific ImagePlus for FluorescenceOps
+            ImageProcessor fullIP = imp.getProcessor();
+            int x0 = Math.max(0, lane.xStart());
+            int x1 = Math.min(fullIP.getWidth() - 1, lane.xEnd());
+            int y0 = 0;
+            int y1 = fullIP.getHeight() - 1;
+            
+            // Extract lane region
+            fullIP.setRoi(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+            ImageProcessor laneIP = fullIP.crop();
+            ImagePlus laneImp = new ImagePlus("lane_" + lane.index(), laneIP);
+            
+            // Get parameters from config
+            double minProm = getDoubleFromConfig(config, "bands", "prominence_frac", 0.001);
+            int minDistPx = getIntFromConfig(config, "bands", "min_distance_px", 3);
+            Double backgroundRadius = getDoubleFromConfig(config, "pre", "background_removal_radius", 0.0);
+            
+            // Create a temporary output directory
+            java.nio.file.Path tempDir = java.nio.file.Files.createTempDirectory("fluorescence_detection");
+            
+            // Call FluorescenceOps detection
+            java.util.Map<String, Object> result = FluorescenceOps.detectFluorescenceBands(
+                laneImp, minProm, minDistPx, backgroundRadius, tempDir
+            );
+            
+            // Parse results and convert to Band objects
+            List<Band> bands = new ArrayList<>();
+            String csvPath = (String) result.get("bands_table");
+            
+            if (csvPath != null && java.nio.file.Files.exists(java.nio.file.Paths.get(csvPath))) {
+                // Read CSV results and convert to Band objects
+                List<java.util.Map<String, String>> rows = autodense.util.Csv.read(java.nio.file.Paths.get(csvPath));
+                
+                for (java.util.Map<String, String> row : rows) {
+                    int bandId = Integer.parseInt(row.get("id"));
+                    int yLocal = Integer.parseInt(row.get("y_px"));
+                    double intensity = Double.parseDouble(row.get("intensity"));
+                    double confidence = Double.parseDouble(row.get("confidence"));
+                    int width = Integer.parseInt(row.get("width"));
+                    
+                    // Convert to global coordinates
+                    int yGlobal = yLocal; // y_px should already be in global coordinates from FluorescenceOps
+                    
+                    // Create Band object (area approximated from intensity * width)
+                    double area = intensity * width;
+                    double background = intensity * 0.1; // Estimate background as 10% of intensity
+                    double snr = confidence * 10; // Convert confidence to SNR-like metric
+                    
+                    bands.add(new Band(bandId, yGlobal, area, background, snr));
+                }
+            }
+            
+            // Cleanup temp directory
+            try {
+                java.nio.file.Files.walk(tempDir)
+                    .sorted(java.util.Comparator.reverseOrder())
+                    .forEach(path -> {
+                        try {
+                            java.nio.file.Files.deleteIfExists(path);
+                        } catch (Exception e) {
+                            // Ignore cleanup errors
+                        }
+                    });
+            } catch (Exception e) {
+                // Ignore cleanup errors
+            }
+            
+            System.err.printf("[FLUORESCENCE_SUCCESS] Detected %d fluorescent bands using advanced algorithms%n", bands.size());
+            return bands;
+            
+        } catch (Exception e) {
+            System.err.println("[FLUORESCENCE_ERROR] Advanced detection failed, falling back to standard: " + e.getMessage());
+            e.printStackTrace();
+            
+            // Fallback to standard detection with fluorescence-aware parameters
+            return findBandsFromProfile(imp, lane, buildLaneProfile(imp, lane), config);
+        }
+    }
+    
+    /**
+     * Helper method to safely get double values from nested config maps.
+     */
+    private static double getDoubleFromConfig(Map<String, Object> config, String section, String key, double defaultValue) {
+        if (config == null) return defaultValue;
+        
+        @SuppressWarnings("unchecked")
+        Map<String, Object> sectionMap = (Map<String, Object>) config.get(section);
+        if (sectionMap == null) return defaultValue;
+        
+        Object value = sectionMap.get(key);
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        
+        return defaultValue;
+    }
+    
+    /**
+     * Helper method to safely get integer values from nested config maps.
+     */
+    private static int getIntFromConfig(Map<String, Object> config, String section, String key, int defaultValue) {
+        if (config == null) return defaultValue;
+        
+        @SuppressWarnings("unchecked")
+        Map<String, Object> sectionMap = (Map<String, Object>) config.get(section);
+        if (sectionMap == null) return defaultValue;
+        
+        Object value = sectionMap.get(key);
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        
+        return defaultValue;
     }
 }

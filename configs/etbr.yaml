@@ -9,7 +9,7 @@ pre:
   deskew_angle_threshold: 0.5  # degrees
   enable_debug_logging: true
   clahe:
-    enabled: false        # typically not needed for EtBr
+    enabled: true         # VISION ENGINEER: Enable contrast enhancement
     clip_limit: 2.0
     tile_grid: [8,8]
 
@@ -28,18 +28,18 @@ detect:
     quantile: 0.08                  # lower quantile for fluorescent baseline
 
 bands:
-  # Band detection parameters for EtBr gels
-  min_distance_px: 12              # explicit pixel distance between bands
-  min_peak_distance_frac: 0.025    # fraction-based fallback
-  prominence_frac: 0.03             # sensitive for EtBr bands
+  # ENHANCED: Band detection parameters for EtBr gels - VISION ENGINEER RECOMMENDATIONS
+  min_distance_px: 8               # VISION ENGINEER: Allow closer bands (was 12)
+  min_peak_distance_frac: 0.02     # More sensitive fallback
+  prominence_frac: 0.015           # VISION ENGINEER: Ultra-sensitive (was 0.03)
   
   baseline:
-    method: "percentile"            # gentle baseline for EtBr band detection
-    window_frac: 0.01               # 1% window to prevent profile zeroing
+    method: "morph"                 # VISION ENGINEER: Better for fluorescence (was percentile)
+    window_frac: 0.008              # Tighter window to prevent profile zeroing
     window_px: 0                    # 0 = use fraction; else explicit px
     clamp_min_px: 2                 # Hard minimum bound for bands
-    clamp_max_px: 6                 # Hard maximum bound for bands (tighter for fluorescent)
-    quantile: 0.12                  # raised from 0.06 to prevent zeroing baseline
+    clamp_max_px: 4                 # Tighter maximum bound for precision
+    quantile: 0.08                  # More sensitive baseline
 
 # Legacy parameters (for backward compatibility)
 expected_lanes: 12

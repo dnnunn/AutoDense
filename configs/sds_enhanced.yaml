@@ -1,0 +1,76 @@
+# SDS Enhanced Configuration - Edge Lane Detection Improvements
+# TARGET: 7/12 → 10+/12 lanes (43% improvement)
+# Based on Vision Engineer recommendations for edge lane detection
+
+# Enhanced preprocessing for better edge detection
+pre:
+  invert_polarity: auto
+  clip_percentiles: [2.0, 98.0]  # Keep tighter clipping for SDS
+  normalize_intensity: true
+  gaussian_sigma: 0.0           # Keep disabled for headless mode
+  background_removal_radius: 15.0  # VISION ENGINEER: Illumination correction
+  enable_deskew: true           # VISION ENGINEER: Better alignment
+  deskew_angle_threshold: 0.5
+  enable_debug_logging: true
+  
+  clahe:
+    enabled: false              # Not typically needed for SDS
+    clip_limit: 2.0
+    tile_grid: [8,8]
+
+# Enhanced lane detection with edge sensitivity
+detect:
+  min_peak_distance_frac: 0.035   # Slightly tighter for edge precision
+  prominence_frac: 0.045          # VISION ENGINEER: Edge sensitivity (was 0.06)
+  rescue_enabled: true
+  
+  baseline:
+    method: "percentile"
+    window_frac: 0.018            # Slightly tighter for edge lanes
+    window_px: 0
+    clamp_min_px: 3
+    clamp_max_px: 12
+    quantile: 0.08                # More sensitive quantile
+
+# Band detection parameters
+bands:
+  min_distance_px: 14
+  min_peak_distance_frac: 0.01
+  prominence_frac: 0.02           # Keep very sensitive for bands
+  
+  baseline:
+    method: "percentile"
+    window_frac: 0.015
+    window_px: 0
+    clamp_min_px: 2
+    clamp_max_px: 8
+    quantile: 0.08
+
+# Enhanced workflow parameters
+workflow:
+  expected_lanes: 12            # Increase expectation to drive edge detection
+  sensitivity: 1.2              # VISION ENGINEER: High sensitivity
+  constant_spacing: false
+  background_method: "rolling_ball"
+  
+  # Enhanced detection algorithm parameters
+  min_peak_distance_frac: 0.035
+  prominence_frac: 0.045        # Edge-optimized prominence
+  rescue_enabled: true
+  
+  # Enhanced baseline parameters
+  baseline:
+    method: "percentile"
+    window_frac: 0.018
+    window_px: 0
+    clamp_min_px: 3
+    clamp_max_px: 12
+    quantile: 0.08
+
+# Legacy parameters (backward compatibility)
+detection:
+  min_width: 12
+  prominence: 0.25              # Slightly lower for edge detection
+  expected_lanes: 12            # Enhanced expectation
+  sensitivity: 1.2
+  constant_spacing: false

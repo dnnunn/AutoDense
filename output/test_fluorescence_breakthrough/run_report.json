@@ -1,0 +1,35 @@
+{
+  "input_hash": "685c6687",
+  "task": "etbr_agarose",
+  "observation": {
+    "prominence_frac": 0.002,
+    "coverage_total": 0,
+    "detection_confidence": 0.5,
+    "min_peak_distance_frac": 0.005,
+    "baseline": {
+      "method": "percentile",
+      "quantile": 0.01,
+      "window_frac": 0.025,
+      "window_px": 0,
+      "clamp_min_px": 8,
+      "clamp_max_px": 20
+    },
+    "rescue_used": false,
+    "polarity": "bands_bright",
+    "status": "ok",
+    "analysis_method": "canonical_gel_workflow"
+  },
+  "meta": {},
+  "diagnostics_png": "overlay.png",
+  "metrics": {
+    "bands_reconciled": 15,
+    "lanes_reconciled": 6,
+    "lane_count": 6,
+    "lanes_raw": 6,
+    "band_count": 15,
+    "bands_raw": 15
+  },
+  "reconciliation_explanation": "Raw detection preserved: 6 (no adjustments needed); Raw detection preserved: 15 (no adjustments needed)",
+  "rescue_used": false,
+  "input_path": "samples/etbr_gel.jpg"
+}

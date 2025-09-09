@@ -3,14 +3,19 @@
 AutoDense Codebase Packaging Script
 
 Creates tar.gz archive of AutoDense source code for audit, review, or distribution.
-Uses the same exclusion patterns as the audit system to ensure consistent packaging.
+Optimized to exclude large files that are not necessary for understanding AutoDense functionality.
 
-Excludes large files that are not necessary for understanding AutoDense functionality:
-- Generated output images (9-11MB each, can be recreated by running tests)
-- Large dependency JARs (311MB total in packaging/resources)
-- Original gel sample images (19MB total in autodense/samples)
-- Build artifacts and caches
-- Previous archive files
+Major exclusions to reduce package size from ~2GB to ~50MB:
+- Generated output directories: out/ (381MB), preclass_out/ (424MB), output/ (45MB)
+- Sample/seed image collections: SeedImages/ (224MB), autodense/samples/ (12MB) 
+- Packaging resources: autodense/packaging/ (322MB with JARs and app bundles)
+- Python virtual environment: .venv/ (with 632MB+ TensorFlow libraries)
+- Documentation files: *.md, *.pdf, *.txt (can be regenerated)
+- Build artifacts: *.jar, *.class, target/, __pycache__/
+- Large binaries: *.dylib, *.so (native libraries)
+- Previous archives: *.tar.gz, *.zip
+
+The resulting package contains only essential source code for understanding and modifying AutoDense.
 
 Usage:
     python3 scripts/package_codebase.py [output_directory]
@@ -57,7 +62,13 @@ EXCLUSION_PATTERNS = [
     
     # Log and cache files
     "*.log", "logs", ".cache",
+
+    # Image files
+    "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp", "*.tiff", "*.webp","*.heic","*.tif","*.HEIC","*.TIFF","*.JPG","*.JPEG"
     
+    # Documents
+    "*.md","*.MD","*.pdf","*.PDF","*.doc","*.DOC","*.docx","*.DOCX","*.ppt","*.PPT","*.pptx","*.PPTX","*.xls","*.XLS","*.xlsx","*.XLSX","*.csv","*.CSV","*.txt","*.TXT"
+   
     # Package/app bundles (AutoDense specific)
     "packaging/resources/AutoDense.app",
     "packaging/resources/Fiji.app",
@@ -67,30 +78,38 @@ EXCLUSION_PATTERNS = [
     # Large files not necessary for understanding functionality issues
     # ================================================================
     
-    # Generated output images (can be recreated by running tests)
+    # Generated output directories (can be recreated by running tests)
     "output",  # Contains large stage0_input.png, overlay.png files (9-11MB each)
+    "out",     # 381M of generated crops, QC images, and analysis results
+    "preclass_out",  # 424M of preprocessing classification results
     
-    # Sample images (keep only essential test samples, exclude large originals)
+    # Sample and seed image directories (large collections not needed for code analysis)
     "autodense/samples",  # Large original gel photos not needed for code analysis
+    "SeedImages",         # 224M of seed images for ML training (not needed for code understanding)
+    "user_seed_images",   # User-specific seed images
     
-    # Large dependency JARs (162 JARs in packaging/resources totaling 311MB)
-    "packaging/resources",  # Already covered above but being explicit
+    # Large dependency JARs and packaging resources (322M total)
+    "packaging/resources", "autodense/packaging",  # Contains AutoDense.app bundle and JARs
     
-    # Previously generated code packages
+    # Previously generated packages and archives
     "*codebase*.tar.gz",  # Avoid recursive packaging
     "*audit*.tar.gz",     # Previous audit packages
+    "*.zip",              # Large zip files (like out.zip - 379M)
     
-    # Large Maven dependency cache (if present)
+    # Large Maven/Java build artifacts
     ".m2/repository",
+    "*.jar",              # Exclude JAR files (some are 178M+)
     
-    # Duplicate sample images in root samples/ vs autodense/samples/
-    # Keep root samples/ as they're smaller and used in current testing
+    # Large Python virtual environment (excluded above but being explicit)
+    # .venv contains 632M+ of TensorFlow and other ML libraries
     
     # Additional large files discovered during analysis
     "*debug*toolkit*.tar.gz",  # Debug toolkit archives
     "*preflight*priors*.tar.gz",  # Preflight archives
     "*.pkl.gz",  # Python pickle files (numpy test data)
     "*.ima.gz",  # Image data files (matplotlib sample data)
+    "*.dylib",   # Large dynamic libraries (72M+ each)
+    "*.so",      # Shared object files (32M+ each)
 ]
 
 def timestamp() -> str:
@@ -101,13 +120,24 @@ def should_exclude(path: Path, excludes: List[str]) -> bool:
     """Check if a file path should be excluded from the archive."""
     try:
         path_str = str(path)
+        path_parts = path_str.split(os.sep)
+        
         for pattern in excludes:
+            # Handle wildcard patterns (like *.md, *.jpg)
             if pattern.startswith("*"):
                 if path.match(pattern):
                     return True
-            else:
-                if pattern in path_str.split(os.sep):
+                # Also check just the filename for extension patterns
+                if path.name.lower().endswith(pattern[1:].lower()):
                     return True
+            else:
+                # Handle directory/file name patterns
+                if pattern in path_parts:
+                    return True
+                # Also check if pattern matches the full filename
+                if pattern == path.name:
+                    return True
+                    
         return False
     except Exception as e:
         print(f"⚠️  Warning: Error checking exclusion for {path}: {e}")
@@ -116,6 +146,7 @@ def should_exclude(path: Path, excludes: List[str]) -> bool:
 def gather_files(root: Path, excludes: List[str]) -> List[Path]:
     """Gather all files from root directory, excluding specified patterns."""
     files: List[Path] = []
+    excluded_count = 0
     
     if not root.exists():
         raise FileNotFoundError(f"Root directory does not exist: {root}")
@@ -125,11 +156,21 @@ def gather_files(root: Path, excludes: List[str]) -> List[Path]:
     
     try:
         for path in root.rglob("*"):
-            if path.is_file() and not should_exclude(path.relative_to(root), excludes):
-                files.append(path)
+            if path.is_file():
+                relative_path = path.relative_to(root)
+                if should_exclude(relative_path, excludes):
+                    excluded_count += 1
+                    # Show a few examples of excluded files
+                    if excluded_count <= 5:
+                        print(f"  Excluding: {relative_path}")
+                    elif excluded_count == 6:
+                        print(f"  ... (and more excluded files)")
+                else:
+                    files.append(path)
     except Exception as e:
         raise RuntimeError(f"Error gathering files from {root}: {e}")
     
+    print(f"📋 Excluded {excluded_count} files based on patterns")
     return files
 
 def create_package(root: Path, output_dir: Path, excludes: List[str]) -> Path:

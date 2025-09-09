@@ -9,6 +9,7 @@ import logging
 import random
 from typing import Dict, Any, List, Optional
 import time
+from .preprocessing_recipes import VisionPreprocessingEngine
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,9 @@ class MockVisionAdvisor:
         self.config = config
         self.suggestion_history = []
         self.deterministic = config.get('deterministic', True)
+        
+        # Initialize preprocessing engine for intelligent suggestions
+        self.preprocessing_engine = VisionPreprocessingEngine()
         
         # Set random seed for deterministic testing
         if self.deterministic:
@@ -64,8 +68,19 @@ class MockVisionAdvisor:
             'advisor_type': 'mock'
         }
         
-        # Generate suggestions based on focus areas and analysis type
-        if focus_areas:
+        # Generate intelligent suggestions using preprocessing recipes
+        recipe = self.preprocessing_engine.get_recipe_for_failure_mode(
+            analysis_type, run_report.get('metrics', {})
+        )
+        
+        if recipe:
+            logger.info(f"📋 Using preprocessing recipe: {recipe.recipe_id}")
+            suggestion['suggestions'] = self.preprocessing_engine.generate_optimized_parameters(
+                recipe, {}  # Current config would be passed here in real implementation
+            )
+            suggestion['recipe_used'] = recipe.recipe_id
+            suggestion['failure_modes_addressed'] = recipe.failure_modes_addressed
+        elif focus_areas:
             suggestion['suggestions'] = self._generate_focused_suggestions(
                 focus_areas, run_report, analysis_type
             )

@@ -22,14 +22,14 @@
   "meta": {},
   "diagnostics_png": "overlay.png",
   "metrics": {
-    "bands_reconciled": 2,
+    "bands_reconciled": 0,
     "lanes_reconciled": 11,
     "lane_count": 11,
     "lanes_raw": 11,
-    "band_count": 2,
-    "bands_raw": 2
+    "band_count": 0,
+    "bands_raw": 0
   },
-  "reconciliation_explanation": "Raw detection preserved: 11 (no adjustments needed); Raw detection preserved: 2 (no adjustments needed)",
+  "reconciliation_explanation": "Raw detection preserved: 11 (no adjustments needed); Raw detection preserved: 0 (no adjustments needed)",
   "rescue_used": false,
   "input_path": "samples/etbr_gel.jpg"
 }
