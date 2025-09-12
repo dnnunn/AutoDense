@@ -91,9 +91,11 @@ For a more detailed description of the Architecture see:
 
 ## Development & Usage
 
-* **Java 17 + Maven** single-module build.
-* **Run:** `EnhancedImageJLauncher` with `GEMINI_API_KEY`.
+* **Python 3.9+ (REQUIRED)** - Core runtime and all development workflows.
+* **Virtual environment** recommended: `source .venv/bin/activate`
+* **Streamlit apps:** `python -m streamlit run ui/streamlit_app.py`
 * **API key** must be valid (`AIza…`), set via env var, system property, or `api-config.properties`.
+* **Pre-commit hooks** expect `python3` in PATH for ImageJ term validation.
 
 ---
 
