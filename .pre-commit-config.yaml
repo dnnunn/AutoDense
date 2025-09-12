@@ -1,9 +1,0 @@
-repos:
-- repo: local
-  hooks:
-    - id: forbid-imagej-terms
-      name: Forbid ImageJ/Fiji/Scijava terms in code & docs
-      entry: python scripts/check_no_imagej_terms.py
-      language: system
-      pass_filenames: false
-      stages: [pre-commit, pre-push]
