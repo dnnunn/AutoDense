@@ -198,21 +198,6 @@ button:focus, .stSelectbox:focus, .stSlider:focus, .stNumberInput:focus {
     }
 }
 
-/* Keyboard shortcuts panel */
-.shortcuts-panel {
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    background: rgba(33, 37, 41, 0.95);
-    color: white;
-    padding: 10px 14px;
-    border-radius: 8px;
-    font-size: 11px;
-    line-height: 1.4;
-    z-index: 1000;
-    backdrop-filter: blur(4px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
 
 /* Status indicators with better visibility */
 .status-indicator {
@@ -295,10 +280,6 @@ button:focus, .stSelectbox:focus, .stSlider:focus, .stNumberInput:focus {
     .main > div {
         padding: 0.5rem;
     }
-    .shortcuts-panel {
-        font-size: 10px;
-        padding: 6px 10px;
-    }
 }
 
 /* Loading animations */
@@ -312,13 +293,6 @@ button:focus, .stSelectbox:focus, .stSlider:focus, .stNumberInput:focus {
 }
 </style>
 
-<div class="shortcuts-panel" role="complementary" aria-label="Keyboard shortcuts">
-    ⌨️ <strong>Shortcuts</strong><br>
-    <kbd>Ctrl</kbd>+<kbd>Enter</kbd> Analyze<br>
-    <kbd>Tab</kbd> Navigate<br>
-    <kbd>Esc</kbd> Clear selection<br>
-    <kbd>?</kbd> Help
-</div>
 """, unsafe_allow_html=True)
 
 # Session state initialization with consistent patterns
@@ -1260,7 +1234,6 @@ with tab1:
                     
                     if alignment_confirmed:
                         st.success("✅ **Lane calibration confirmed!** 🎉")
-                        st.balloons()
                         
                         # Action buttons for next steps
                         col1, col2, col3 = st.columns(3)
@@ -1868,7 +1841,6 @@ with tab2:
                 
                 # Success celebration
                 st.success("🎉 **Analysis completed successfully!** 🎉")
-                st.balloons()
                 
                 # Display analysis results summary
                 st.markdown("### 📊 Analysis Results Summary")
