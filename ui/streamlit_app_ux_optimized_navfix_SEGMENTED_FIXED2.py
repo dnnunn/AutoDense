@@ -479,13 +479,15 @@ def init_session_state():
         'res_preprocessing_outcome': None,
         'res_analysis_data': None,
         'res_export_data': None,
-    
-    'res_ba_overlay_png': None,
-    'res_ba_lanes_rows': [],
-    'res_ba_bands_rows': [],
-    'res_ba_errors': [],
-        'analysis_cancelled': False,
-}
+
+        # Band Assist
+        'res_ba_overlay_png': None,
+        'res_ba_lanes_rows': [],
+        'res_ba_bands_rows': [],
+        'res_ba_errors': [],
+
+        # Control
+        'analysis_cancelled': False,}
     
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -1831,91 +1833,93 @@ with tab2:
                 value=True,
                 help="Calculate statistical significance between lanes"
             )
-# --- AutoDense Band Assist (lanes/bands pipeline) ---
-st.markdown("### 🧪 AutoDense Band Assist (Beta)")
-st.caption("Runs the AutoDense lanes/bands pipeline and shows an editable bands table with overlay.")
 
-ba_cols = st.columns([2,1])
-with ba_cols[0]:
-    run_ba = st.button("🚀 Run Band Assist Pipeline", use_container_width=True)
-with ba_cols[1]:
-    st.caption("Requires image upload; uses your current calibration and detection params.")
+    # --- AutoDense Band Assist (lanes/bands pipeline) ---
+    st.markdown("### 🧪 AutoDense Band Assist (Beta)")
+    st.caption("Runs the AutoDense lanes/bands pipeline and shows an editable bands table with overlay.")
 
-if run_ba:
-    if not st.session_state.res_uploaded_image:
-        st.error("Upload an image first.")
-    else:
-        # Build minimal params from UI
-        params = {
-            "gel_type": "SDS-PAGE" if st.session_state.params_gel_type == "sds_page" else "EtBr",
-            "conf_threshold": float(st.session_state.params_conf_threshold),
-            "mw_lane": int(st.session_state.params_mw_lane),
-            # Optional background radius from manual params if available
-        }
-        res = _try_run_ad_band_assist(st.session_state.res_uploaded_image, params)
-        st.session_state.res_ba_errors = res.get("errors", [])
-        st.session_state.res_ba_lanes_rows = res.get("lanes", [])
-        st.session_state.res_ba_bands_rows = res.get("bands", [])
-        st.session_state.res_ba_overlay_png = res.get("overlay")
-        if res.get("errors"):
-            st.warning(" ; ".join(res["errors"]))
+    ba_cols = st.columns([2,1])
+    with ba_cols[0]:
+        run_ba = st.button("🚀 Run Band Assist Pipeline", use_container_width=True)
+    with ba_cols[1]:
+        st.caption("Requires image upload; uses your current calibration and detection params.")
+
+    if run_ba:
+        if not st.session_state.res_uploaded_image:
+            st.error("Upload an image first.")
         else:
-            st.success("Band Assist completed")
-
-# Preview overlay + lanes table
-if st.session_state.res_ba_overlay_png:
-    c1, c2 = st.columns([2,1])
-    with c1:
-        st.image(st.session_state.res_ba_overlay_png, caption="Band Assist overlay", use_container_width=True)
-    with c2:
-        st.markdown("**Lanes (summary)**")
-        lane_cols = ["lane_index", "x0", "y0", "x1", "y1", "lane_type", "band_count"]
-        lanes_tbl = []
-        for r in (st.session_state.res_ba_lanes_rows or []):
-            lanes_tbl.append({k: r.get(k, "") for k in lane_cols})
-        st.dataframe(lanes_tbl, use_container_width=True, hide_index=True)
-
-# Editable bands table
-if st.session_state.res_ba_bands_rows:
-    st.markdown("**Band Assist — editable bands**")
-    band_cols = ["lane_index", "band_index", "x0", "x1", "y0", "y1", "intensity", "confidence"]
-    edited = st.data_editor(
-        [{k: row.get(k, "") for k in band_cols} for row in st.session_state.res_ba_bands_rows],
-        key="ba_bands_editor",
-        num_rows="dynamic",
-        use_container_width=True,
-        hide_index=True,
-    )
-    if st.button("✏️ Apply Band Edits and Update Overlay"):
-        st.session_state.res_ba_bands_rows = edited
-        try:
-            base2 = st.session_state.res_uploaded_image.convert("RGB")
-            if draw_ad_overlay and HAS_AD_PIPELINE:
-                over = draw_ad_overlay(base2, lanes=st.session_state.res_ba_lanes_rows, bands=st.session_state.res_ba_bands_rows)  # type: ignore
-                if isinstance(over, Image.Image):
-                    st.session_state.res_ba_overlay_png = _to_png_bytes(over)
+            # Build minimal params from UI
+            params = {
+                "gel_type": "SDS-PAGE" if st.session_state.params_gel_type == "sds_page" else "EtBr",
+                "conf_threshold": float(st.session_state.params_conf_threshold),
+                "mw_lane": int(st.session_state.params_mw_lane),
+                # Optional background radius from manual params if available
+            }
+            res = _try_run_ad_band_assist(st.session_state.res_uploaded_image, params)
+            st.session_state.res_ba_errors = res.get("errors", [])
+            st.session_state.res_ba_lanes_rows = res.get("lanes", [])
+            st.session_state.res_ba_bands_rows = res.get("bands", [])
+            st.session_state.res_ba_overlay_png = res.get("overlay")
+            if res.get("errors"):
+                st.warning(" ; ".join(res["errors"]))
             else:
-                fallback = _overlay_fallback(base2, st.session_state.res_ba_lanes_rows, st.session_state.res_ba_bands_rows)
-                st.session_state.res_ba_overlay_png = _to_png_bytes(fallback)
-            st.success("Band edits applied.")
-        except Exception as e:
-            st.error(f"Failed to update overlay: {e}")
+                st.success("Band Assist completed")
 
+    # Preview overlay + lanes table
+    if st.session_state.res_ba_overlay_png:
+        c1, c2 = st.columns([2,1])
+        with c1:
+            st.image(st.session_state.res_ba_overlay_png, caption="Band Assist overlay", use_container_width=True)
+        with c2:
+            st.markdown("**Lanes (summary)**")
+            lane_cols = ["lane_index", "x0", "y0", "x1", "y1", "lane_type", "band_count"]
+            lanes_tbl = []
+            for r in (st.session_state.res_ba_lanes_rows or []):
+                lanes_tbl.append({k: r.get(k, "") for k in lane_cols})
+            st.dataframe(lanes_tbl, use_container_width=True, hide_index=True)
 
-    
+    # Editable bands table
+    if st.session_state.res_ba_bands_rows:
+        st.markdown("**Band Assist — editable bands**")
+        band_cols = ["lane_index", "band_index", "x0", "x1", "y0", "y1", "intensity", "confidence"]
+        edited = st.data_editor(
+            [{k: row.get(k, "") for k in band_cols} for row in st.session_state.res_ba_bands_rows],
+            key="ba_bands_editor",
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
+        )
+        if st.button("✏️ Apply Band Edits and Update Overlay"):
+            st.session_state.res_ba_bands_rows = edited
+            try:
+                base2 = st.session_state.res_uploaded_image.convert("RGB")
+                if draw_ad_overlay and HAS_AD_PIPELINE:
+                    over = draw_ad_overlay(base2, lanes=st.session_state.res_ba_lanes_rows, bands=st.session_state.res_ba_bands_rows)  # type: ignore
+                    if isinstance(over, Image.Image):
+                        st.session_state.res_ba_overlay_png = _to_png_bytes(over)
+                else:
+                    fallback = _overlay_fallback(base2, st.session_state.res_ba_lanes_rows, st.session_state.res_ba_bands_rows)
+                    st.session_state.res_ba_overlay_png = _to_png_bytes(fallback)
+                st.success("Band edits applied.")
+            except Exception as e:
+                st.error(f"Failed to update overlay: {e}")
+    # Run / Stop controls (Analysis tab only)
+    run_col, stop_col, _sp = st.columns([1, 1, 6])
+    run_now = run_col.button("🚀 Run Analysis", key="run_analysis_top", type="primary", use_container_width=True)
+    stop_button = stop_col.button("🛑 Stop Analysis", key="stop_analysis_top", type="secondary", use_container_width=True)
+
+    if run_now:
+        # Set a session trigger that the main analysis logic checks
+        st.session_state.analysis_trigger = True
+        st.experimental_rerun()
+
+    if stop_button:
+        st.session_state.analysis_cancelled = True
+        st.warning("⚠️ Analysis cancelled by user")
+        st.experimental_rerun()
+
     # Analysis execution section
     st.markdown("### 🚀 Execute Analysis")
-    
-
-# Run / Stop controls
-run_col, stop_col, _sp = st.columns([1,1,6])
-run_button = run_col.button("🚀 Run Analysis", key="run_analysis", type="primary", use_container_width=True)
-stop_button = stop_col.button("🛑 Stop Analysis", key="stop_analysis", type="secondary", use_container_width=True)
-
-if stop_button:
-    st.session_state['analysis_cancelled'] = True
-    st.warning("⚠️ Analysis cancelled by user")
-    st.rerun()
 
     # Pre-analysis validation
     analysis_warnings = []
@@ -2594,33 +2598,32 @@ with tab3:
     
     # 4. Export and Download Options
     st.markdown("### 📥 Export & Download Options")
-# --- AutoDense Band Assist exports ---
-st.markdown("### 🧾 AutoDense Band Assist — Exports")
-lanes = st.session_state.get("res_ba_lanes_rows") or []
-bands = st.session_state.get("res_ba_bands_rows") or []
-if lanes or bands or st.session_state.get("res_ba_overlay_png"):
-    import io as _io
-    def _csv(rows, cols):
-        s = _io.StringIO()
-        s.write(",".join(cols) + "\n")
-        for r in rows:
-            s.write(",".join([str(r.get(c, "")) for c in cols]) + "\n")
-        return s.getvalue()
-    lane_cols = ["lane_index", "x0", "y0", "x1", "y1", "lane_type", "band_count"]
-    band_cols = ["lane_index", "band_index", "x0", "x1", "y0", "y1", "intensity", "confidence"]
-    lcsv = _csv(lanes, lane_cols) if lanes else ""
-    bcsv = _csv(bands, band_cols) if bands else ""
-    ec1, ec2, ec3 = st.columns(3)
-    with ec1:
-        st.download_button("⬇️ lanes.csv", data=lcsv, file_name="lanes.csv", mime="text/csv", use_container_width=True, disabled=not bool(lanes))
-    with ec2:
-        st.download_button("⬇️ bands.csv", data=bcsv, file_name="bands.csv", mime="text/csv", use_container_width=True, disabled=not bool(bands))
-    with ec3:
-        if st.session_state.get("res_ba_overlay_png"):
-            st.download_button("⬇️ overlay.png", data=st.session_state.res_ba_overlay_png, file_name="overlay.png", mime="image/png", use_container_width=True)
-else:
-    st.caption("No Band Assist data yet.")
-
+    # --- AutoDense Band Assist exports ---
+    st.markdown("### 🧾 AutoDense Band Assist — Exports")
+    lanes = st.session_state.get("res_ba_lanes_rows") or []
+    bands = st.session_state.get("res_ba_bands_rows") or []
+    if lanes or bands or st.session_state.get("res_ba_overlay_png"):
+        import io as _io
+        def _csv(rows, cols):
+            s = _io.StringIO()
+            s.write(",".join(cols) + "\n")
+            for r in rows:
+                s.write(",".join([str(r.get(c, "")) for c in cols]) + "\n")
+            return s.getvalue()
+        lane_cols = ["lane_index", "x0", "y0", "x1", "y1", "lane_type", "band_count"]
+        band_cols = ["lane_index", "band_index", "x0", "x1", "y0", "y1", "intensity", "confidence"]
+        lcsv = _csv(lanes, lane_cols) if lanes else ""
+        bcsv = _csv(bands, band_cols) if bands else ""
+        ec1, ec2, ec3 = st.columns(3)
+        with ec1:
+            st.download_button("⬇️ lanes.csv", data=lcsv, file_name="lanes.csv", mime="text/csv", use_container_width=True, disabled=not bool(lanes))
+        with ec2:
+            st.download_button("⬇️ bands.csv", data=bcsv, file_name="bands.csv", mime="text/csv", use_container_width=True, disabled=not bool(bands))
+        with ec3:
+            if st.session_state.get("res_ba_overlay_png"):
+                st.download_button("⬇️ overlay.png", data=st.session_state.res_ba_overlay_png, file_name="overlay.png", mime="image/png", use_container_width=True)
+    else:
+        st.caption("No Band Assist data yet.")
     
     col1, col2, col3 = st.columns(3)
     
