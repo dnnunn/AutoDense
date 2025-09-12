@@ -428,8 +428,26 @@ st.markdown("""
 <style>
 /* Main container optimizations */
 .main > div {
-    padding-top: 1rem;
+    padding-top: 0;
+    margin-top: 0;
     max-width: 1400px;
+}
+
+/* Remove default Streamlit spacing */
+.block-container {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+
+/* Remove header spacing */
+header[data-testid="stHeader"] {
+    height: 0 !important;
+    min-height: 0 !important;
+}
+
+/* Compact the toolbar */
+.stApp > div:first-child {
+    margin-top: 0 !important;
 }
 
 /* Accessibility improvements */
@@ -684,42 +702,6 @@ st.markdown("""
 Built with accessibility, performance, and scientific workflows in mind.
 """)
 
-# Workflow progress indicator with enhanced accessibility  
-st.markdown("### 📊 Analysis Workflow")
-
-workflow_steps = [
-    ("📤", "Upload", "upload", "Upload gel image", st.session_state.res_uploaded_image is not None),
-    ("🎯", "Calibrate", "calibrate", "Set lane boundaries", st.session_state.res_lane_boundaries is not None),
-    ("🔬", "Analyze", "analyze", "Run comprehensive analysis", st.session_state.res_analysis_data is not None),
-    ("📊", "Export", "export", "Download results", st.session_state.res_export_data is not None)
-]
-
-cols = st.columns(len(workflow_steps))
-for i, (icon, step, test_id, description, completed) in enumerate(workflow_steps):
-    with cols[i]:
-        # Determine step status
-        is_current = False
-        if i == 0 and not completed:
-            is_current = True
-        elif i > 0 and workflow_steps[i-1][4] and not completed:
-            is_current = True
-        
-        status_class = "complete" if completed else ("active" if is_current else "")
-        status_color = "ready" if completed else ("warning" if is_current else "error")
-        
-        st.markdown(f"""
-        <div class="workflow-step {status_class}" 
-             data-testid="workflow-step-{test_id}"
-             role="status" 
-             aria-label="{step}: {description}">
-            <span class="status-indicator status-{status_color}" 
-                  aria-hidden="true"></span>
-            {icon} <strong>{step}</strong><br>
-            <small style="color: #6c757d;">{description}</small>
-        </div>
-        """, unsafe_allow_html=True)
-
-st.markdown("---")
 
 # Sticky tabs CSS for better navigation - Updated for Streamlit 1.28+
 st.markdown("""
