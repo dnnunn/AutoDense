@@ -1755,6 +1755,7 @@ with tab2:
     if analyze_button:
         st.session_state.ui_analysis_count += 1
         st.session_state.ui_last_action = "analysis"
+        st.session_state.analysis_cancelled = False  # Initialize cancellation flag
         
         # Create analysis progress tracking
         progress_container = st.container()
@@ -1763,58 +1764,100 @@ with tab2:
             progress_bar = st.progress(0, text="🚀 Initializing analysis...")
             status_text = st.empty()
             
+            # Add stop button in a separate column layout
+            col1, col2 = st.columns([3, 1])
+            with col2:
+                stop_button = st.button("🛑 Stop Analysis", key="stop_analysis", type="secondary", use_container_width=True)
+            
+            if stop_button:
+                st.session_state.analysis_cancelled = True
+                st.warning("⚠️ Analysis cancelled by user")
+                st.rerun()
+            
             try:
                 # Step 1: Image preprocessing
-                status_text.info("🔬 **Step 1/5:** Preprocessing gel image...")
-                progress_bar.progress(20, text="🔬 Optimizing image quality...")
+                if not st.session_state.get('analysis_cancelled', False):
+                    status_text.info("🔬 **Step 1/5:** Preprocessing gel image...")
+                    progress_bar.progress(10, text="🔬 Starting image analysis...")
+                    
+                    # Add specific feedback for AI preprocessing
+                    if preprocessing_mode.startswith("ChatGPT"):
+                        status_text.info("🤖 **Step 1/5:** AI is analyzing your gel image (this may take 30-60 seconds)...")
+                        progress_bar.progress(15, text="🤖 Contacting OpenAI ChatGPT-4.1...")
+                    else:
+                        progress_bar.progress(20, text="🔬 Optimizing image quality...")
+                    
+                    img_hash = (st.session_state.res_image_metadata or {}).get('hash', '')
+                    manual_params_str = json.dumps(manual_params) if preprocessing_mode == "Manual" else ""
+                    
+                    # Enhanced spinner text for AI preprocessing
+                    spinner_text = "🤖 ChatGPT-4.1 is analyzing your gel image and recommending optimal preprocessing..." if preprocessing_mode.startswith("ChatGPT") else "Applying preprocessing algorithms..."
+                    
+                    with st.spinner(spinner_text):
+                        # Check for cancellation before expensive operation
+                        if st.session_state.get('analysis_cancelled', False):
+                            raise Exception("Analysis cancelled by user")
+                        
+                        preproc_result = cached_preprocess_image(img_hash, preprocessing_mode, manual_params_str)
+                        prepped_img, preproc_metadata = preproc_result
+                        st.session_state.res_preprocessing_outcome = preproc_metadata
                 
-                img_hash = (st.session_state.res_image_metadata or {}).get('hash', '')
-                manual_params_str = json.dumps(manual_params) if preprocessing_mode == "Manual" else ""
-                
-                with st.spinner("Applying preprocessing algorithms..."):
-                    preproc_result = cached_preprocess_image(img_hash, preprocessing_mode, manual_params_str)
-                    prepped_img, preproc_metadata = preproc_result
-                    st.session_state.res_preprocessing_outcome = preproc_metadata
-                
-                if preproc_metadata.get('status') == 'error':
-                    raise Exception(f"Preprocessing failed: {preproc_metadata.get('error', 'Unknown error')}")
-                
-                st.toast("Preprocessing complete", icon="✅")
+                    # Check for cancellation after preprocessing
+                    if st.session_state.get('analysis_cancelled', False):
+                        raise Exception("Analysis cancelled by user")
+                    
+                    if preproc_metadata.get('status') == 'error':
+                        raise Exception(f"Preprocessing failed: {preproc_metadata.get('error', 'Unknown error')}")
+                    
+                    st.toast("Preprocessing complete", icon="✅")
                 
                 # Step 2: Lane boundary application
-                status_text.info("🎯 **Step 2/5:** Applying custom lane boundaries...")
-                progress_bar.progress(40, text="🎯 Configuring lane regions...")
-                
-                # Here we would apply the calibrated lane boundaries to the analysis
-                # For now, we'll simulate this step
-                import time
-                time.sleep(1)  # Simulate processing time
+                if not st.session_state.get('analysis_cancelled', False):
+                    status_text.info("🎯 **Step 2/5:** Applying custom lane boundaries...")
+                    progress_bar.progress(40, text="🎯 Configuring lane regions...")
+                    
+                    # Here we would apply the calibrated lane boundaries to the analysis
+                    # For now, we'll simulate this step
+                    import time
+                    time.sleep(1)  # Simulate processing time
                 
                 # Step 3: Band detection
-                status_text.info("🔍 **Step 3/5:** Detecting and quantifying bands...")
-                progress_bar.progress(60, text="🔍 Identifying band signals...")
-                
-                with st.spinner("Analyzing band patterns..."):
-                    # This would integrate with the full AutoDense analysis pipeline
-                    analysis_result = cached_analyze_gel("/tmp/placeholder", {}, 1)
-                    time.sleep(2)  # Simulate band detection time
+                if not st.session_state.get('analysis_cancelled', False):
+                    status_text.info("🔍 **Step 3/5:** Detecting and quantifying bands...")
+                    progress_bar.progress(60, text="🔍 Identifying band signals...")
+                    
+                    with st.spinner("Analyzing band patterns..."):
+                        # Check for cancellation before expensive operation
+                        if st.session_state.get('analysis_cancelled', False):
+                            raise Exception("Analysis cancelled by user")
+                        # This would integrate with the full AutoDense analysis pipeline
+                        analysis_result = cached_analyze_gel("/tmp/placeholder", {}, 1)
+                        time.sleep(2)  # Simulate band detection time
                 
                 # Step 4: Molecular weight calibration
-                status_text.info("📏 **Step 4/5:** MW calibration and size determination...")
-                progress_bar.progress(80, text="📏 Calibrating molecular weights...")
-                
-                with st.spinner("Calculating molecular weights..."):
-                    # MW calibration would happen here
-                    time.sleep(1)
+                if not st.session_state.get('analysis_cancelled', False):
+                    status_text.info("📏 **Step 4/5:** MW calibration and size determination...")
+                    progress_bar.progress(80, text="📏 Calibrating molecular weights...")
+                    
+                    with st.spinner("Calculating molecular weights..."):
+                        # Check for cancellation
+                        if st.session_state.get('analysis_cancelled', False):
+                            raise Exception("Analysis cancelled by user")
+                        # MW calibration would happen here
+                        time.sleep(1)
                 
                 # Step 5: Statistical analysis and finalization
-                status_text.info("📊 **Step 5/5:** Statistical analysis and report generation...")
-                progress_bar.progress(100, text="📊 Finalizing results...")
-                
-                with st.spinner("Computing statistics and generating report..."):
-                    time.sleep(1)
-                
-                status_text.success("✅ **Analysis completed successfully!**")
+                if not st.session_state.get('analysis_cancelled', False):
+                    status_text.info("📊 **Step 5/5:** Statistical analysis and report generation...")
+                    progress_bar.progress(100, text="📊 Finalizing results...")
+                    
+                    with st.spinner("Computing statistics and generating report..."):
+                        # Check for cancellation
+                        if st.session_state.get('analysis_cancelled', False):
+                            raise Exception("Analysis cancelled by user")
+                        time.sleep(1)
+                    
+                    status_text.success("✅ **Analysis completed successfully!**")
                 
                 # Store comprehensive analysis results
                 analysis_timestamp = pd.Timestamp.now()
@@ -1930,24 +1973,40 @@ with tab2:
                     st.button("📥 **Quick Export**", use_container_width=True, help="Download analysis summary")
                 
             except Exception as e:
-                st.session_state.ui_error_count += 1
-                
                 # Clear progress indicators
                 progress_bar.empty()
                 status_text.empty()
                 
-                st.toast("Analysis failed", icon="❌")
-                
-                # Comprehensive error reporting
-                with st.expander("🔍 Analysis Error Details", expanded=True):
-                    st.markdown(f"""
-                    <div class="error-details">
-                    <strong>Analysis Failed - Error #{st.session_state.ui_error_count}</strong><br>
-                    <strong>Error:</strong> {str(e)}<br>
-                    <strong>Analysis Count:</strong> {st.session_state.ui_analysis_count}<br>
-                    <strong>Preprocessing Mode:</strong> {preprocessing_mode}
+                # Handle cancelled operations differently from errors
+                if "cancelled by user" in str(e).lower():
+                    st.info("⏹️ **Analysis Cancelled**")
+                    st.toast("Analysis stopped", icon="⏹️")
+                    
+                    # Reset cancellation flag
+                    st.session_state.analysis_cancelled = False
+                    
+                    st.markdown("""
+                    <div class="info-panel">
+                    <strong>Analysis stopped by user</strong><br>
+                    You can restart the analysis at any time by clicking the analysis button again.
                     </div>
                     """, unsafe_allow_html=True)
+                    
+                else:
+                    # Handle actual errors
+                    st.session_state.ui_error_count += 1
+                    st.toast("Analysis failed", icon="❌")
+                    
+                    # Comprehensive error reporting
+                    with st.expander("🔍 Analysis Error Details", expanded=True):
+                        st.markdown(f"""
+                        <div class="error-details">
+                        <strong>Analysis Failed - Error #{st.session_state.ui_error_count}</strong><br>
+                        <strong>Error:</strong> {str(e)}<br>
+                        <strong>Analysis Count:</strong> {st.session_state.ui_analysis_count}<br>
+                        <strong>Preprocessing Mode:</strong> {preprocessing_mode}
+                        </div>
+                        """, unsafe_allow_html=True)
                     
                     # Contextual troubleshooting
                     st.markdown("""
