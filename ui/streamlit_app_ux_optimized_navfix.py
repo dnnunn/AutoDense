@@ -2581,6 +2581,152 @@ with col4:
 # TODO: Keyboard event handling for future enhancement
 # This would require streamlit-keyup or similar package
 
+def render_global_sticky_footer():
+    """Fixed footer with Back / Next that follows the current active tab."""
+    import streamlit.components.v1 as components
+    
+    components.html("""
+    <style>
+        #ad-sticky-footer {
+            position: fixed;
+            left: 0; right: 0; bottom: 0;
+            z-index: 9999;
+            padding: 10px 16px;
+            background: rgba(255,255,255,0.92);
+            backdrop-filter: blur(6px);
+            border-top: 1px solid #e0e0e0;
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        #ad-sticky-footer .btn {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            color: #495057;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        #ad-sticky-footer .btn:hover {
+            background: #e9ecef;
+            border-color: #adb5bd;
+            transform: translateY(-1px);
+        }
+        
+        #ad-sticky-footer .btn.primary {
+            background: #0d6efd;
+            border-color: #0d6efd;
+            color: white;
+        }
+        
+        #ad-sticky-footer .btn.primary:hover {
+            background: #0b5ed7;
+            border-color: #0a58ca;
+        }
+        
+        #ad-sticky-footer .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        #ad-sticky-footer .hint {
+            color: #6c757d;
+            font-size: 13px;
+            text-align: center;
+            flex: 1;
+            margin: 0 16px;
+        }
+        
+        /* Hide on mobile to avoid overlay issues */
+        @media (max-width: 768px) {
+            #ad-sticky-footer {
+                display: none;
+            }
+        }
+    </style>
+    
+    <div id="ad-sticky-footer">
+        <button id="ad-back" class="btn">⬅️ Back</button>
+        <div class="hint">Use Back/Next to move through Calibration → Analysis → Results</div>
+        <button id="ad-next" class="btn primary">Next ➡️</button>
+    </div>
+    
+    <script>
+      const doc = window.parent.document;
+      function clickTabByPrefix(prefixes) {
+        const tabs = Array.from(doc.querySelectorAll('[role="tab"]'));
+        for (const pref of prefixes) {
+          for (const t of tabs) {
+            const txt = (t.innerText || t.textContent).trim();
+            if (txt.startsWith(pref)) { 
+              t.click(); 
+              window.parent.scrollTo({top: 0, behavior: 'smooth'}); 
+              return true; 
+            }
+          }
+        }
+        return false;
+      }
+      function currentTabLabel() {
+        const tabs = Array.from(doc.querySelectorAll('[role="tab"]'));
+        const curr = tabs.find(t => t.getAttribute('aria-selected') === 'true');
+        return curr ? (curr.innerText || curr.textContent).trim() : '';
+      }
+      function configureButtons() {
+        const back = document.getElementById('ad-back');
+        const next = document.getElementById('ad-next');
+        const label = currentTabLabel();
+        const isCal = label.startsWith('🎯');
+        const isAna = label.startsWith('🔬');
+        const isRes = label.startsWith('📊');
+        // Reset
+        back.removeAttribute('disabled'); next.removeAttribute('disabled');
+        back.onclick = null; next.onclick = null;
+        if (isCal) {
+          back.setAttribute('disabled','true');
+          next.onclick = () => clickTabByPrefix(['🔬 Analysis', '🔬 Analysis & Processing']);
+        } else if (isAna) {
+          back.onclick = () => clickTabByPrefix(['🎯 Lane Calibration']);
+          next.onclick = () => clickTabByPrefix(['📊 Results', '📊 Results & Export']);
+        } else if (isRes) {
+          back.onclick = () => clickTabByPrefix(['🔬 Analysis', '🔬 Analysis & Processing']);
+          next.setAttribute('disabled','true');
+        } else {
+          // Unknown: default to enabling both
+          back.onclick = () => clickTabByPrefix(['🎯 Lane Calibration']);
+          next.onclick = () => clickTabByPrefix(['🔬 Analysis', '🔬 Analysis & Processing']);
+        }
+      }
+      // Try repeatedly until the tablist exists, then observe changes
+      let tries = 0;
+      const iv = setInterval(() => {
+        tries += 1;
+        const tablist = doc.querySelector('[role="tablist"]');
+        if (tablist) {
+          configureButtons();
+          const obs = new MutationObserver(configureButtons);
+          obs.observe(tablist, {attributes:true, subtree:true, childList:true, characterData:true});
+          clearInterval(iv);
+        }
+        if (tries > 60) clearInterval(iv);
+      }, 100);
+    </script>
+    """, height=0)
+
+# Render sticky footer navigation
+render_global_sticky_footer()
+
 # Performance monitoring (development mode)
 if st.checkbox("⚡ Performance Monitor", help="Show performance metrics"):
     import psutil
@@ -2599,8 +2745,13 @@ if st.checkbox("⚡ Performance Monitor", help="Show performance metrics"):
         st.metric("Memory", f"{memory.percent:.1f}%")
     
     with col3:
-        cache_info = st.cache_data.cache.get_stats()  # If available
-        st.metric("Cache Hits", len(cache_info) if cache_info else 0)
+        try:
+            # Try to get cache stats (may not be available in all Streamlit versions)
+            cache_info = getattr(st.cache_data, 'cache', {})
+            cache_hits = len(cache_info) if hasattr(cache_info, '__len__') else 0
+        except Exception:
+            cache_hits = 0
+        st.metric("Cache Hits", cache_hits)
 
 def main():
     """Entry point for the UX-optimized AutoDense interface"""
