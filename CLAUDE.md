@@ -95,7 +95,7 @@ For a more detailed description of the Architecture see:
 * **Virtual environment** recommended: `source .venv/bin/activate`
 * **Streamlit apps:** `python -m streamlit run ui/streamlit_app.py`
 * **API key** must be valid (`AIza…`), set via env var, system property, or `api-config.properties`.
-* **Pre-commit hooks** expect `python3` in PATH for ImageJ term validation.
+* **Pre-commit hooks** expect `python3` in PATH for legacy term validation.
 
 ---
 
@@ -131,7 +131,7 @@ For a more detailed description of the Architecture see:
 ## Immediate Priorities
 
 ### 🎯 Optimization System Priorities
-1. **Complete autotune runner integration** with actual ImageJ analysis pipelines
+1. **Complete autotune runner integration** with actual Python analysis pipelines
 2. **Implement result persistence** for optimization workflow state management  
 3. **Validate challenge pack specifications** against real analysis scenarios
 4. **Test Python-Java bridge reliability** under various optimization loads
