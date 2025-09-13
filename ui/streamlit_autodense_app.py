@@ -8,6 +8,11 @@ from utils.image_processing import (
     process_uploaded_image, overlay_fallback
 )
 from utils.data_helpers import obj_to_dict, extract_json, calculate_lane_metrics
+from utils.preprocessing import (
+    _load_prompt, filter_supported_preproc_params,
+    _guarded_preprocess_with_timeout, _openai_preprocess_with_timeout,
+    openai_guided_preprocess, HAS_PREPROCESS, HAS_OPENAI
+)
 try:
     _futures
 except NameError:
@@ -18,67 +23,10 @@ except NameError:
 
 
 
-def _openai_preprocess_with_timeout(pil_img: Image.Image, timeout_sec: int = 75):
-    """Run openai_guided_preprocess with a timeout; returns (image, metadata_dict) or raises on failure/timeout."""
-    if not HAS_OPENAI:
-        raise RuntimeError("OpenAI is not configured")
-
-    def _task():
-        # Image is already standardized at upload time, no need to resize again
-        outcome = openai_guided_preprocess(pil_img)
-        meta = {"mode": f"ChatGPT-4.1: {getattr(outcome, 'mode', 'unknown')}", "status": "success"}
-        params = getattr(outcome, "params", None)
-        if isinstance(params, dict):
-            meta.update(params)
-        return outcome.image, meta
-
-    with _futures.ThreadPoolExecutor(max_workers=1) as ex:
-        fut = ex.submit(_task)
-        try:
-            return fut.result(timeout=timeout_sec)
-        except _futures.TimeoutError:
-            raise TimeoutError(f"OpenAI preprocessing timed out after {timeout_sec}s")
 
 
-def _guarded_preprocess_with_timeout(pil_img: Image.Image, timeout_sec: int = 60):
-    """Run guarded_preprocess with a timeout; returns (image, meta) or raises on failure/timeout."""
-    if not HAS_PREPROCESS:
-        raise RuntimeError("Preprocessing module not available")
-
-    def _task():
-        outcome = guarded_preprocess(pil_img)
-        return outcome.image, {
-            "mode": outcome.mode,
-            "before": outcome.before,
-            "after": outcome.after,
-            "params": outcome.params,
-            "status": "success",
-        }
-
-    with _futures.ThreadPoolExecutor(max_workers=1) as ex:
-        fut = ex.submit(_task)
-        try:
-            return fut.result(timeout=timeout_sec)
-        except _futures.TimeoutError:
-            raise TimeoutError(f"Guarded preprocessing timed out after {timeout_sec}s")
 
 
-def filter_supported_preproc_params(ui_params):
-    """Filter UI parameters to only include those supported by PreprocParams backend."""
-    try:
-        from autodense.preprocess.pipeline import PreprocParams
-        supported = set(PreprocParams.__annotations__.keys())
-        filtered = {k: v for k, v in ui_params.items() if k in supported}
-        unsupported = {k: v for k, v in ui_params.items() if k not in supported}
-
-        if unsupported:
-            print(f"INFO: Filtered out unsupported preprocessing parameters: {list(unsupported.keys())}")
-
-        return filtered
-    except ImportError:
-        # If import fails, return params as-is and let downstream handle it
-        print("WARNING: Could not import PreprocParams for parameter filtering")
-        return ui_params
 
 def cached_preprocess_image(image_hash: str, mode: str, manual_params_str: str = ""):
     """Improved caching with better key strategy - no longer processes image bytes repeatedly"""
@@ -1001,7 +949,7 @@ with tab1:
         # Instructions with progressive disclosure
         instructions_expanded = len(st.session_state.res_calibration_points) < 2
         
-        with st.expander("📖 Calibration Instructions & Best Practices", expanded=instructions_expanded):
+        with st.expander("📖 Calibration Instructions & Best Practices", expanded=False):
             col1, col2 = st.columns([2, 1])
             
             with col1:
@@ -1169,7 +1117,7 @@ with tab1:
                     st.session_state.res_calibration_points = current_points
                     st.rerun()
                 elif is_duplicate:
-                    st.warning("⚠️ Click in a different location")
+                    pass  # Don't show warning, green status box below is sufficient
                 elif len(current_points) >= 2:
                     st.info("✋ Already have 2 points. Use Clear or Undo to reset.")
             
@@ -1634,7 +1582,7 @@ with tab1:
         </div>
         """, unsafe_allow_html=True)
         
-        with st.expander("💡 Image Upload Guidelines", expanded=True):
+        with st.expander("💡 Image Upload Guidelines", expanded=False):
             col1, col2 = st.columns(2)
             
             with col1:
@@ -3322,92 +3270,15 @@ if __name__ == "__main__":
 from pathlib import Path
 import base64, json, re
 
-def _load_prompt(name: str, fallback: str) -> str:
-    candidates = [
-        Path(__file__).with_name(name),
-        Path(__file__).parent / "prompts" / name,
-        Path.cwd() / name,
-        Path.cwd() / "prompts" / name,
-    ]
-    for p in candidates:
-        try:
-            if p.exists():
-                return p.read_text(encoding="utf-8")
-        except Exception:
-            pass
-    return fallback
 
 
-
-def openai_guided_preprocess(pil_img):
-    """
-    Calls ChatGPT-4.1 with the preprocessing.system.md prompt.
-    Returns an object with .image (PIL), .params (dict), .mode (str).
-    """
-    sys_prompt = _load_prompt("preprocessing.system.md", "<embedded>")
-    data_url = img_to_data_url(pil_img)
-    from openai import OpenAI
-    client = OpenAI()
-    resp = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{
-            "role": "system",
-            "content": sys_prompt
-        }, {
-            "role": "user",
-            "content": [
-                {"type": "image_url", "image_url": {"url": data_url}},
-                {"type": "text", "text": "Analyze and return STRICT JSON per the schema."}
-            ]
-        }],
-        temperature=0
-    )
-    text = resp.choices[0].message.content
-    obj = extract_json(text)
-
-    # Apply minimal safe ops locally; leave heavy steps to your pipeline
-    img2 = pil_img.copy()
-    try:
-        ops = obj.get("ops") or []
-        for step in ops:
-            (k, v), = step.items()
-            if k == "orientation":
-                rot = {0:0, 90:90, 180:180, 270:270}.get(int(v), 0)
-                if rot: img2 = img2.rotate(360-rot, expand=True)
-            elif k == "deskew_deg":
-                try:
-                    ang = float(v)
-                    if abs(ang) > 0.1:
-                        img2 = img2.rotate(-ang, resample=Image.BICUBIC, expand=True)
-                except Exception:
-                    pass
-            elif k == "crop_xyxy":
-                x1,y1,x2,y2 = [int(x) for x in v]
-                img2 = img2.crop((x1,y1,x2,y2))
-            elif k == "grayscale" and bool(v):
-                img2 = img2.convert("L").convert("RGB")
-            elif k == "invert" and bool(v):
-                img2 = ImageOps.invert(img2.convert("RGB"))
-            elif k == "resize_max_w" and int(v) > 0:
-                w, h = img2.size
-                if w > int(v):
-                    nh = int(h * (int(v)/w))
-                    img2 = img2.resize((int(v), nh), Image.BICUBIC)
-    except Exception:
-        pass
-
-    class _Outcome: ...
-    outcome = _Outcome()
-    outcome.image = img2
-    outcome.params = obj.get("params") or {}
-    outcome.mode = "ChatGPT-4.1"
-    return outcome
 
 def chatgpt_postrun_explainer(run_summary: dict) -> dict:
     """
     Calls ChatGPT-4.1 with analysis.system.md given your RunSummary telemetry.
     Returns a dict with interpretation / next_params / action / notes.
     """
+    from ui.utils.preprocessing import _load_prompt
     sys_prompt = _load_prompt("analysis.system.md", "<embedded>")
     from openai import OpenAI
     client = OpenAI()

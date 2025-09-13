@@ -1,8 +1,0 @@
-pillow
-numpy
-scipy
-scikit-image
-fastapi
-uvicorn
-pydantic
-streamlit

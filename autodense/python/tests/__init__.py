@@ -1,3 +1,0 @@
-"""
-AutoDense Python Package Tests
-"""

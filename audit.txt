@@ -1,3 +1,0 @@
-./audit.sh                   # uses openai gemini grok, consolidates via openai by default
-CONSENSUS=gemini ./audit.sh  # consolidate via Gemini instead
-PROVIDERS="grok openai" ./audit.sh  # choose any subset

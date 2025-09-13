@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-scripts/md_check.sh
-git add -A :/

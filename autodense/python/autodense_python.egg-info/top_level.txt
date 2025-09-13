@@ -1,2 +1,0 @@
-autodense
-tests
