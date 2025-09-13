@@ -12,26 +12,97 @@ import io
 from typing import Dict, Any, Optional, Callable
 
 
+class HybridSessionStateMock:
+    """Mock that supports both dict-like and object-like access for session state.
+
+    This class bridges the gap between dict-like access ('key' in state) and
+    object-like access (state.key) that Streamlit session state supports.
+    """
+
+    def __init__(self, initial_data=None):
+        # Use object.__setattr__ to avoid recursion with our custom __setattr__
+        object.__setattr__(self, '_data', initial_data or {})
+
+    # Dict-like interface support
+    def __contains__(self, key):
+        """Support 'key' in state syntax."""
+        return key in self._data
+
+    def get(self, key, default=None):
+        """Support state.get('key', default) syntax."""
+        return self._data.get(key, default)
+
+    def __getitem__(self, key):
+        """Support state['key'] syntax."""
+        return self._data[key]
+
+    def __setitem__(self, key, value):
+        """Support state['key'] = value syntax."""
+        self._data[key] = value
+
+    # Object-like interface support
+    def __getattr__(self, key):
+        """Support state.key syntax."""
+        if key.startswith('_'):  # Internal attributes
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{key}'")
+        return self._data.get(key)
+
+    def __setattr__(self, key, value):
+        """Support state.key = value syntax."""
+        if key.startswith('_'):  # Internal attributes like _data
+            object.__setattr__(self, key, value)
+        else:
+            self._data[key] = value
+
+    def __delattr__(self, key):
+        """Support del state.key syntax."""
+        if key.startswith('_'):
+            object.__delattr__(self, key)
+        else:
+            del self._data[key]
+
+    # Additional dict-like methods that might be needed
+    def keys(self):
+        """Return keys like a dict."""
+        return self._data.keys()
+
+    def values(self):
+        """Return values like a dict."""
+        return self._data.values()
+
+    def items(self):
+        """Return items like a dict."""
+        return self._data.items()
+
+    def update(self, other):
+        """Update like a dict."""
+        self._data.update(other)
+
+    def clear(self):
+        """Clear like a dict."""
+        self._data.clear()
+
+
 @pytest.fixture
 def mock_session_state():
     """Mock Streamlit session state for component testing.
 
-    Returns a mock object that behaves like st.session_state with
-    attribute access and common AutoDense session state keys.
+    Returns a hybrid mock object that behaves like st.session_state with
+    both dict-like ('key' in state) and object-like (state.key) access patterns.
     """
-    mock_state = Mock()
-
     # Initialize common AutoDense session state keys with defaults
-    mock_state.res_uploaded_image = None
-    mock_state.res_uploaded_array = None
-    mock_state.res_image_metadata = None
-    mock_state.res_image_bytes = None
-    mock_state.res_lane_boundaries = None
-    mock_state.params_gel_type = "sds_page"
-    mock_state.ui_last_action = None
-    mock_state.ui_error_count = 0
+    initial_data = {
+        'res_uploaded_image': None,
+        'res_uploaded_array': None,
+        'res_image_metadata': None,
+        'res_image_bytes': None,
+        'res_lane_boundaries': None,
+        'params_gel_type': "sds_page",
+        'ui_last_action': None,
+        'ui_error_count': 0
+    }
 
-    return mock_state
+    return HybridSessionStateMock(initial_data)
 
 
 @pytest.fixture
@@ -176,10 +247,7 @@ def prerequisite_states():
     """Various prerequisite states for testing prerequisites panel."""
 
     def create_mock_state(state_dict):
-        mock_state = Mock()
-        for key, value in state_dict.items():
-            setattr(mock_state, key, value)
-        return mock_state
+        return HybridSessionStateMock(state_dict)
 
     return {
         'no_prerequisites': create_mock_state({
@@ -269,13 +337,14 @@ def invalid_image_mock():
 @pytest.fixture
 def session_state_with_existing_image(sample_image, sample_image_metadata):
     """Session state with an existing image loaded."""
-    mock_state = Mock()
-    mock_state.res_uploaded_image = sample_image
-    mock_state.res_uploaded_array = np.array(sample_image)
-    mock_state.res_image_metadata = sample_image_metadata
-    mock_state.res_image_bytes = b'existing_image_bytes'
-    mock_state.res_lane_boundaries = None
-    mock_state.params_gel_type = "sds_page"
-    mock_state.ui_last_action = None
-    mock_state.ui_error_count = 0
-    return mock_state
+    initial_data = {
+        'res_uploaded_image': sample_image,
+        'res_uploaded_array': np.array(sample_image),
+        'res_image_metadata': sample_image_metadata,
+        'res_image_bytes': b'existing_image_bytes',
+        'res_lane_boundaries': None,
+        'params_gel_type': "sds_page",
+        'ui_last_action': None,
+        'ui_error_count': 0
+    }
+    return HybridSessionStateMock(initial_data)

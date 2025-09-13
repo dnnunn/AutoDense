@@ -341,16 +341,19 @@ class TestImageUploadQualityAssessment:
              patch('PIL.Image.open') as mock_image_open:
 
             # Setup original image larger than standardized
-            mock_original_img = Mock(spec=Image.Image)
+            mock_original_img = Mock()
             mock_original_img.size = (2000, 1500)
             mock_original_img.format = 'JPEG'
             mock_original_img.convert.return_value = mock_original_img
 
-            mock_standardized_img = Mock(spec=Image.Image)
+            mock_standardized_img = Mock()
             mock_standardized_img.size = (1024, 768)
             mock_standardized_img.mode = 'RGB'
 
             mock_image_open.return_value = mock_original_img
+
+            # Clear side_effect from fixture and set return_value
+            mock_standardize_image.side_effect = None
             mock_standardize_image.return_value = mock_standardized_img
 
             with patch('numpy.array') as mock_array:
