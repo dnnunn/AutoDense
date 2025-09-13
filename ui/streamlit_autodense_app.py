@@ -1,6 +1,13 @@
 import base64, json, re
 from pathlib import Path
 from PIL import Image, ImageDraw
+
+# Import extracted utility functions
+from utils.image_processing import (
+    standardize_image_size, to_png_bytes, img_to_data_url,
+    process_uploaded_image, overlay_fallback
+)
+from utils.data_helpers import obj_to_dict, extract_json, calculate_lane_metrics
 try:
     _futures
 except NameError:
@@ -36,7 +43,7 @@ def _openai_preprocess_with_timeout(pil_img: Image.Image, timeout_sec: int = 75)
 
     def _task():
         # Standardize image size before sending to OpenAI to prevent timeouts
-        standardized_img = _standardize_image_size(pil_img)
+        standardized_img = standardize_image_size(pil_img)
         outcome = openai_guided_preprocess(standardized_img)
         meta = {"mode": f"ChatGPT-4.1: {getattr(outcome, 'mode', 'unknown')}", "status": "success"}
         params = getattr(outcome, "params", None)
@@ -441,47 +448,8 @@ def cached_analyze_gel(_image_path: str, _params_dict: dict, _retries: int):
 
 
 # ---- Band Assist helpers ----
-def _obj_to_dict(x):
-    if x is None:
-        return {}
-    if isinstance(x, dict):
-        return x
-    out = {}
-    for k in dir(x):
-        if k.startswith("_"):
-            continue
-        try:
-            v = getattr(x, k)
-        except Exception:
-            continue
-        if callable(v):
-            continue
-        try:
-            json.dumps(v, default=str)
-            out[k] = v
-        except Exception:
-            out[k] = str(v)
-    return out
 
-def _to_png_bytes(pil_img: Image.Image) -> bytes:
-    buf = io.BytesIO()
-    pil_img.save(buf, format="PNG")
-    return buf.getvalue()
 
-def _overlay_fallback(base: Image.Image, lanes, bands) -> Image.Image:
-    im = base.convert("RGBA").copy()
-    dr = ImageDraw.Draw(im, "RGBA")
-    for ln in (lanes or []):
-        x0, y0 = int(ln.get("x0", 0)), int(ln.get("y0", 0))
-        x1, y1 = int(ln.get("x1", base.width)), int(ln.get("y1", base.height))
-        dr.rectangle([x0, y0, x1, y1], outline=(0, 180, 0, 255), width=2)
-    for b in (bands or []):
-        x0 = int(b.get("x0", 0))
-        x1 = int(b.get("x1", base.width))
-        y0 = int(b.get("y0", 0))
-        y1 = int(b.get("y1", y0+2))
-        dr.rectangle([x0, y0, x1, y1], outline=(0, 90, 255, 255), width=2)
-    return im
 
 def _try_run_ad_band_assist(pil_img, params: dict):
     """Run AutoDense lanes/bands pipeline; resilient to signature changes across versions.
@@ -533,19 +501,19 @@ def _try_run_ad_band_assist(pil_img, params: dict):
             return out
 
         # Normalize to simple dicts
-        rdict = _obj_to_dict(res)
+        rdict = obj_to_dict(res)
         lanes_src = rdict.get("lanes") or rdict.get("detected_lanes") or []
         lanes = []
         for idx, ln in enumerate(lanes_src):
-            d = _obj_to_dict(ln)
+            d = obj_to_dict(ln)
             d.setdefault("lane_index", idx)
             lanes.append(d)
 
         bands = []
         for li, ln in enumerate(lanes_src):
-            d = _obj_to_dict(ln)
+            d = obj_to_dict(ln)
             for bi, b in enumerate(d.get("bands") or d.get("detected_bands") or []):
-                bd = _obj_to_dict(b)
+                bd = obj_to_dict(b)
                 bd.setdefault("lane_index", d.get("lane_index", li))
                 bd.setdefault("band_index", bi)
                 bands.append(bd)
@@ -556,10 +524,10 @@ def _try_run_ad_band_assist(pil_img, params: dict):
             if draw_ad_overlay:
                 over = draw_ad_overlay(base, lanes=lanes, bands=bands)  # type: ignore
                 if isinstance(over, Image.Image):
-                    overlay_bytes = _to_png_bytes(over)
+                    overlay_bytes = to_png_bytes(over)
             if overlay_bytes is None:
-                fallback = _overlay_fallback(base, lanes, bands)
-                overlay_bytes = _to_png_bytes(fallback)
+                fallback = overlay_fallback(base, lanes, bands)
+                overlay_bytes = to_png_bytes(fallback)
         except Exception as e:
             out["errors"].append(f"Overlay error: {e}")
 
@@ -2210,10 +2178,10 @@ with tab2:
                 if draw_ad_overlay and HAS_AD_PIPELINE:
                     over = draw_ad_overlay(base2, lanes=st.session_state.res_ba_lanes_rows, bands=st.session_state.res_ba_bands_rows)  # type: ignore
                     if isinstance(over, Image.Image):
-                        st.session_state.res_ba_overlay_png = _to_png_bytes(over)
+                        st.session_state.res_ba_overlay_png = to_png_bytes(over)
                 else:
-                    fallback = _overlay_fallback(base2, st.session_state.res_ba_lanes_rows, st.session_state.res_ba_bands_rows)
-                    st.session_state.res_ba_overlay_png = _to_png_bytes(fallback)
+                    fallback = overlay_fallback(base2, st.session_state.res_ba_lanes_rows, st.session_state.res_ba_bands_rows)
+                    st.session_state.res_ba_overlay_png = to_png_bytes(fallback)
                 st.success("Band edits applied.")
             except Exception as e:
                 st.error(f"Failed to update overlay: {e}")
@@ -3444,28 +3412,7 @@ def _load_prompt(name: str, fallback: str) -> str:
             pass
     return fallback
 
-def _img_to_data_url(pil_img, max_dimension=1920):
-    """Convert PIL image to data URL.
 
-    Note: Images are now standardized at upload time to prevent ChatGPT API timeouts,
-    so this function no longer needs to resize. However, max_dimension parameter is
-    kept for backward compatibility.
-    """
-    import io
-
-    # Images are already standardized at upload time, so no resizing needed
-    # Convert directly to base64
-    buf = io.BytesIO()
-    pil_img.save(buf, format="PNG")
-    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-
-    return f"data:image/png;base64,{b64}"
-
-def _extract_json(text: str) -> dict:
-    m = re.search(r"\{[\s\S]*\}", text)
-    if not m:
-        raise ValueError("No JSON object found in model output")
-    return json.loads(m.group(0))
 
 def openai_guided_preprocess(pil_img):
     """
@@ -3473,7 +3420,7 @@ def openai_guided_preprocess(pil_img):
     Returns an object with .image (PIL), .params (dict), .mode (str).
     """
     sys_prompt = _load_prompt("preprocessing.system.md", "<embedded>")
-    data_url = _img_to_data_url(pil_img)
+    data_url = img_to_data_url(pil_img)
     from openai import OpenAI
     client = OpenAI()
     resp = client.chat.completions.create(
@@ -3491,7 +3438,7 @@ def openai_guided_preprocess(pil_img):
         temperature=0
     )
     text = resp.choices[0].message.content
-    obj = _extract_json(text)
+    obj = extract_json(text)
 
     # Apply minimal safe ops locally; leave heavy steps to your pipeline
     from PIL import Image, ImageOps
@@ -3552,5 +3499,5 @@ def chatgpt_postrun_explainer(run_summary: dict) -> dict:
         temperature=0
     )
     text = resp.choices[0].message.content
-    return _extract_json(text)
+    return extract_json(text)
 # --- end glue ---------------------------------------------------------------
