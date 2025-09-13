@@ -1,6 +1,6 @@
 import base64, json, re
 from pathlib import Path
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 
 # Import extracted utility functions
 from utils.image_processing import (
@@ -16,24 +16,6 @@ except NameError:
 # Safe timeout helpers (no Image annotations to avoid NameError at import-time)
 # REMOVED: Duplicate function - see the main _openai_preprocess_with_timeout function below
 
-def _guarded_preprocess_with_timeout(pil_img, timeout_sec: int = 60):
-    if not 'HAS_PREPROCESS' in globals() or not HAS_PREPROCESS:
-        raise RuntimeError("Preprocessing module not available")
-    def _task():
-        outcome = guarded_preprocess(pil_img)
-        return outcome.image, {
-            "mode": outcome.mode,
-            "before": outcome.before,
-            "after": outcome.after,
-            "params": outcome.params,
-            "status": "success",
-        }
-    with _futures.ThreadPoolExecutor(max_workers=1) as ex:
-        fut = ex.submit(_task)
-        try:
-            return fut.result(timeout=timeout_sec)
-        except _futures.TimeoutError:
-            raise TimeoutError(f"Guarded preprocessing timed out after {timeout_sec}s")
 
 
 def _openai_preprocess_with_timeout(pil_img: Image.Image, timeout_sec: int = 75):
@@ -42,9 +24,8 @@ def _openai_preprocess_with_timeout(pil_img: Image.Image, timeout_sec: int = 75)
         raise RuntimeError("OpenAI is not configured")
 
     def _task():
-        # Standardize image size before sending to OpenAI to prevent timeouts
-        standardized_img = standardize_image_size(pil_img)
-        outcome = openai_guided_preprocess(standardized_img)
+        # Image is already standardized at upload time, no need to resize again
+        outcome = openai_guided_preprocess(pil_img)
         meta = {"mode": f"ChatGPT-4.1: {getattr(outcome, 'mode', 'unknown')}", "status": "success"}
         params = getattr(outcome, "params", None)
         if isinstance(params, dict):
@@ -81,20 +62,6 @@ def _guarded_preprocess_with_timeout(pil_img: Image.Image, timeout_sec: int = 60
         except _futures.TimeoutError:
             raise TimeoutError(f"Guarded preprocessing timed out after {timeout_sec}s")
 
-def _standardize_image_size(pil_img, max_pixels=1024*768):
-    """Standardize image size to prevent OpenAI API timeouts."""
-    width, height = pil_img.size
-    total_pixels = width * height
-
-    if total_pixels <= max_pixels:
-        return pil_img
-
-    # Calculate scaling factor to reduce to max_pixels
-    scale_factor = (max_pixels / total_pixels) ** 0.5
-    new_width = int(width * scale_factor)
-    new_height = int(height * scale_factor)
-
-    return pil_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
 def filter_supported_preproc_params(ui_params):
     """Filter UI parameters to only include those supported by PreprocParams backend."""
@@ -167,7 +134,6 @@ import json, io
 import numpy as np
 import pandas as pd
 import concurrent.futures as _futures
-from PIL import Image, ImageDraw
 import time
 import contextlib
 import gc
@@ -383,23 +349,6 @@ except ImportError:
 
 # OPTIMIZATION 1: Single image processing pipeline with better caching
 @st.cache_data(persist=True, max_entries=1)
-def process_uploaded_image(uploaded_file_bytes: bytes, filename: str):
-    """Single source of truth for image processing - avoids redundant conversions"""
-    img = Image.open(io.BytesIO(uploaded_file_bytes)).convert("RGB")
-    img_array = np.asarray(img)
-    
-    # Generate hash for cache keys
-    image_hash = hashlib.md5(uploaded_file_bytes).hexdigest()[:8]
-    
-    metadata = {
-        'filename': filename,
-        'dimensions': img.size,  # More efficient than array shape
-        'mode': img.mode,
-        'format': img.format or 'Unknown',
-        'hash': image_hash,
-        'size_bytes': len(uploaded_file_bytes)
-    }
-    return img, img_array, metadata
 
 # OPTIMIZATION 1: Improved preprocessing cache with better key strategy
 @st.cache_data(
@@ -411,24 +360,6 @@ def process_uploaded_image(uploaded_file_bytes: bytes, filename: str):
 
 
 
-def calculate_lane_metrics(lane_boundaries_data: list):
-    """Efficient vectorized lane metrics calculation - replaces O(n) loops"""
-    if len(lane_boundaries_data) < 2:
-        return {'spacings': [], 'widths': [], 'min_spacing': 0, 'max_spacing': 0, 'mean_spacing': 0, 'spacing_cv': 0}
-    
-    # Convert to numpy arrays for vectorized operations
-    centers = np.array([b['center_px'] for b in lane_boundaries_data])
-    widths = np.array([b['width_px'] for b in lane_boundaries_data])
-    spacings = np.abs(np.diff(centers))  # Vectorized spacing calculation
-    
-    return {
-        'spacings': spacings.tolist(),
-        'widths': widths.tolist(),
-        'min_spacing': float(spacings.min()) if len(spacings) > 0 else 0,
-        'max_spacing': float(spacings.max()) if len(spacings) > 0 else 0,
-        'mean_spacing': float(spacings.mean()) if len(spacings) > 0 else 0,
-        'spacing_cv': float(spacings.std() / spacings.mean()) if len(spacings) > 0 and spacings.mean() > 0 else 0
-    }
 
 @st.cache_data(show_spinner="🔍 Analyzing gel structure...", max_entries=5, ttl=1800)
 def cached_analyze_gel(_image_path: str, _params_dict: dict, _retries: int):
@@ -905,23 +836,6 @@ with tab1:
     
     # Enhanced file upload with validation
     @handle_errors("Image Upload")
-    def standardize_uploaded_image(img: Image.Image, max_dimension: int = 1920):
-        """Standardize all uploaded images to consistent size immediately at upload time.
-
-        This eliminates multiple resize operations throughout the pipeline and prevents
-        ChatGPT API timeouts caused by large base64 payloads (>20MB).
-        """
-        original_size = img.size
-
-        # Resize if needed (maintaining aspect ratio)
-        if max(img.size) > max_dimension:
-            if img.size[0] > img.size[1]:
-                new_size = (max_dimension, int(img.size[1] * max_dimension / img.size[0]))
-            else:
-                new_size = (int(img.size[0] * max_dimension / img.size[1]), max_dimension)
-            img = img.resize(new_size, Image.LANCZOS)
-
-        return img, original_size, img.size
 
     def handle_file_upload(uploaded_file):
         if not uploaded_file:
@@ -934,13 +848,22 @@ with tab1:
         
         # Load and validate image
         file_bytes = uploaded_file.getvalue()
+        image_hash = hashlib.md5(file_bytes).hexdigest()[:8]
+
+        # Check if this is the same image already loaded (avoid duplicate processing)
+        if ('res_uploaded_image' in st.session_state and
+            st.session_state.res_image_metadata and
+            st.session_state.res_image_metadata.get('hash') == image_hash):
+            return None  # Same image, don't reprocess
+
         img_original = Image.open(io.BytesIO(file_bytes)).convert("RGB")
 
         # Apply upload-time image standardization
-        img, original_size, standardized_size = standardize_uploaded_image(img_original)
+        original_size = img_original.size
+        img = standardize_image_size(img_original)
+        standardized_size = img.size
         img_array = np.array(img)
         h, w, _ = img_array.shape
-        image_hash = hashlib.md5(file_bytes).hexdigest()[:8]
         
         # Store metadata including standardization info
         metadata = {
@@ -2195,7 +2118,9 @@ with tab2:
     
     # Check image quality indicators
     if st.session_state.res_image_metadata:
-        dims = st.session_state.res_image_metadata.get('dimensions', (0, 0))
+        # Check ORIGINAL dimensions (before standardization) for detection accuracy warning
+        dims = st.session_state.res_image_metadata.get('original_dimensions',
+               st.session_state.res_image_metadata.get('dimensions', (0, 0)))
         if dims[0] < 1000 or dims[1] < 500:
             analysis_warnings.append("Small image dimensions may reduce detection accuracy")
 
@@ -3441,7 +3366,6 @@ def openai_guided_preprocess(pil_img):
     obj = extract_json(text)
 
     # Apply minimal safe ops locally; leave heavy steps to your pipeline
-    from PIL import Image, ImageOps
     img2 = pil_img.copy()
     try:
         ops = obj.get("ops") or []
