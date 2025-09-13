@@ -11,7 +11,8 @@ from unittest.mock import patch, Mock, MagicMock
 import numpy as np
 from PIL import Image
 
-from components.image_upload import render_image_upload, handle_errors
+from components.image_upload import render_image_upload
+from utils.error_handling import handle_errors
 
 
 class TestImageUploadBasicFunctionality:

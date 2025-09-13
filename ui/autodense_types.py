@@ -27,6 +27,11 @@ LaneData: TypeAlias = Dict[str, Any]
 TabNavigationFunction: TypeAlias = Callable[[str], None]
 ErrorCallback: TypeAlias = Callable[[str], None]
 
+# Error handling types
+ErrorDetails: TypeAlias = Dict[str, Union[str, int, Any]]
+ErrorLogEntry: TypeAlias = Dict[str, Any]
+ErrorHandler: TypeAlias = Callable[[str, Exception, int], None]
+
 # Parameter types
 ParameterDict: TypeAlias = Dict[str, Union[str, int, float, bool]]
 ConfigDict: TypeAlias = Dict[str, Any]
@@ -49,3 +54,8 @@ SessionValue: TypeAlias = Any
 
 # Type guards and validation types
 ValidationResult: TypeAlias = Tuple[bool, Optional[str]]  # (is_valid, error_message)
+
+# Error handling and debugging types
+UIErrorCount: TypeAlias = int
+UIErrorLog: TypeAlias = List[ErrorLogEntry]
+ComponentErrorState: TypeAlias = Dict[str, Any]

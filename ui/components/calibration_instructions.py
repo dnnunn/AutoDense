@@ -7,7 +7,10 @@ two-point lane calibration in gel electrophoresis analysis.
 import streamlit as st
 from typing import Optional
 
+from utils.error_handling import with_error_boundary
 
+
+@with_error_boundary("Calibration Instructions")
 def render_calibration_instructions(expanded: bool = False) -> None:
     """
     Render calibration instructions panel with step-by-step guidance.

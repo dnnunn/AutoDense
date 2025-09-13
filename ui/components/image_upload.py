@@ -7,7 +7,6 @@ for scientific gel electrophoresis analysis.
 import hashlib
 import io
 from typing import Optional, Tuple, Dict, Any, Callable, Union
-from functools import wraps
 
 import numpy as np
 import streamlit as st
@@ -15,33 +14,10 @@ from PIL import Image
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 from utils.image_processing import standardize_image_size
+from utils.error_handling import handle_ui_errors
 from autodense_types import ImageMetadata, ImageTuple, ImageDimensions, FileBytes, FileHash
 
 
-def handle_errors(operation_name: str) -> Callable[[Callable[..., Any]], Callable[..., Optional[Any]]]:
-    """Decorator for consistent error handling with user feedback."""
-    def decorator(func: Callable[..., Any]) -> Callable[..., Optional[Any]]:
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Optional[Any]:
-            try:
-                return func(*args, **kwargs)
-            except Exception as e:
-                if 'ui_error_count' not in st.session_state:
-                    st.session_state.ui_error_count = 0
-                st.session_state.ui_error_count += 1
-                st.toast(f"{operation_name} failed", icon="❌")
-
-                with st.expander(f"🔍 {operation_name} Error Details", expanded=True):
-                    st.markdown(f"""
-                    <div class="error-details">
-                    <strong>Operation:</strong> {operation_name}<br>
-                    <strong>Error:</strong> {str(e)}<br>
-                    <strong>Error #{st.session_state.ui_error_count}</strong>
-                    </div>
-                    """, unsafe_allow_html=True)
-                return None
-        return wrapper
-    return decorator
 
 
 def render_image_upload(
@@ -70,7 +46,7 @@ def render_image_upload(
         - ui_last_action: "upload"
     """
 
-    @handle_errors("Image Upload")
+    @handle_ui_errors("Image Upload", show_details=True, return_value=None)
     def handle_file_upload(uploaded_file: Optional[UploadedFile]) -> Optional[ImageTuple]:
         if not uploaded_file:
             return None
