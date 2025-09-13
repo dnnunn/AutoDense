@@ -28,6 +28,7 @@ class PreprocParams:
     clahe: bool = True
     deskew: bool = True
     rectify: bool = False              # placeholder for perspective rectify
+    gamma: float = 1.0                 # gamma correction factor (1.0 = no correction)
 
 @dataclass
 class PreprocMeta:
@@ -39,6 +40,7 @@ class PreprocMeta:
     clahe: bool
     deskew_deg: float
     rectify: bool
+    gamma: float
 
 def _exif_orient(img: Image.Image) -> Image.Image:
     try: return ImageOps.exif_transpose(img)
@@ -98,6 +100,12 @@ def _clahe8(g: np.ndarray, enabled: bool) -> np.ndarray:
     u8 = (np.clip(g,0,1) * 255).astype(np.uint8)
     return exposure.equalize_adapthist(u8).astype(np.float32)
 
+def _gamma_correct(g: np.ndarray, gamma: float) -> np.ndarray:
+    """Apply gamma correction to the image."""
+    if gamma == 1.0:
+        return g
+    return np.power(np.clip(g, 0, 1), gamma).astype(np.float32)
+
 def _deskew(g: np.ndarray):
     edges = feature.canny(g, sigma=2.0)
     h, theta, _ = transform.hough_line(edges)
@@ -136,11 +144,15 @@ def run(image, params: Optional[PreprocParams]=None, save_dir: Optional[Path]=No
     g_dn, dn_used = _denoise(g_bg, params.denoise); stages["40_denoise"] = g_dn
     g_eq = _clahe8(g_dn, params.clahe); stages["50_contrast"] = g_eq
 
+    # Gamma correction
+    g_gamma = _gamma_correct(g_eq, params.gamma); stages["55_gamma"] = g_gamma
+
     # Deskew
-    g_sk, deg = _deskew(g_eq) if params.deskew else (g_eq, 0.0); stages["60_deskew"] = g_sk
+    g_sk, deg = _deskew(g_gamma) if params.deskew else (g_gamma, 0.0); stages["60_deskew"] = g_sk
 
     meta = PreprocMeta(channel=ch_label, polarity=pol, bg_method=method_used, bg_radius_px=int(radius),
-                       denoise=dn_used, clahe=bool(params.clahe), deskew_deg=float(deg), rectify=bool(params.rectify))
+                       denoise=dn_used, clahe=bool(params.clahe), deskew_deg=float(deg), rectify=bool(params.rectify),
+                       gamma=float(params.gamma))
 
     # Save stages + sidecar
     if save_dir is not None:
