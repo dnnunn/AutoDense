@@ -5,10 +5,12 @@ required before analysis can proceed.
 """
 
 import streamlit as st
-from typing import Callable, Optional
+from typing import Callable, Optional, Dict, Any, Tuple, Union, List
+
+from autodense_types import ImageMetadata, TabNavigationFunction
 
 
-def render_prerequisites_panel(goto_tab: Optional[Callable[[str], None]] = None) -> bool:
+def render_prerequisites_panel(goto_tab: Optional[TabNavigationFunction] = None) -> bool:
     """
     Render prerequisites status panel showing image and calibration status.
 
@@ -23,8 +25,8 @@ def render_prerequisites_panel(goto_tab: Optional[Callable[[str], None]] = None)
     """
 
     # Prerequisites validation with detailed feedback
-    has_image = st.session_state.res_uploaded_image is not None
-    has_calibration = st.session_state.res_lane_boundaries is not None
+    has_image: bool = st.session_state.res_uploaded_image is not None
+    has_calibration: bool = st.session_state.res_lane_boundaries is not None
 
     # Prerequisites status panel
     st.markdown("### 📋 Prerequisites Status")
@@ -33,9 +35,9 @@ def render_prerequisites_panel(goto_tab: Optional[Callable[[str], None]] = None)
 
     with col1:
         if has_image:
-            metadata = st.session_state.res_image_metadata or {}
-            filename = metadata.get('filename', 'Unknown')
-            dimensions = metadata.get('dimensions', (0, 0))
+            metadata: ImageMetadata = st.session_state.res_image_metadata or {}
+            filename: str = metadata.get('filename', 'Unknown')
+            dimensions: Tuple[int, int] = metadata.get('dimensions', (0, 0))
             st.success(f"✅ **Image Ready:** {filename}")
             st.caption(f"📐 Dimensions: {dimensions[0]}×{dimensions[1]}px")
         else:
@@ -44,9 +46,10 @@ def render_prerequisites_panel(goto_tab: Optional[Callable[[str], None]] = None)
 
     with col2:
         if has_calibration:
-            n_boundaries = len(st.session_state.res_lane_boundaries)
+            n_boundaries: int = len(st.session_state.res_lane_boundaries)
             st.success(f"✅ **Lanes Calibrated:** {n_boundaries} lanes configured")
-            st.caption(f"🎯 Ready for {st.session_state.params_gel_type.upper()} analysis")
+            gel_type: str = getattr(st.session_state, 'params_gel_type', 'unknown')
+            st.caption(f"🎯 Ready for {gel_type.upper()} analysis")
         else:
             st.error("❌ **Calibration Missing**")
             st.caption("👈 Complete lane setup in **Lane Calibration** tab")

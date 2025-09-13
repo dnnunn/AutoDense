@@ -1,5 +1,6 @@
 import base64, json, re
 from pathlib import Path
+from typing import Dict, Any, Optional, Tuple, List, Union, Callable
 from PIL import Image, ImageDraw, ImageOps
 
 # Import extracted utility functions
@@ -20,6 +21,7 @@ from utils.parameter_management import (
 from components.image_upload import render_image_upload
 from components.prerequisites_panel import render_prerequisites_panel
 from components.calibration_instructions import render_calibration_instructions
+from autodense_types import ImageMetadata, ImageTuple, ParameterDict, AnalysisResult
 try:
     _futures
 except NameError:
@@ -35,14 +37,14 @@ except NameError:
 
 
 
-def cached_preprocess_image(image_hash: str, mode: str, manual_params_str: str = ""):
+def cached_preprocess_image(image_hash: str, mode: str, manual_params_str: str = "") -> Tuple[Any, Dict[str, Any]]:
     """Improved caching with better key strategy - no longer processes image bytes repeatedly"""
     # Get image from session state (already processed once)
     if 'res_uploaded_image' not in st.session_state or st.session_state.res_image_metadata.get('hash') != image_hash:
         return None, {"status": "error", "error": "Image not found in session"}
 
-    img = st.session_state.res_uploaded_image
-    manual_params = json.loads(manual_params_str) if manual_params_str else None
+    img: Image.Image = st.session_state.res_uploaded_image
+    manual_params: Optional[Dict[str, Any]] = json.loads(manual_params_str) if manual_params_str else None
 
     try:
         if mode.startswith("ChatGPT") and HAS_OPENAI:
@@ -74,7 +76,7 @@ def cached_preprocess_image(image_hash: str, mode: str, manual_params_str: str =
         arr = np.asarray(img.convert("L")).astype(np.float32)
         prepped = (arr - arr.min())/(arr.max()-arr.min()+1e-6)
         return prepped, {"mode": "Fallback (preprocessing failed)", "error": str(e), "status": "error"}
-def _apply_footer_hide():
+def _apply_footer_hide() -> None:
     """Hide sticky footer while a run is active."""
     try:
         if st.session_state.get("_analysis_running"):
@@ -179,7 +181,7 @@ except ImportError:
 
 
 @st.cache_data(show_spinner="🔍 Analyzing gel structure...", max_entries=5, ttl=1800)
-def cached_analyze_gel(_image_path: str, _params_dict: dict, _retries: int):
+def cached_analyze_gel(_image_path: str, _params_dict: Dict[str, Any], _retries: int) -> Dict[str, Any]:
     """Cache gel analysis operations with 30-minute TTL"""
     try:
         # This would integrate with the full AutoDense pipeline
@@ -199,11 +201,11 @@ def cached_analyze_gel(_image_path: str, _params_dict: dict, _retries: int):
 
 
 
-def _try_run_ad_band_assist(pil_img, params: dict):
+def _try_run_ad_band_assist(pil_img: Image.Image, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Run AutoDense lanes/bands pipeline; resilient to signature changes across versions.
     Returns dict: {lanes, bands, overlay, errors}
     """
-    out = {"lanes": [], "bands": [], "overlay": None, "errors": []}
+    out: Dict[str, Any] = {"lanes": [], "bands": [], "overlay": None, "errors": []}
     if not HAS_AD_PIPELINE:
         out["errors"].append("AutoDense analysis pipeline is not available in this environment.")
         return out
@@ -442,7 +444,7 @@ button:focus, .stSelectbox:focus, .stSlider:focus, .stNumberInput:focus {
 
 # Session state initialization with consistent patterns
 # --- Simple DOM-click helper to programmatically switch Streamlit tabs ---
-def goto_tab(label_prefix: str):
+def goto_tab(label_prefix: str) -> None:
     """Switch to a tab whose label starts with label_prefix (e.g., '🔬 Analysis').
     Works by clicking the DOM tab button; resilient to Streamlit updates by matching role="tab".
     """
@@ -471,9 +473,9 @@ def goto_tab(label_prefix: str):
         </script>
     """, height=0)
 
-def init_session_state():
+def init_session_state() -> None:
     """Initialize session state following ui_* params_* res_* convention"""
-    defaults = {
+    defaults: Dict[str, Any] = {
         # UI State
         'ui_current_tab': 'calibration',
         'ui_canvas_key': 0,
@@ -515,10 +517,10 @@ def init_session_state():
 init_session_state()
 
 # Enhanced error handler decorator
-def handle_errors(operation_name: str):
+def handle_errors(operation_name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator for consistent error handling with user feedback"""
-    def decorator(func):
-        def wrapper(*args, **kwargs):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             try:
                 return func(*args, **kwargs)
             except Exception as e:
@@ -2760,7 +2762,7 @@ with col4:
 # TODO: Keyboard event handling for future enhancement
 # This would require streamlit-keyup or similar package
 
-def render_global_sticky_footer():
+def render_global_sticky_footer() -> None:
     """Fixed footer with Back / Next that follows the current active tab."""
     import streamlit.components.v1 as components
     
@@ -2932,7 +2934,7 @@ if st.checkbox("⚡ Performance Monitor", help="Show performance metrics"):
             cache_hits = 0
         st.metric("Cache Hits", cache_hits)
 
-def main():
+def main() -> None:
     """Entry point for the UX-optimized AutoDense interface"""
     import subprocess
     import sys
@@ -2957,7 +2959,7 @@ import base64, json, re
 
 
 
-def chatgpt_postrun_explainer(run_summary: dict) -> dict:
+def chatgpt_postrun_explainer(run_summary: Dict[str, Any]) -> Dict[str, Any]:
     """
     Calls ChatGPT-4.1 with analysis.system.md given your RunSummary telemetry.
     Returns a dict with interpretation / next_params / action / notes.

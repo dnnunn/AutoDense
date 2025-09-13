@@ -6,19 +6,23 @@ for scientific gel electrophoresis analysis.
 
 import hashlib
 import io
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, Callable, Union
+from functools import wraps
 
 import numpy as np
 import streamlit as st
 from PIL import Image
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 from utils.image_processing import standardize_image_size
+from autodense_types import ImageMetadata, ImageTuple, ImageDimensions, FileBytes, FileHash
 
 
-def handle_errors(operation_name: str):
+def handle_errors(operation_name: str) -> Callable[[Callable[..., Any]], Callable[..., Optional[Any]]]:
     """Decorator for consistent error handling with user feedback."""
-    def decorator(func):
-        def wrapper(*args, **kwargs):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Optional[Any]]:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Optional[Any]:
             try:
                 return func(*args, **kwargs)
             except Exception as e:
@@ -44,7 +48,7 @@ def render_image_upload(
     key_prefix: str = "main",
     max_file_size_mb: int = 50,
     show_metadata: bool = True
-) -> Optional[Tuple[Image.Image, np.ndarray, Dict[str, Any]]]:
+) -> Optional[ImageTuple]:
     """
     Render image upload component with validation and standardization.
 
@@ -67,19 +71,19 @@ def render_image_upload(
     """
 
     @handle_errors("Image Upload")
-    def handle_file_upload(uploaded_file):
+    def handle_file_upload(uploaded_file: Optional[UploadedFile]) -> Optional[ImageTuple]:
         if not uploaded_file:
             return None
 
         # Validate file size
-        max_size_bytes = max_file_size_mb * 1024 * 1024
+        max_size_bytes: int = max_file_size_mb * 1024 * 1024
         if uploaded_file.size > max_size_bytes:
             st.error(f"❌ File too large (>{max_file_size_mb}MB). Please use a smaller image.")
             return None
 
         # Load and validate image
-        file_bytes = uploaded_file.getvalue()
-        image_hash = hashlib.md5(file_bytes).hexdigest()[:8]
+        file_bytes: FileBytes = uploaded_file.getvalue()
+        image_hash: FileHash = hashlib.md5(file_bytes).hexdigest()[:8]
 
         # Check if this is the same image already loaded (avoid duplicate processing)
         if ('res_uploaded_image' in st.session_state and
@@ -87,17 +91,19 @@ def render_image_upload(
             st.session_state.res_image_metadata.get('hash') == image_hash):
             return None  # Same image, don't reprocess
 
-        img_original = Image.open(io.BytesIO(file_bytes)).convert("RGB")
+        img_original: Image.Image = Image.open(io.BytesIO(file_bytes)).convert("RGB")
 
         # Apply upload-time image standardization
-        original_size = img_original.size
-        img = standardize_image_size(img_original)
-        standardized_size = img.size
-        img_array = np.array(img)
+        original_size: ImageDimensions = img_original.size
+        img: Image.Image = standardize_image_size(img_original)
+        standardized_size: ImageDimensions = img.size
+        img_array: np.ndarray = np.array(img)
+        h: int
+        w: int
         h, w, _ = img_array.shape
 
         # Store metadata including standardization info
-        metadata = {
+        metadata: ImageMetadata = {
             'filename': uploaded_file.name,
             'size_bytes': uploaded_file.size,
             'original_dimensions': original_size,
@@ -134,7 +140,7 @@ def render_image_upload(
     st.markdown('<div data-testid="file-upload-section" role="region" aria-labelledby="upload-heading">', unsafe_allow_html=True)
     st.markdown('<h3 id="upload-heading">📤 Image Upload</h3>', unsafe_allow_html=True)
 
-    uploaded_file = st.file_uploader(
+    uploaded_file: Optional[UploadedFile] = st.file_uploader(
         "Select gel image",
         type=["jpg", "jpeg", "png", "tiff", "tif", "heic", "heif"],
         help="Supported: PNG, JPG, TIFF, HEIC/HEIF (install pillow-heif). Optimal size: 1000–4000px width, <50MB",
@@ -142,10 +148,13 @@ def render_image_upload(
         key=f"{key_prefix}_file_uploader"
     )
 
-    result = None
+    result: Optional[ImageTuple] = None
     if uploaded_file:
         result = handle_file_upload(uploaded_file)
         if result:
+            img: Image.Image
+            img_array: np.ndarray
+            metadata: ImageMetadata
             img, img_array, metadata = result
             h, w, _ = img_array.shape
 

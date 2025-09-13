@@ -5,6 +5,7 @@ two-point lane calibration in gel electrophoresis analysis.
 """
 
 import streamlit as st
+from typing import Optional
 
 
 def render_calibration_instructions(expanded: bool = False) -> None:
