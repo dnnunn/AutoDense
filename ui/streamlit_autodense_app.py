@@ -7,7 +7,7 @@ from utils.image_processing import (
     standardize_image_size, to_png_bytes, img_to_data_url,
     process_uploaded_image, overlay_fallback
 )
-from utils.data_helpers import obj_to_dict, extract_json, calculate_lane_metrics
+from utils.data_helpers import obj_to_dict, extract_json, calculate_lane_metrics, convert_to_csv
 from utils.preprocessing import (
     _load_prompt, filter_supported_preproc_params,
     _guarded_preprocess_with_timeout, _openai_preprocess_with_timeout,
@@ -2696,17 +2696,10 @@ with tab3:
     lanes = st.session_state.get("res_ba_lanes_rows") or []
     bands = st.session_state.get("res_ba_bands_rows") or []
     if lanes or bands or st.session_state.get("res_ba_overlay_png"):
-        import io as _io
-        def _csv(rows, cols):
-            s = _io.StringIO()
-            s.write(",".join(cols) + "\n")
-            for r in rows:
-                s.write(",".join([str(r.get(c, "")) for c in cols]) + "\n")
-            return s.getvalue()
         lane_cols = ["lane_index", "x0", "y0", "x1", "y1", "lane_type", "band_count"]
         band_cols = ["lane_index", "band_index", "x0", "x1", "y0", "y1", "intensity", "confidence"]
-        lcsv = _csv(lanes, lane_cols) if lanes else ""
-        bcsv = _csv(bands, band_cols) if bands else ""
+        lcsv = convert_to_csv(lanes, lane_cols) if lanes else ""
+        bcsv = convert_to_csv(bands, band_cols) if bands else ""
         ec1, ec2, ec3 = st.columns(3)
         with ec1:
             st.download_button("⬇️ lanes.csv", data=lcsv, file_name="lanes.csv", mime="text/csv", use_container_width=True, disabled=not bool(lanes))
