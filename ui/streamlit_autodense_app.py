@@ -777,6 +777,24 @@ with tab1:
     
     # Enhanced file upload with validation
     @handle_errors("Image Upload")
+    def standardize_uploaded_image(img: Image.Image, max_dimension: int = 1920):
+        """Standardize all uploaded images to consistent size immediately at upload time.
+
+        This eliminates multiple resize operations throughout the pipeline and prevents
+        ChatGPT API timeouts caused by large base64 payloads (>20MB).
+        """
+        original_size = img.size
+
+        # Resize if needed (maintaining aspect ratio)
+        if max(img.size) > max_dimension:
+            if img.size[0] > img.size[1]:
+                new_size = (max_dimension, int(img.size[1] * max_dimension / img.size[0]))
+            else:
+                new_size = (int(img.size[0] * max_dimension / img.size[1]), max_dimension)
+            img = img.resize(new_size, Image.LANCZOS)
+
+        return img, original_size, img.size
+
     def handle_file_upload(uploaded_file):
         if not uploaded_file:
             return None
@@ -788,19 +806,25 @@ with tab1:
         
         # Load and validate image
         file_bytes = uploaded_file.getvalue()
-        img = Image.open(io.BytesIO(file_bytes)).convert("RGB")
+        img_original = Image.open(io.BytesIO(file_bytes)).convert("RGB")
+
+        # Apply upload-time image standardization
+        img, original_size, standardized_size = standardize_uploaded_image(img_original)
         img_array = np.array(img)
         h, w, _ = img_array.shape
         image_hash = hashlib.md5(file_bytes).hexdigest()[:8]
         
-        # Store metadata
+        # Store metadata including standardization info
         metadata = {
             'filename': uploaded_file.name,
             'size_bytes': uploaded_file.size,
-            'dimensions': (w, h),
-            'format': img.format or 'Unknown',
+            'original_dimensions': original_size,
+            'standardized_dimensions': standardized_size,
+            'dimensions': (w, h),  # Keep for backward compatibility
+            'format': img_original.format or 'Unknown',
             'mode': img.mode,
-        'hash': image_hash
+            'hash': image_hash,
+            'standardized': original_size != standardized_size
         }
         
         st.session_state.res_uploaded_image = img  # Store the PIL image, not file object
@@ -809,13 +833,17 @@ with tab1:
         st.session_state.res_image_bytes = file_bytes
         st.session_state.ui_last_action = "upload"
         
-        # Quality assessment
+        # Quality assessment with standardization info
+        if metadata['standardized']:
+            st.info(f"📏 Image standardized: {original_size[0]}×{original_size[1]}px → {w}×{h}px")
+            st.success(f"✅ Standardized for optimal processing and ChatGPT compatibility")
+        else:
+            st.success(f"✅ Image size already optimal: {w}×{h}px")
+
         if w < 500 or h < 300:
             st.warning(f"⚠️ Small image ({w}×{h}px) may produce less accurate results.")
-        elif w > 4000 or h > 4000:
-            st.info(f"ℹ️ Large image ({w}×{h}px) detected. Processing may take longer.")
-        else:
-            st.success(f"✅ Optimal image size: {w}×{h}px")
+        elif original_size[0] > 4000 or original_size[1] > 4000:
+            st.success(f"🚀 Large image optimized: {original_size[0]}×{original_size[1]}px → {w}×{h}px")
         
         return img, img_array, metadata
     
@@ -847,6 +875,15 @@ with tab1:
                     st.metric("File Size", f"{metadata['size_bytes'] / 1024:.1f} KB")
                 with col3:
                     st.metric("Format", metadata['format'])
+
+                # Show standardization info if applied
+                if metadata['standardized']:
+                    st.markdown("**📏 Image Standardization Applied**")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write(f"Original: {metadata['original_dimensions'][0]}×{metadata['original_dimensions'][1]}px")
+                    with col2:
+                        st.write(f"Standardized: {metadata['standardized_dimensions'][0]}×{metadata['standardized_dimensions'][1]}px")
     
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -3233,11 +3270,21 @@ def _load_prompt(name: str, fallback: str) -> str:
             pass
     return fallback
 
-def _img_to_data_url(pil_img):
+def _img_to_data_url(pil_img, max_dimension=1920):
+    """Convert PIL image to data URL.
+
+    Note: Images are now standardized at upload time to prevent ChatGPT API timeouts,
+    so this function no longer needs to resize. However, max_dimension parameter is
+    kept for backward compatibility.
+    """
     import io
+
+    # Images are already standardized at upload time, so no resizing needed
+    # Convert directly to base64
     buf = io.BytesIO()
     pil_img.save(buf, format="PNG")
     b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+
     return f"data:image/png;base64,{b64}"
 
 def _extract_json(text: str) -> dict:
