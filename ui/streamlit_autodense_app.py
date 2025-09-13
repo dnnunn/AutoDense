@@ -3255,20 +3255,21 @@ def openai_guided_preprocess(pil_img):
     data_url = _img_to_data_url(pil_img)
     from openai import OpenAI
     client = OpenAI()
-    resp = client.responses.create(
-        model="gpt-4.1",
-        reasoning={"effort": "low"},
-        system=sys_prompt,
-        input=[{
+    resp = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{
+            "role": "system",
+            "content": sys_prompt
+        }, {
             "role": "user",
             "content": [
-                {"type": "input_image", "image_url": data_url},
+                {"type": "image_url", "image_url": {"url": data_url}},
                 {"type": "text", "text": "Analyze and return STRICT JSON per the schema."}
             ]
         }],
         temperature=0
     )
-    text = getattr(resp, "output_text", None) or json.dumps(resp.dict(), default=str)
+    text = resp.choices[0].message.content
     obj = _extract_json(text)
 
     # Apply minimal safe ops locally; leave heavy steps to your pipeline
@@ -3318,13 +3319,17 @@ def chatgpt_postrun_explainer(run_summary: dict) -> dict:
     sys_prompt = _load_prompt("analysis.system.md", "<embedded>")
     from openai import OpenAI
     client = OpenAI()
-    resp = client.responses.create(
-        model="gpt-4.1",
-        reasoning={"effort": "low"},
-        system=sys_prompt,
-        input=[{"role": "user", "content": [{"type": "text", "text": json.dumps(run_summary)}]}],
+    resp = client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{
+            "role": "system",
+            "content": sys_prompt
+        }, {
+            "role": "user", 
+            "content": json.dumps(run_summary)
+        }],
         temperature=0
     )
-    text = getattr(resp, "output_text", None) or json.dumps(resp.dict(), default=str)
+    text = resp.choices[0].message.content
     return _extract_json(text)
 # --- end glue ---------------------------------------------------------------
