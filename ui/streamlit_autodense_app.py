@@ -349,8 +349,8 @@ def _try_run_ad_band_assist(pil_img, params: dict):
         # Try a variety of call patterns
         attempts = []
         if ad_params is not None:
-            attempts.append(lambda: ad_pipeline_run(base, ad_params))               # run(image, ADParams)
-            attempts.append(lambda: ad_pipeline_run(ad_params, base))               # run(ADParams, image) 'p' first
+            attempts.append(lambda: ad_pipeline_run(image=base, p=ad_params))        # run(image=..., p=...)
+            # Removed problematic positional call - use named parameters instead
         attempts.append(lambda: ad_pipeline_run(base, **kwargs))                    # run(image, **kwargs)
         attempts.append(lambda: ad_pipeline_run(image=base, **kwargs))              # run(image=..., **kwargs)
         if ad_params is not None:
