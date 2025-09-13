@@ -7,22 +7,7 @@ except NameError:
     import concurrent.futures as _futures
 
 # Safe timeout helpers (no Image annotations to avoid NameError at import-time)
-def _openai_preprocess_with_timeout(pil_img, timeout_sec: int = 75):
-    if not 'HAS_OPENAI' in globals() or not HAS_OPENAI:
-        raise RuntimeError("OpenAI is not configured")
-    def _task():
-        outcome = openai_guided_preprocess(pil_img)
-        meta = {"mode": f"ChatGPT-4.1: {getattr(outcome, 'mode', 'unknown')}", "status": "success"}
-        params = getattr(outcome, "params", None)
-        if isinstance(params, dict):
-            meta.update(params)
-        return outcome.image, meta
-    with _futures.ThreadPoolExecutor(max_workers=1) as ex:
-        fut = ex.submit(_task)
-        try:
-            return fut.result(timeout=timeout_sec)
-        except _futures.TimeoutError:
-            raise TimeoutError(f"OpenAI preprocessing timed out after {timeout_sec}s")
+# REMOVED: Duplicate function - see the main _openai_preprocess_with_timeout function below
 
 def _guarded_preprocess_with_timeout(pil_img, timeout_sec: int = 60):
     if not 'HAS_PREPROCESS' in globals() or not HAS_PREPROCESS:
@@ -50,7 +35,9 @@ def _openai_preprocess_with_timeout(pil_img: Image.Image, timeout_sec: int = 75)
         raise RuntimeError("OpenAI is not configured")
 
     def _task():
-        outcome = openai_guided_preprocess(pil_img)
+        # Standardize image size before sending to OpenAI to prevent timeouts
+        standardized_img = _standardize_image_size(pil_img)
+        outcome = openai_guided_preprocess(standardized_img)
         meta = {"mode": f"ChatGPT-4.1: {getattr(outcome, 'mode', 'unknown')}", "status": "success"}
         params = getattr(outcome, "params", None)
         if isinstance(params, dict):
@@ -87,6 +74,38 @@ def _guarded_preprocess_with_timeout(pil_img: Image.Image, timeout_sec: int = 60
         except _futures.TimeoutError:
             raise TimeoutError(f"Guarded preprocessing timed out after {timeout_sec}s")
 
+def _standardize_image_size(pil_img, max_pixels=1024*768):
+    """Standardize image size to prevent OpenAI API timeouts."""
+    width, height = pil_img.size
+    total_pixels = width * height
+
+    if total_pixels <= max_pixels:
+        return pil_img
+
+    # Calculate scaling factor to reduce to max_pixels
+    scale_factor = (max_pixels / total_pixels) ** 0.5
+    new_width = int(width * scale_factor)
+    new_height = int(height * scale_factor)
+
+    return pil_img.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+def filter_supported_preproc_params(ui_params):
+    """Filter UI parameters to only include those supported by PreprocParams backend."""
+    try:
+        from autodense.preprocess.pipeline import PreprocParams
+        supported = set(PreprocParams.__annotations__.keys())
+        filtered = {k: v for k, v in ui_params.items() if k in supported}
+        unsupported = {k: v for k, v in ui_params.items() if k not in supported}
+
+        if unsupported:
+            print(f"INFO: Filtered out unsupported preprocessing parameters: {list(unsupported.keys())}")
+
+        return filtered
+    except ImportError:
+        # If import fails, return params as-is and let downstream handle it
+        print("WARNING: Could not import PreprocParams for parameter filtering")
+        return ui_params
+
 def cached_preprocess_image(image_hash: str, mode: str, manual_params_str: str = ""):
     """Improved caching with better key strategy - no longer processes image bytes repeatedly"""
     # Get image from session state (already processed once)
@@ -106,6 +125,8 @@ def cached_preprocess_image(image_hash: str, mode: str, manual_params_str: str =
             return img2, meta
 
         elif mode == "Manual" and manual_params and HAS_PREPROCESS:
+            # Filter parameters to only include those supported by PreprocParams
+            manual_params = filter_supported_preproc_params(manual_params)
             # Parameter aliasing for backward compatibility
             alias = {"bg_radius": "bg_radius_px"}
             manual_params = { (alias.get(k, k)): v for k, v in manual_params.items() }
@@ -496,7 +517,7 @@ def _try_run_ad_band_assist(pil_img, params: dict):
             attempts.append(lambda: ad_pipeline_run(image=base, params=ad_params))  # run(image=..., params=ADParams)
             attempts.append(lambda: ad_pipeline_run(p=ad_params, image=base))       # run(p=..., image=...)
         attempts.append(lambda: ad_pipeline_run(**({**kwargs, "image": base})))     # run(**{..., image})
-        attempts.append(lambda: ad_pipeline_run(base))                               # run(image)
+        # REMOVED: attempts.append(lambda: ad_pipeline_run(base)) - this causes "missing 1 required positional argument: 'p'" error
 
         res = None
         errors = []
@@ -1974,11 +1995,12 @@ with tab2:
                         help="Adjust image brightness curve (1.0 = no change)"
                     )
                     
-                    manual_params["sharpen"] = st.checkbox(
-                        "Edge Sharpening",
-                        value=False,
-                        help="Apply unsharp mask to enhance edge definition"
-                    )
+                    # TEMPORARILY DISABLED: sharpen parameter not yet supported in PreprocParams backend
+                    # manual_params["sharpen"] = st.checkbox(
+                    #     "Edge Sharpening",
+                    #     value=False,
+                    #     help="Apply unsharp mask to enhance edge definition"
+                    # )
             
             # Parameter validation and warnings
             if manual_params["bg_radius"] > 50:
