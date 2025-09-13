@@ -18,6 +18,8 @@ from utils.parameter_management import (
     create_safe_ad_params
 )
 from components.image_upload import render_image_upload
+from components.prerequisites_panel import render_prerequisites_panel
+from components.calibration_instructions import render_calibration_instructions
 try:
     _futures
 except NameError:
@@ -713,36 +715,7 @@ with tab1:
         st.markdown("### 🎯 Two-Point Lane Calibration")
         
         # Instructions with progressive disclosure
-        instructions_expanded = len(st.session_state.res_calibration_points) < 2
-        
-        with st.expander("📖 Calibration Instructions & Best Practices", expanded=False):
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                st.markdown("""
-                **Step-by-step calibration:**
-                
-                1. **Identify reference lanes**: Choose two lanes with distinct, well-defined bands
-                2. **First calibration point**: Click the center of a clear band in your MW standard (typically lane 1)
-                3. **Second calibration point**: Click the center of another clear band in a different lane, preferably far from the first
-                4. **Verify accuracy**: Check that the calculated lane boundaries align with your gel
-                
-                **For best accuracy:**
-                - Choose bands that are sharp and well-separated from neighbors
-                - Avoid bands at the very top or bottom of the gel
-                - Select lanes that span a good portion of the gel width
-                - Click precisely on the band centers, not the edges
-                """)
-            
-            with col2:
-                st.markdown("""
-                **Common mistakes to avoid:**
-                - Clicking on band edges instead of centers
-                - Using distorted or unclear bands
-                - Choosing calibration points too close together
-                - Using bands from the same lane
-                - Calibrating near gel artifacts or bubbles
-                """)
+        render_calibration_instructions(expanded=False)
         
         # Calibration interface with enhanced error handling
         @handle_errors("Lane Calibration")
@@ -1377,58 +1350,10 @@ with tab2:
     Configure preprocessing parameters and run comprehensive gel analysis with your calibrated lane boundaries.
     """)
     
-    # Prerequisites validation with detailed feedback
-    has_image = st.session_state.res_uploaded_image is not None
-    has_calibration = st.session_state.res_lane_boundaries is not None
-    
-    # Prerequisites status panel
-    st.markdown("### 📋 Prerequisites Status")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if has_image:
-            metadata = st.session_state.res_image_metadata or {}
-            filename = metadata.get('filename', 'Unknown')
-            dimensions = metadata.get('dimensions', (0, 0))
-            st.success(f"✅ **Image Ready:** {filename}")
-            st.caption(f"📐 Dimensions: {dimensions[0]}×{dimensions[1]}px")
-        else:
-            st.error("❌ **Image Missing**")
-            st.caption("👈 Upload gel image in **Lane Calibration** tab")
-    
-    with col2:
-        if has_calibration:
-            n_boundaries = len(st.session_state.res_lane_boundaries)
-            st.success(f"✅ **Lanes Calibrated:** {n_boundaries} lanes configured")
-            st.caption(f"🎯 Ready for {st.session_state.params_gel_type.upper()} analysis")
-        else:
-            st.error("❌ **Calibration Missing**")
-            st.caption("👈 Complete lane setup in **Lane Calibration** tab")
-    
-    # Only proceed if prerequisites are met
-    if not has_image or not has_calibration:
-        st.markdown("---")
-        st.info("🔒 **Analysis locked until prerequisites are completed.**")
-        st.button("⬅️ Go to Calibration", on_click=lambda: goto_tab("🎯 Lane Calibration"), use_container_width=True)
-        
-        # Show what will be available
-        with st.expander("🔮 Analysis Capabilities (Available After Prerequisites)", expanded=True):
-            st.markdown("""
-            **Preprocessing Options:**
-            - 🧠 **AI-Guided:** Automatic image optimization using computer vision
-            - 🤖 **ChatGPT-4.1:** Advanced AI analysis with reasoning (premium)
-            - 🛠️ **Manual:** Custom preprocessing parameters
-            - 📷 **Raw:** No preprocessing (analyze original image)
-            
-            **Analysis Features:**
-            - 🎯 Lane-aware band detection using your calibration
-            - 📏 Molecular weight calibration with standard curves
-            - 📊 Quantitative band intensity analysis
-            - 🧮 Statistical significance testing
-            - 📈 Interactive results visualization
-            """)
-        
+    # Prerequisites status check using component
+    prerequisites_met = render_prerequisites_panel(goto_tab)
+
+    if not prerequisites_met:
         st.stop()  # Exit early if prerequisites not met
     
     # Analysis configuration section

@@ -5,13 +5,13 @@ All components follow the established pattern of accepting parameters and using 
 for persistence while maintaining AutoDense's scientific workflow integrity.
 """
 
-# Import only existing components
+# Import all available components
 from .image_upload import render_image_upload
+from .prerequisites_panel import render_prerequisites_panel
+from .calibration_instructions import render_calibration_instructions
 
 __all__ = [
-    'render_image_upload'
+    'render_image_upload',
+    'render_prerequisites_panel',
+    'render_calibration_instructions'
 ]
-
-# TODO: Add imports as components are created:
-# from .prerequisites_status import render_prerequisites_status
-# from .calibration_instructions import render_calibration_instructions
