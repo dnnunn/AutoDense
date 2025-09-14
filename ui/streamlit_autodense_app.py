@@ -36,6 +36,37 @@ def announce_to_screen_reader(message: str, priority: str = "polite") -> None:
     </div>
     """, unsafe_allow_html=True)
 
+# Enhanced loading state management
+def show_loading_context(operation_name: str, details: str = "", estimated_time: str = ""):
+    """Display enhanced loading state with context and progress information."""
+    loading_message = f"🔄 {operation_name}"
+    if estimated_time:
+        loading_message += f" (up to {estimated_time})"
+
+    if details:
+        st.info(f"🔄 {details}")
+
+    announce_to_screen_reader(f"{operation_name} in progress", "polite")
+    return st.spinner(loading_message)
+
+def show_operation_success(operation_name: str, details: str = ""):
+    """Display success state with consistent formatting."""
+    success_message = f"✅ {operation_name} completed successfully"
+    if details:
+        success_message += f": {details}"
+
+    st.success(success_message)
+    announce_to_screen_reader(f"{operation_name} completed", "assertive")
+
+def show_operation_error(operation_name: str, error_message: str, context: str = ""):
+    """Display error state with helpful context and next steps."""
+    error_display = f"⚠️ {operation_name} failed: {error_message}"
+    if context:
+        error_display += f"\n\n**Context:** {context}"
+
+    st.error(error_display)
+    announce_to_screen_reader(f"{operation_name} failed: {error_message}", "assertive")
+
 # Safe timeout helpers (no Image annotations to avoid NameError at import-time)
 # REMOVED: Duplicate function - see the main _openai_preprocess_with_timeout function below
 
@@ -57,33 +88,46 @@ def cached_preprocess_image(image_hash: str, mode: str, manual_params_str: str =
 
     try:
         if mode.startswith("ChatGPT") and HAS_OPENAI:
-            img2, meta = _openai_preprocess_with_timeout(img, timeout_sec=75)
+            with st.spinner(f"🤖 Processing image with ChatGPT... (up to 75s)"):
+                st.info("🔄 Sending image to OpenAI for intelligent preprocessing...")
+                img2, meta = _openai_preprocess_with_timeout(img, timeout_sec=75)
+                announce_to_screen_reader("ChatGPT preprocessing completed successfully", "assertive")
             return img2, meta
 
         elif mode.startswith("AI") and HAS_PREPROCESS:
-            img2, meta = _guarded_preprocess_with_timeout(img, timeout_sec=60)
+            with st.spinner(f"🔬 AI preprocessing in progress... (up to 60s)"):
+                st.info("🔄 Applying intelligent image enhancement algorithms...")
+                img2, meta = _guarded_preprocess_with_timeout(img, timeout_sec=60)
+                announce_to_screen_reader("AI preprocessing completed successfully", "assertive")
             return img2, meta
 
         elif mode == "Manual" and manual_params and HAS_PREPROCESS:
-            # Filter parameters to only include those supported by PreprocParams
-            manual_params = filter_supported_preproc_params(manual_params)
-            # Parameter aliasing for backward compatibility
-            alias = {"bg_radius": "bg_radius_px"}
-            manual_params = { (alias.get(k, k)): v for k, v in manual_params.items() }
-            pp = PreprocParams(**manual_params)
-            prepped, meta, _ = preproc_run(img, pp, save_dir=None, save_prefix="")
+            with st.spinner("⚙️ Applying manual preprocessing parameters..."):
+                st.info(f"🔄 Processing with {len(manual_params)} custom parameters...")
+                # Filter parameters to only include those supported by PreprocParams
+                manual_params = filter_supported_preproc_params(manual_params)
+                # Parameter aliasing for backward compatibility
+                alias = {"bg_radius": "bg_radius_px"}
+                manual_params = { (alias.get(k, k)): v for k, v in manual_params.items() }
+                pp = PreprocParams(**manual_params)
+                prepped, meta, _ = preproc_run(img, pp, save_dir=None, save_prefix="")
+                announce_to_screen_reader("Manual preprocessing completed successfully", "assertive")
             return prepped, {"mode": "Manual", "meta": getattr(meta, "__dict__", {}), "status": "success"}
 
         else:
-            # Raw fallback (no preprocessing)
-            arr = np.asarray(img.convert("L")).astype(np.float32)
-            prepped = (arr - arr.min())/(arr.max()-arr.min()+1e-6)
+            # Raw fallback (no preprocessing) - Fast operation, minimal loading state
+            with st.spinner("📸 Preparing raw image data..."):
+                arr = np.asarray(img.convert("L")).astype(np.float32)
+                prepped = (arr - arr.min())/(arr.max()-arr.min()+1e-6)
             return prepped, {"mode": "Raw (no preprocessing)", "status": "fallback"}
 
     except Exception as e:
         # Return raw image on any preprocessing failure with error annotation
-        arr = np.asarray(img.convert("L")).astype(np.float32)
-        prepped = (arr - arr.min())/(arr.max()-arr.min()+1e-6)
+        st.error(f"⚠️ Preprocessing failed: {str(e)}")
+        announce_to_screen_reader(f"Preprocessing failed: {str(e)}", "assertive")
+        with st.spinner("🔧 Falling back to raw image processing..."):
+            arr = np.asarray(img.convert("L")).astype(np.float32)
+            prepped = (arr - arr.min())/(arr.max()-arr.min()+1e-6)
         return prepped, {"mode": "Fallback (preprocessing failed)", "error": str(e), "status": "error"}
 def _apply_footer_hide() -> None:
     """Hide sticky footer while a run is active."""
@@ -298,9 +342,16 @@ def _try_run_ad_band_assist(pil_img: Image.Image, params: Dict[str, Any]) -> Opt
 
 # Page configuration
 # Page configuration with enhanced metadata
+# Load Better Dairy icon for page favicon
+try:
+    from PIL import Image as PILImage
+    better_dairy_icon = PILImage.open("betterdairyicon.png")
+except:
+    better_dairy_icon = "🔬"  # Fallback to microscope if icon not found
+
 st.set_page_config(
     page_title="AutoDense – UX Optimized",
-    page_icon="🔬",
+    page_icon=better_dairy_icon,
     layout="wide",
     initial_sidebar_state="collapsed",
     menu_items={
@@ -309,6 +360,19 @@ st.set_page_config(
         'About': 'AutoDense: Professional gel electrophoresis analysis for bench scientists'
     }
 )
+
+# Better Dairy logo in header
+col1, col2 = st.columns([1, 8])
+with col1:
+    try:
+        st.image("betterdairyicon.png", width=60)
+    except:
+        pass  # Skip if logo not found
+with col2:
+    st.title("AutoDense – UX Optimized Interface")
+
+st.markdown("*Professional gel electrophoresis analysis for bench scientists*")
+st.markdown("Built with accessibility, performance, and scientific workflows in mind.")
 
 # Accessibility: Skip links for keyboard navigation
 st.markdown("""
@@ -322,8 +386,8 @@ st.markdown("""
 /* Skip links for keyboard navigation */
 .skip-link {
     position: absolute;
-    top: -40px;
-    left: 6px;
+    top: -9999px;
+    left: -9999px;
     background: #000;
     color: #fff;
     padding: 8px 12px;
@@ -336,6 +400,7 @@ st.markdown("""
 
 .skip-link:focus {
     top: 6px;
+    left: 6px;
     outline: 3px solid #007bff;
     outline-offset: 2px;
 }
@@ -637,13 +702,6 @@ def handle_errors(operation_name: str) -> Callable[[Callable[..., Any]], Callabl
         return wrapper
     return decorator
 
-# Header with enhanced branding and status
-st.markdown("""
-# 🔬 AutoDense – UX Optimized Interface
-*Professional gel electrophoresis analysis for bench scientists*
-
-Built with accessibility, performance, and scientific workflows in mind.
-""")
 
 
 # Sticky tabs CSS for better navigation - Updated for Streamlit 1.28+
@@ -914,9 +972,13 @@ with tab1:
                                              help="Vertical position on the image (0 = top edge)")
 
                 if st.button("Add Manual Coordinate Point", help="Add the coordinate point using the values above"):
-                    # Handle manual coordinate input
-                    coord_result = {'x': manual_x, 'y': manual_y}
-                    st.success(f"Manual coordinate added: ({manual_x}, {manual_y})")
+                    with st.spinner("📍 Processing coordinate point..."):
+                        # Handle manual coordinate input
+                        coord_result = {'x': manual_x, 'y': manual_y}
+                        # Add brief processing delay to show loading state for user feedback
+                        import time
+                        time.sleep(0.5)  # Brief pause to demonstrate loading state
+                    st.success(f"✅ Manual coordinate added: ({manual_x}, {manual_y})")
                     announce_to_screen_reader(f"Coordinate point added at {manual_x}, {manual_y}", "assertive")
                 else:
                     coord_result = None
@@ -936,32 +998,34 @@ with tab1:
             
             # Handle coordinate clicks
             if coord_result is not None and coord_result.get('x') is not None:
-                # Scale coordinates back to original image size
-                scale_x = w / display_width
-                scale_y = h / display_height
-                
-                x = int(coord_result['x'] * scale_x)
-                y = int(coord_result['y'] * scale_y)
-                
-                # Get current points
-                current_points = st.session_state.res_calibration_points[:]
-                
-                # Check if this is a duplicate point (within 5 pixels)
-                is_duplicate = False
-                for existing_x, existing_y in current_points:
-                    if abs(x - existing_x) < 5 and abs(y - existing_y) < 5:
-                        is_duplicate = True
-                        break
-                
-                # Add point if we have less than 2 and it's not a duplicate
-                if len(current_points) < 2 and not is_duplicate:
-                    current_points.append((x, y))
-                    st.session_state.res_calibration_points = current_points
-                    st.rerun()
-                elif is_duplicate:
-                    pass  # Don't show warning, green status box below is sufficient
-                elif len(current_points) >= 2:
-                    st.info("✋ Already have 2 points. Use Clear or Undo to reset.")
+                with st.spinner("🎯 Processing calibration point..."):
+                    # Scale coordinates back to original image size
+                    scale_x = w / display_width
+                    scale_y = h / display_height
+
+                    x = int(coord_result['x'] * scale_x)
+                    y = int(coord_result['y'] * scale_y)
+
+                    # Get current points
+                    current_points = st.session_state.res_calibration_points[:]
+
+                    # Check if this is a duplicate point (within 5 pixels)
+                    is_duplicate = False
+                    for existing_x, existing_y in current_points:
+                        if abs(x - existing_x) < 5 and abs(y - existing_y) < 5:
+                            is_duplicate = True
+                            break
+
+                    # Add point if we have less than 2 and it's not a duplicate
+                    if len(current_points) < 2 and not is_duplicate:
+                        current_points.append((x, y))
+                        st.session_state.res_calibration_points = current_points
+                        announce_to_screen_reader(f"Calibration point {len(current_points)} added at position {x}, {y}", "assertive")
+                        st.rerun()
+                    elif is_duplicate:
+                        pass  # Don't show warning, green status box below is sufficient
+                    elif len(current_points) >= 2:
+                        st.info("✋ Already have 2 points. Use Clear or Undo to reset.")
             
             # Display current points
             points = st.session_state.res_calibration_points
@@ -1389,8 +1453,11 @@ with tab1:
                         with col3:
                             # Quick analysis shortcut
                             if st.button("🔬 **Start Analysis**", use_container_width=True, type="primary"):
-                                goto_tab("🔬 Analysis")
-                                goto_tab("🔬 Analysis & Processing")
+                                with st.spinner("🚀 Navigating to analysis..."):
+                                    st.info("🔄 Switching to Analysis & Processing tab...")
+                                    announce_to_screen_reader("Navigating to analysis tab", "polite")
+                                    goto_tab("🔬 Analysis")
+                                    goto_tab("🔬 Analysis & Processing")
                     
                     else:
                         st.info("💡 **Need adjustments?**")
@@ -1400,15 +1467,21 @@ with tab1:
                         
                         with adj_col1:
                             if st.button("🔄 **Recalibrate**", help="Clear points and start calibration over", use_container_width=True):
-                                st.session_state.res_calibration_points = []
-                                st.session_state.res_lane_boundaries = None
-                                st.session_state.ui_canvas_key += 1
+                                with st.spinner("🔄 Resetting calibration..."):
+                                    st.info("🔄 Clearing all calibration data...")
+                                    st.session_state.res_calibration_points = []
+                                    st.session_state.res_lane_boundaries = None
+                                    st.session_state.ui_canvas_key += 1
+                                    announce_to_screen_reader("Calibration reset completed", "assertive")
                                 st.rerun()
-                        
+
                         with adj_col2:
                             if st.button("🎯 **Adjust Points**", help="Keep lane settings but change calibration points", use_container_width=True):
-                                st.session_state.res_calibration_points = []
-                                st.session_state.ui_canvas_key += 1
+                                with st.spinner("🎯 Adjusting calibration points..."):
+                                    st.info("🔄 Clearing points while preserving lane settings...")
+                                    st.session_state.res_calibration_points = []
+                                    st.session_state.ui_canvas_key += 1
+                                    announce_to_screen_reader("Calibration points cleared for adjustment", "assertive")
                                 st.info("👆 Place new calibration points above")
                                 st.rerun()
                         
@@ -1837,19 +1910,23 @@ with tab2:
             hide_index=True,
         )
         if st.button("✏️ Apply Band Edits and Update Overlay"):
-            st.session_state.res_ba_bands_rows = edited
-            try:
-                base2 = st.session_state.res_uploaded_image.convert("RGB")
-                if draw_ad_overlay and HAS_AD_PIPELINE:
-                    over = draw_ad_overlay(base2, lanes=st.session_state.res_ba_lanes_rows, bands=st.session_state.res_ba_bands_rows)  # type: ignore
-                    if isinstance(over, Image.Image):
-                        st.session_state.res_ba_overlay_png = to_png_bytes(over)
-                else:
-                    fallback = overlay_fallback(base2, st.session_state.res_ba_lanes_rows, st.session_state.res_ba_bands_rows)
-                    st.session_state.res_ba_overlay_png = to_png_bytes(fallback)
-                st.success("Band edits applied.")
-            except Exception as e:
-                st.error(f"Failed to update overlay: {e}")
+            with st.spinner("✏️ Applying band edits..."):
+                st.info("🔄 Processing band modifications and regenerating overlay...")
+                st.session_state.res_ba_bands_rows = edited
+                try:
+                    base2 = st.session_state.res_uploaded_image.convert("RGB")
+                    if draw_ad_overlay and HAS_AD_PIPELINE:
+                        over = draw_ad_overlay(base2, lanes=st.session_state.res_ba_lanes_rows, bands=st.session_state.res_ba_bands_rows)  # type: ignore
+                        if isinstance(over, Image.Image):
+                            st.session_state.res_ba_overlay_png = to_png_bytes(over)
+                    else:
+                        fallback = overlay_fallback(base2, st.session_state.res_ba_lanes_rows, st.session_state.res_ba_bands_rows)
+                        st.session_state.res_ba_overlay_png = to_png_bytes(fallback)
+                    st.success("✅ Band edits applied successfully!")
+                    announce_to_screen_reader("Band edits applied successfully", "assertive")
+                except Exception as e:
+                    st.error(f"⚠️ Failed to update overlay: {e}")
+                    announce_to_screen_reader(f"Band edits failed: {str(e)}", "assertive")
     # Analysis execution section
     # Analysis execution section
     st.markdown("### 🚀 Execute Analysis")
@@ -2743,8 +2820,11 @@ with tab3:
         
         with col1:
             if st.button("🗑️ **Clear Results**", help="Remove current analysis results"):
-                st.session_state.res_analysis_data = None
-                st.session_state.res_export_data = None
+                with st.spinner("🗑️ Clearing analysis results..."):
+                    st.info("🔄 Removing all analysis data and cached results...")
+                    st.session_state.res_analysis_data = None
+                    st.session_state.res_export_data = None
+                    announce_to_screen_reader("Analysis results cleared successfully", "assertive")
                 st.rerun()
         
         with col2:
