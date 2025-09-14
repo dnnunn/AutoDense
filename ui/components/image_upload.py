@@ -15,6 +15,7 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 from utils.image_processing import standardize_image_size
 from utils.error_handling import handle_ui_errors
+from utils.state_management import get_state_manager
 from autodense_types import ImageMetadata, ImageTuple, ImageDimensions, FileBytes, FileHash
 
 
@@ -23,7 +24,8 @@ from autodense_types import ImageMetadata, ImageTuple, ImageDimensions, FileByte
 def render_image_upload(
     key_prefix: str = "main",
     max_file_size_mb: int = 50,
-    show_metadata: bool = True
+    show_metadata: bool = True,
+    use_new_state_management: bool = False
 ) -> Optional[ImageTuple]:
     """
     Render image upload component with validation and standardization.
@@ -32,6 +34,7 @@ def render_image_upload(
         key_prefix: Unique prefix for session state keys to avoid conflicts
         max_file_size_mb: Maximum file size in MB (default: 50MB)
         show_metadata: Whether to show expanded metadata section
+        use_new_state_management: Enable memory-optimized state management (experimental)
 
     Returns:
         Tuple of (PIL Image, numpy array, metadata dict) if successful upload,
@@ -62,10 +65,16 @@ def render_image_upload(
         image_hash: FileHash = hashlib.md5(file_bytes).hexdigest()[:8]
 
         # Check if this is the same image already loaded (avoid duplicate processing)
-        if ('res_uploaded_image' in st.session_state and
-            st.session_state.res_image_metadata and
-            st.session_state.res_image_metadata.get('hash') == image_hash):
-            return None  # Same image, don't reprocess
+        if use_new_state_management:
+            state_manager = get_state_manager()
+            current_metadata = st.session_state.get('autodense_image_metadata')
+            if (current_metadata and current_metadata.hash == image_hash):
+                return None  # Same image, don't reprocess
+        else:
+            if ('res_uploaded_image' in st.session_state and
+                st.session_state.res_image_metadata and
+                st.session_state.res_image_metadata.get('hash') == image_hash):
+                return None  # Same image, don't reprocess
 
         img_original: Image.Image = Image.open(io.BytesIO(file_bytes)).convert("RGB")
 
@@ -91,11 +100,22 @@ def render_image_upload(
             'standardized': original_size != standardized_size
         }
 
-        # Update session state
-        st.session_state.res_uploaded_image = img  # Store the PIL image, not file object
-        st.session_state.res_uploaded_array = img_array  # Store the numpy array
-        st.session_state.res_image_metadata = metadata
-        st.session_state.res_image_bytes = file_bytes
+        # Update session state - dual mode support
+        if use_new_state_management:
+            # Use new memory-optimized state manager
+            state_manager = get_state_manager()
+            image_data = state_manager.set_current_image(img, file_bytes, uploaded_file.name)
+
+            # Show memory optimization info
+            memory_stats = state_manager.get_memory_stats()
+            st.info(f"🧠 Memory-optimized storage: {memory_stats['session_state_mb']:.1f}MB session state")
+        else:
+            # Use legacy direct session state storage
+            st.session_state.res_uploaded_image = img  # Store the PIL image, not file object
+            st.session_state.res_uploaded_array = img_array  # Store the numpy array
+            st.session_state.res_image_metadata = metadata
+            st.session_state.res_image_bytes = file_bytes
+
         st.session_state.ui_last_action = "upload"
 
         # Quality assessment with standardization info
@@ -126,7 +146,10 @@ def render_image_upload(
 
     result: Optional[ImageTuple] = None
     if uploaded_file:
-        result = handle_file_upload(uploaded_file)
+        with st.spinner("📤 Processing uploaded image..."):
+            st.info(f"🔄 Loading and validating image: {uploaded_file.name}")
+            result = handle_file_upload(uploaded_file)
+
         if result:
             img: Image.Image
             img_array: np.ndarray
@@ -134,7 +157,15 @@ def render_image_upload(
             img, img_array, metadata = result
             h, w, _ = img_array.shape
 
+            st.success(f"✅ Image successfully loaded: {metadata['filename']}")
             st.toast(f"Image loaded: {metadata['filename']}", icon="✅")
+
+            # Announce to screen readers for accessibility
+            try:
+                from ..streamlit_autodense_app import announce_to_screen_reader
+                announce_to_screen_reader(f"Image {metadata['filename']} loaded successfully", "assertive")
+            except ImportError:
+                pass  # Fallback if announce function not available
 
             # Display image metadata if requested
             if show_metadata:
