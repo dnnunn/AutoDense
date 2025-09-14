@@ -1,0 +1,87 @@
+# EtBr Lane-Optimized Configuration for Dark Fluorescence Gels
+# Targets the catastrophic band detection failure (2→0 bands)
+#
+# Key optimizations:
+# 1. Much more sensitive band detection parameters for post-inversion images
+# 2. Specialized fluorescence baseline handling
+# 3. Reduced spacing constraints for tightly packed bands
+# 4. Enhanced rescue parameters for edge cases
+
+pre:
+  # Preprocessing working well - keep successful inversion logic
+  invert_polarity: auto
+  clip_percentiles: [0.5, 99.5]  # Tighter clipping for fluorescence contrast
+  normalize_intensity: true
+  gaussian_sigma: 0.8  # Slightly reduced to preserve fine band edges
+  background_removal_radius: 0.0
+  enable_deskew: false
+  deskew_angle_threshold: 0.5
+  enable_debug_logging: true
+  
+  # ENHANCED: Add CLAHE for fluorescence contrast enhancement
+  clahe:
+    enabled: true  # Enable for dark fluorescence images
+    clip_limit: 3.0  # Higher clip for bright band enhancement
+    tile_grid: [6, 6]  # Smaller tiles for localized enhancement
+
+detect:
+  # CRITICAL: More aggressive lane detection for EtBr
+  min_peak_distance_frac: 0.025  # Reduced from 0.028 - allow closer lanes
+  prominence_frac: 0.035  # Reduced from 0.045 - more sensitive
+  rescue_enabled: true
+  
+  # Enhanced baseline for fluorescence images
+  baseline:
+    method: morph  # Changed from percentile - better for fluorescence
+    window_frac: 0.012  # Smaller window for sharp features
+    window_px: 0
+    clamp_min_px: 2  # Reduced constraints
+    clamp_max_px: 8
+    quantile: 0.05  # Lower quantile for dark backgrounds
+
+bands:
+  # CRITICAL RESCUE: Ultra-sensitive band detection parameters
+  min_distance_px: 8  # Reduced from 12 - allow closer bands
+  min_peak_distance_frac: 0.018  # More aggressive than 0.025
+  prominence_frac: 0.015  # MUCH more sensitive than 0.03
+  
+  # Specialized baseline for band detection in inverted images
+  baseline:
+    method: morph  # Morphological baseline better for fluorescence
+    window_frac: 0.018  # Slightly smaller window
+    window_px: 0
+    clamp_min_px: 1  # Minimal clamping for sensitive detection
+    clamp_max_px: 4
+    quantile: 0.03  # Very low quantile for dark background
+
+# Workflow parameters optimized for 18-20 lane EtBr gels
+workflow:
+  expected_lanes: 20  # Increased from 12 to match expected performance
+  sensitivity: 0.9  # Increased sensitivity for difficult gels
+  constant_spacing: false  # Allow variable lane spacing
+  background_method: rolling_ball  # Better for uneven illumination
+  
+  # Lane detection parameters - more aggressive
+  min_peak_distance_frac: 0.025
+  prominence_frac: 0.035
+  rescue_enabled: true
+  
+  baseline:
+    method: morph
+    window_frac: 0.012
+    window_px: 0
+    clamp_min_px: 2
+    clamp_max_px: 8
+    quantile: 0.05
+
+# EtBr-specific detection parameters
+etbr_detection:
+  expected_lanes: 20
+  sensitivity: 0.9  # High sensitivity for fluorescence
+  constant_spacing: false
+  background_subtraction: true  # Enable for fluorescence cleanup
+  peak_detection_method: fluorescence
+
+# Lane parameters - enhanced boundary detection
+lanes:
+  prominence_frac: 0.035  # More sensitive lane boundary detection

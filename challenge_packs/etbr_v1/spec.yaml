@@ -1,0 +1,44 @@
+task: etbr_agarose
+qc:
+  lane_count_tolerance: 1
+  ladder_linear_r2_min: 0.995
+  background_snr_min: 5.0
+  smearing_index_max: 0.35
+acceptance:
+  must_improve: ["ladder_linear_r2","background_snr"]
+  must_not_regress: ["smearing_index"]
+budget:
+  max_attempts: 4
+runner:
+  run_cmd: "python -m autodense_autotune.java_bridge etbr_agarose --input {input} --config configs/etbr.yaml --outdir {outdir}"
+search:
+  param_grids:
+    # SCHEMA UNIFIED: Now targets workflow: section for consistent optimization/execution
+    # This solves the parameter isolation issue where optimization modified detect: but execution read etbr_detection:
+    - file: "configs/etbr.yaml"
+      path: "workflow.baseline.method"
+      values: ["percentile", "morph", "none"]
+    - file: "configs/etbr.yaml"
+      path: "workflow.baseline.window_frac"
+      values: [0.01, 0.015, 0.02]  # Tighter range for EtBr fluorescence
+    - file: "configs/etbr.yaml"
+      path: "workflow.baseline.quantile"
+      values: [0.05, 0.08, 0.12]   # Lower quantiles for fluorescent baseline
+    - file: "configs/etbr.yaml"
+      path: "workflow.prominence_frac"
+      values: [0.04, 0.06, 0.08]
+    - file: "configs/etbr.yaml"
+      path: "workflow.min_peak_distance_frac"
+      values: [0.03, 0.035, 0.04]  # Tighter spacing for EtBr bands
+    - file: "configs/etbr.yaml"
+      path: "workflow.expected_lanes"
+      values: [16, 20, 24]  # Now can optimize EtBr-specific execution parameters!
+    - file: "configs/etbr.yaml"
+      path: "workflow.sensitivity"
+      values: [0.6, 0.8, 1.0]  # EtBr-specific sensitivity optimization
+    - file: "configs/etbr.yaml"
+      path: "workflow.constant_spacing"
+      values: [true, false]  # Optimize lane spacing assumptions
+    - file: "configs/etbr.yaml"
+      path: "bands.min_distance_px"
+      values: [10, 12, 14]  # Band parameters remain separate

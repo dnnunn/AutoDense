@@ -1,0 +1,22 @@
+# AutoDense Streamlit App Requirements
+streamlit==1.49.1
+pandas>=2.0.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+Pillow>=10.0.0
+scipy>=1.11.0
+scikit-image>=0.21.0
+
+# Optional enhanced components
+streamlit-drawable-canvas>=0.9.0
+streamlit-keyup>=0.2.0
+streamlit-aggrid>=0.3.0
+
+# Web framework alternatives
+fastapi>=0.110,<0.120
+uvicorn[standard]>=0.29,<0.32
+pydantic>=2.6,<3
+
+# Testing and development
+pytest>=7.0.0
+requests>=2.31.0

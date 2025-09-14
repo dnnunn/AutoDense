@@ -1,0 +1,84 @@
+# Colony counting parameters - MINIMAL preprocessing (normalization destroys features)
+pre:
+  invert_polarity: auto   # true|false|auto
+  clip_percentiles: [0.5, 99.5]  # gentle clipping (only used if normalization enabled)
+  normalize_intensity: false      # DISABLED - rescaling destroys colony contrast
+  gaussian_sigma: 1.0     # basic smoothing
+  background_removal_radius: 0.0  # DISABLED - was removing colonies
+  enable_deskew: false    # colonies don't need deskewing
+  deskew_angle_threshold: 0.5  # degrees
+  enable_debug_logging: true
+  clahe:
+    enabled: false         # often helpful for colonies
+    clip_limit: 2.0
+    tile_grid: [8,8]
+
+detect:
+  # AUDITOR'S SAFE BASELINE SYSTEM: Colony-specific config
+  min_peak_distance_frac: 0.05     # larger spacing for colonies vs lanes
+  prominence_frac: 0.08             # lower for colony detection
+  threshold_radius: 15              # required by colony_analysis validation
+  min_colony_size: 5.0              # required by colony_analysis validation  
+  rescue_enabled: true
+  
+  baseline:
+    method: "none"                  # COLONIES ARE FRAGILE: default off
+    window_frac: 0.01               # if enabled, very gentle (1% vs 2% for gels)
+    window_px: 0                    # 0 = use fraction
+    clamp_min_px: 2                 # tighter clamps for colonies
+    clamp_max_px: 8                 # smaller max window
+    quantile: 0.05                  # lower quantile if needed
+
+bands:
+  baseline:
+    method: "none"                  # COLONIES DON'T HAVE BANDS: disabled
+    window_frac: 0.01               # not applicable for colonies
+    window_px: 0                    
+    clamp_min_px: 2                 
+    clamp_max_px: 8                 
+    quantile: 0.05
+
+# Legacy parameters (for backward compatibility)
+segmentation:
+  threshold: 0.30       # 0..1; used by runner/spec grid
+  min_area: 30          # pixels
+post:
+  merge_distance_px: 5  # pixels
+
+# SCHEMA UNIFIED: Execution parameters for optimization system
+# This solves parameter isolation - both optimization and execution now read from workflow:
+workflow:
+  # Colony-specific execution parameters
+  stain: "x-gal"          # Stain type for colony analysis
+  min_size: 5.0           # Minimum colony size in pixels
+  max_size: 1000.0        # Maximum colony size in pixels  
+  plate_layout: 1         # Plate layout configuration
+  
+  # Detection algorithm parameters (can be optimized)
+  min_peak_distance_frac: 0.05     # larger spacing for colonies vs lanes
+  prominence_frac: 0.08             # lower for colony detection
+  rescue_enabled: true
+  
+  # Baseline parameters (gentle for colonies)
+  baseline:
+    method: "none"                  # Baseline mostly disabled for colonies
+    window_frac: 0.005              # Very gentle if enabled
+    window_px: 0
+    clamp_min_px: 3
+    clamp_max_px: 12
+    quantile: 0.05
+
+# Colony-specific detection parameters (LEGACY - for backward compatibility)
+colony_detection:
+  stain: "x-gal"          # Stain type for colony analysis
+  min_size: 5.0           # Minimum colony size in pixels
+  max_size: 1000.0        # Maximum colony size in pixels  
+  plate_layout: 1         # Plate layout configuration
+
+# Color calibration and classification (CRITICAL FOR BLUE/WHITE DETECTION)
+color_calib:
+  colorspace: "Lab"       # Use Lab colorspace for blue/white classification
+  enable_filter_chain_ledger: true  # Track filter chain component counts
+  enable_color_histogram: true      # Generate Lab-b histogram for debugging
+
+# TEMP CONFIG - variant: full - Fri Aug 29 08:57:14 BST 2025

@@ -1,0 +1,137 @@
+#Apply with: patch -p0 < add_precalibration_deskew_desmile.patch (from the repo root), or copy/paste the +++ / --- blocks manually.
+diff --git a/streamlit_autodense_app.py b/streamlit_autodense_app.py
+--- a/streamlit_autodense_app.py
++++ b/streamlit_autodense_app.py
+@@ -1,6 +1,43 @@
+ import streamlit as st
+ import numpy as np
+ from PIL import Image
++
++# ==== [PATCH] OpenCV safeguard & pre-calibration helpers ======================
++try:
++    import cv2  # OpenCV is optional; UI will degrade gracefully if missing
++    _HAS_CV2 = True
++except Exception:
++    cv2 = None
++    _HAS_CV2 = False
++
++def _apply_geom_precal(img_pil: Image.Image, rotate_deg: float = 0.0,
++                       shear_deg: float = 0.0, desmile_px: float = 0.0) -> Image.Image:
++    """
++    Rotate, shear (deskew), and 'desmile' (quadratic vertical remap) a gel image.
++    - rotate_deg: small fine rotation in degrees.
++    - shear_deg: horizontal shear in degrees to correct lane lean.
++    - desmile_px: vertical correction @ edges in pixels; counters curved band 'smile'.
++    """
++    if not _HAS_CV2:
++        return img_pil  # graceful no-op if OpenCV unavailable
++    img = np.asarray(img_pil)
++    h, w = img.shape[:2]
++    out = img
++    # 1) Rotate around center
++    if abs(rotate_deg) > 1e-3:
++        M = cv2.getRotationMatrix2D((w/2, h/2), rotate_deg, 1.0)
++        out = cv2.warpAffine(out, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
++    # 2) Horizontal shear (deskew)
++    if abs(shear_deg) > 1e-3:
++        sh = np.tan(np.deg2rad(shear_deg))
++        M = np.array([[1, sh, 0], [0, 1, 0]], dtype=np.float32)
++        out = cv2.warpAffine(out, M, (w + int(abs(h*sh)), h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
++        out = out[:, :w]  # crop back to original width
++    # 3) Desmile: quadratic vertical offset across columns
++    if abs(desmile_px) > 1e-3:
++        yy, xx = np.indices((h, w), dtype=np.float32)
++        x = (xx - w/2) / (w/2)
++        offset = desmile_px * (x**2 - 1.0)  # 0 at center, -desmile_px at edges
++        map_y = (yy + offset).clip(0, h-1)
++        out = cv2.remap(out, xx, map_y, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_REPLICATE)
++    return Image.fromarray(out)
++# =============================================================================
+ 
+@@ -120,6 +157,65 @@
+     # ... your existing layout / tabs setup above ...
+     tab_cal, tab_ana, tab_export = tabs[0], tabs[1], tabs[2] if isinstance(tabs, (list, tuple)) else (None, None, None)
+ 
++    # ==== [PATCH] Pre-calibration geometry controls ==========================
++    # We store/consume a pre-calibrated image for lane calibration interactions.
++    # Assumes you already stash the uploaded PIL image as st.session_state["res_uploaded_image"]
++    # (If you use a different key, adjust the two lines marked [*] below.)
++
++    def _get_src_upload() -> Image.Image:
++        # [*] source image used throughout the app (existing behavior)
++        if "res_uploaded_image" in st.session_state and isinstance(st.session_state["res_uploaded_image"], Image.Image):
++            return st.session_state["res_uploaded_image"]
++        # Fallbacks: try to rebuild from any byte buffer you keep
++        if "uploaded_image_bytes" in st.session_state:
++            return Image.open(st.session_state["uploaded_image_bytes"])
++        return None
++
++    with tab_cal:
++        st.markdown("### Pre-calibration: Deskew & Desmile")
++        with st.expander("🪚 Geometry correction (applies **before** lane calibration)", expanded=False):
++            # persist UI state across reruns
++            rot = st.session_state.get("cal_rotate_deg", 0.0)
++            shear = st.session_state.get("cal_shear_deg", 0.0)
++            desmile = st.session_state.get("cal_desmile_px", 0)
++
++            c1, c2, c3, c4 = st.columns([1.2, 1, 1, 0.9])
++            disabled = not _HAS_CV2
++            if not _HAS_CV2:
++                st.info("OpenCV not detected. Geometry controls are disabled; using original image.")
++            new_rot = c1.slider("Rotate (°)", -7.0, 7.0, float(rot), 0.1,
++                                help="Fine rotation to straighten the gel.", disabled=disabled)
++            new_shear = c2.slider("Shear X (°)", -5.0, 5.0, float(shear), 0.1,
++                                  help="Horizontal shear (deskew) if lanes lean.", disabled=disabled)
++            new_desmile = c3.slider("Desmile (px @ edges)", -40, 40, int(desmile), 1,
++                                    help="Quadratic vertical correction to counter band 'smile'.", disabled=disabled)
++            reset = c4.button("Reset", use_container_width=True, disabled=disabled)
++
++            if reset:
++                st.session_state["cal_rotate_deg"] = 0.0
++                st.session_state["cal_shear_deg"] = 0.0
++                st.session_state["cal_desmile_px"] = 0
++            else:
++                st.session_state["cal_rotate_deg"] = new_rot
++                st.session_state["cal_shear_deg"] = new_shear
++                st.session_state["cal_desmile_px"] = new_desmile
++
++        # Build/store the image used for lane calibration interactions
++        _src = _get_src_upload()
++        if _src is not None:
++            if "res_original_image" not in st.session_state:
++                st.session_state["res_original_image"] = _src.copy()
++            if _HAS_CV2:
++                cal_img = _apply_geom_precal(
++                    _src,
++                    rotate_deg=st.session_state.get("cal_rotate_deg", 0.0),
++                    shear_deg=st.session_state.get("cal_shear_deg", 0.0),
++                    desmile_px=st.session_state.get("cal_desmile_px", 0),
++                )
++            else:
++                cal_img = _src
++            st.session_state["res_cal_image"] = cal_img  # consumed below by the calibration canvas
++        else:
++            st.warning("No uploaded image detected yet.")
++    # =========================================================================
++
+     with tab_cal:
+         # --- existing calibration UI continues here ---
+-        # (previously you likely used: img = st.session_state["res_uploaded_image"])
+-        img = st.session_state["res_uploaded_image"]
+-        img_array = np.asarray(img)
++        # [PATCH] Use the geometry-corrected image (falls back automatically)
++        img = st.session_state.get("res_cal_image",
++                                   st.session_state.get("res_uploaded_image"))
++        img_array = np.asarray(img) if img is not None else None
+         # ... rest of lane calibration canvas / clicks / overlay logic ...
+ 
+     with tab_ana:
+@@ -205,6 +301,13 @@
+         # Band Assist / pipeline code etc...
+-        work_img = st.session_state.get("res_uploaded_image")
++        # [PATCH] feed the corrected image into analysis by default
++        work_img = st.session_state.get("res_cal_image",
++                                        st.session_state.get("res_uploaded_image"))
+         if work_img is None:
+             st.stop()
+         # ... continue as before ...

@@ -1,0 +1,26 @@
+# Colony counting parameters following 15-minute triage guide
+pre:
+  invert_polarity: auto   # true|false|auto
+  clip_percentiles: [1.0, 99.5]  # wider range for colonies
+  normalize_intensity: true
+  gaussian_sigma: 2.0     # more smoothing for colonies
+  background_removal_radius: 20.0  # smaller radius for colonies
+  enable_deskew: false    # colonies don't need deskewing
+  deskew_angle_threshold: 0.5  # degrees
+  enable_debug_logging: true
+  clahe:
+    enabled: true         # often helpful for colonies
+    clip_limit: 2.0
+    tile_grid: [8,8]
+
+detect:
+  prominence_frac: 0.08   # lower for colony detection
+  min_peak_distance_px: 15  # larger distance for colonies
+  rescue_enabled: true
+
+# Legacy parameters (for backward compatibility)
+segmentation:
+  threshold: 0.30       # 0..1; used by runner/spec grid
+  min_area: 30          # pixels
+post:
+  merge_distance_px: 5  # pixels

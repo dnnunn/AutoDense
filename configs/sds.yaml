@@ -1,0 +1,73 @@
+# SDS-PAGE parameters following 15-minute triage guide
+pre:
+  invert_polarity: auto   # true|false|auto
+  clip_percentiles: [2.0, 98.0]  # tighter clipping for SDS
+  normalize_intensity: true
+  gaussian_sigma: 0.0  # TEMPORARILY DISABLED to test headless mode
+  background_removal_radius: 0.0   # DISABLED - was creating white streaks
+  enable_deskew: false              # DISABLED - was creating skewing artifacts
+  deskew_angle_threshold: 0.5  # degrees
+  enable_debug_logging: true
+  clahe:
+    enabled: false        # typically not needed for SDS
+    clip_limit: 2.0
+    tile_grid: [8,8]
+
+detect:
+  # AUDITOR'S SAFE BASELINE SYSTEM: Config-driven parameters
+  min_peak_distance_frac: 0.04     # fraction of ROI width for lane spacing
+  prominence_frac: 0.06             # peak prominence threshold (was 0.12, made more lenient)
+  rescue_enabled: true
+  
+  baseline:
+    method: "percentile"            # "none" | "percentile" | "morph" 
+    window_frac: 0.02               # 2% of ROI width (gentle vs old 4% = 32px!)
+    window_px: 0                    # 0 = use fraction; else explicit px
+    clamp_min_px: 3                 # Hard minimum bound (safety)
+    clamp_max_px: 12                # Hard maximum bound (was 32px destructive!)
+    quantile: 0.10                  # 10th percentile for baseline
+
+bands:
+  # Band detection parameters
+  min_distance_px: 14              # explicit pixel distance between bands (default for SDS-PAGE)
+  min_peak_distance_frac: 0.01     # fraction-based fallback if px not specified
+  prominence_frac: 0.02             # Very sensitive for bands
+  
+  baseline:
+    method: "percentile"            # "none" | "percentile" | "morph" 
+    window_frac: 0.015              # 1.5% of ROI width for band detection (tighter than lane detection)
+    window_px: 0                    # 0 = use fraction; else explicit px
+    clamp_min_px: 2                 # Hard minimum bound for bands
+    clamp_max_px: 8                 # Hard maximum bound for bands (tighter than lanes)
+    quantile: 0.08                  # 8th percentile for band baseline (more sensitive)
+
+# SCHEMA UNIFIED: Execution parameters for optimization system
+# This solves parameter isolation - both optimization and execution now read from workflow:
+workflow:
+  # Execution control parameters
+  expected_lanes: 8
+  sensitivity: 1.0
+  constant_spacing: false
+  background_method: "rolling_ball"
+  
+  # Detection algorithm parameters (can be optimized)
+  min_peak_distance_frac: 0.04     # fraction of ROI width for lane spacing
+  prominence_frac: 0.06             # peak prominence threshold
+  rescue_enabled: true
+  
+  # Baseline parameters (can be optimized)
+  baseline:
+    method: "percentile"            # "none" | "percentile" | "morph" 
+    window_frac: 0.02               # 2% of ROI width
+    window_px: 0                    # 0 = use fraction
+    clamp_min_px: 3                 # Hard minimum bound
+    clamp_max_px: 12                # Hard maximum bound
+    quantile: 0.10                  # 10th percentile for baseline
+
+# Legacy parameters (for backward compatibility)
+detection:
+  min_width: 12     # pixels
+  prominence: 0.30  # 0..1 relative
+  expected_lanes: 8
+  sensitivity: 1.0
+  constant_spacing: false

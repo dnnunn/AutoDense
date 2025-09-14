@@ -1,0 +1,52 @@
+# SDS-PAGE parameters - MORE SENSITIVE for 12-lane gels
+pre:
+  invert_polarity: auto
+  clip_percentiles: [2.0, 98.0]
+  normalize_intensity: true
+  gaussian_sigma: 0.0
+  background_removal_radius: 0.0
+  enable_deskew: false
+  deskew_angle_threshold: 0.5
+  enable_debug_logging: true
+  clahe:
+    enabled: false
+    clip_limit: 2.0
+    tile_grid: [8,8]
+
+detect:
+  # MORE SENSITIVE PARAMETERS for 12-lane detection
+  min_peak_distance_frac: 0.025    # REDUCED from 0.04 to allow closer lanes
+  prominence_frac: 0.04             # REDUCED from 0.06 to catch weaker lanes
+  rescue_enabled: true
+  
+  baseline:
+    method: "percentile"
+    window_frac: 0.015              # REDUCED from 0.02 for finer baseline
+    window_px: 0
+    clamp_min_px: 2                 # REDUCED minimum
+    clamp_max_px: 8                 # REDUCED maximum
+    quantile: 0.08                  # REDUCED from 0.10 for more sensitive baseline
+
+bands:
+  # MORE SENSITIVE BAND DETECTION
+  min_distance_px: 12              # explicit pixel distance for sensitive detection
+  min_peak_distance_frac: 0.01     # Much smaller for band detection
+  prominence_frac: 0.02             # Very sensitive for bands
+  
+  baseline:
+    method: "percentile"
+    window_frac: 0.01               # Very fine baseline for bands
+    window_px: 0
+    clamp_min_px: 1                 # Minimum possible
+    clamp_max_px: 4                 # Very small maximum
+    quantile: 0.05                  # Very sensitive quantile
+
+# Legacy parameters (THESE ARE WHAT THE CODE ACTUALLY USES!)
+detection:
+  min_width: 8                    # REDUCED from 12 pixels
+  prominence: 0.20                # REDUCED from 0.30
+  expected_lanes: 12              # TARGET: 12 lanes instead of default 10
+  sensitivity: 0.8                # INCREASED from 0.5 for more sensitive detection
+  constant_spacing: true          # Assume constant spacing
+  background_subtraction: false   # Disable for band detection (might interfere)
+  peak_detection_method: "auto"   # Use auto method for bands

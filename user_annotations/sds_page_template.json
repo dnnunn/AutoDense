@@ -1,0 +1,14 @@
+{
+  "task_type": "sds_page",
+  "description": "Manual ground truth for SDS-PAGE gel images",
+  "analyses": [
+    {
+      "image_path": "user_seed_images/sds_page/your_sds_image_1.jpg",
+      "lanes_total": 10,
+      "bands_total": 35,
+      "confidence": 0.9,
+      "notes": "Example: SDS-PAGE with 10 lanes, ~35 protein bands",
+      "task_type": "sds_page"
+    }
+  ]
+}

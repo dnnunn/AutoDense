@@ -1,0 +1,94 @@
+{
+  "tools": [
+    {
+      "id":"imagej.sds.detect_lanes",
+      "desc":"Estimate lane ROIs via vertical projection or fixed count.",
+      "mutates_image": true,
+      "inputs_schema":{"lane_count":"number?","smooth_px":"number?"},
+      "returns":{"lanes_rois":"string","lanes_png":"string"}
+    },
+    {
+      "id":"imagej.sds.detect_bands",
+      "desc":"Per-lane 1D profile peak detection of bands.",
+      "mutates_image": true,
+      "inputs_schema":{"min_prominence":"number","min_distance_px":"number"},
+      "returns":{"bands_table":"string","bands_overlay_png":"string"}
+    },
+    {
+      "id":"imagej.sds.integrate",
+      "desc":"Lane-wise baseline (quantile) and AUC integration.",
+      "mutates_image": false,
+      "inputs_schema":{"baseline_win":"number?","baseline_q":"number?","band_halfwin":"number?"},
+      "returns":{"bands_csv":"string"}
+    },
+    {
+      "id": "imagej.sds.calibrate_ladder",
+      "desc": "Fit log10(kDa) vs relative migration (Rf) for the ladder lane.",
+      "mutates_image": false,
+      "inputs_schema": {
+        "ladder": "string",
+        "lane_index": "number?",
+        "front_y": "number?"
+      },
+      "returns": { "fit": "{slope,intercept,r2}", "mw_table": "string", "lane_index":"number" }
+    },
+    {
+      "id": "imagej.sds.assign_mw",
+      "desc": "Apply ladder calibration to all detected bands and label overlay with kDa.",
+      "mutates_image": true,
+      "inputs_schema": {},
+      "returns": { "mw_csv": "string", "mw_overlay_png": "string" }
+    },
+    {
+      "id": "imagej.sds.autodetect_ladder_by_color",
+      "desc": "Pick ladder lane by prestained color signature.",
+      "mutates_image": false,
+      "inputs_schema": { "ladder": "string" },
+      "returns": { "lane_index": "number" }
+    },
+    {
+      "id":"imagej.agarose.detect_lanes",
+      "desc":"Detect agarose lanes (DNA).",
+      "mutates_image": true,
+      "inputs_schema":{"lane_count":"number?","smooth_px":"number?"},
+      "returns":{"lanes_rois":"string","lanes_png":"string"}
+    },
+    {
+      "id":"imagej.agarose.detect_bands",
+      "desc":"Detect DNA bands per lane.",
+      "mutates_image": true,
+      "inputs_schema":{"min_prominence":"number","min_distance_px":"number"},
+      "returns":{"bands_table":"string","bands_overlay_png":"string"}
+    },
+    {
+      "id":"imagej.agarose.calibrate_ladder",
+      "desc":"Fit log(bp) vs migration distance for selected ladder lane.",
+      "mutates_image": false,
+      "inputs_schema":{"ladder":"string","lane_index":"number"},
+      "returns":{"fit":"{slope,intercept,r2}","mw_table":"string"}
+    }
+  ],
+  "workflows": [
+    {
+      "name":"SDS_PAGE_DENSITOMETRY",
+      "steps":["imagej.open_image","imagej.sds.detect_lanes","imagej.sds.detect_bands","imagej.overlay.annotate","imagej.sds.integrate","export.results"]
+    },
+    {
+      "name": "SDS_PAGE_DENSITOMETRY_MW",
+      "steps": [
+        "imagej.open_image",
+        "imagej.sds.detect_lanes",
+        "imagej.sds.detect_bands",
+        "imagej.sds.calibrate_ladder",
+        "imagej.sds.assign_mw",
+        "imagej.overlay.annotate",
+        "imagej.sds.integrate",
+        "export.results"
+      ]
+    },
+    {
+      "name":"AGAROSE_ETBR",
+      "steps":["imagej.open_image","imagej.agarose.detect_lanes","imagej.agarose.detect_bands","imagej.agarose.calibrate_ladder","imagej.overlay.annotate","export.results"]
+    }
+  ]
+}

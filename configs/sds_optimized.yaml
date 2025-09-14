@@ -1,0 +1,64 @@
+pre:
+  invert_polarity: auto
+  clip_percentiles:
+  - 2.0
+  - 98.0
+  normalize_intensity: true
+  gaussian_sigma: 0.0
+  background_removal_radius: 0.0
+  enable_deskew: false
+  deskew_angle_threshold: 0.5
+  enable_debug_logging: true
+  clahe:
+    enabled: false
+    clip_limit: 2.0
+    tile_grid:
+    - 8
+    - 8
+detect:
+  min_peak_distance_frac: 0.04
+  prominence_frac: 0.06
+  rescue_enabled: true
+  baseline:
+    method: percentile
+    window_frac: 0.02
+    window_px: 0
+    clamp_min_px: 3
+    clamp_max_px: 12
+    quantile: 0.1
+bands:
+  min_distance_px: 14
+  min_peak_distance_frac: 0.01
+  prominence_frac: 0.03
+  baseline:
+    method: percentile
+    window_frac: 0.025
+    window_px: 0
+    clamp_min_px: 2
+    clamp_max_px: 8
+    quantile: 0.05
+  min_peak_distance_px: 10
+workflow:
+  expected_lanes: 8
+  sensitivity: 1.0
+  constant_spacing: false
+  background_method: rolling_ball
+  min_peak_distance_frac: 0.04
+  prominence_frac: 0.06
+  rescue_enabled: true
+  baseline:
+    method: percentile
+    window_frac: 0.02
+    window_px: 0
+    clamp_min_px: 3
+    clamp_max_px: 12
+    quantile: 0.1
+detection:
+  min_width: 12
+  prominence: 0.3
+  expected_lanes: 8
+  sensitivity: 1.0
+  constant_spacing: false
+lanes:
+  min_peak_distance_frac: 0.025
+  prominence_frac: 0.03

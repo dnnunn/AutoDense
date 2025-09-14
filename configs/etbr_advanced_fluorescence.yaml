@@ -1,0 +1,114 @@
+# Advanced Fluorescence Detection Configuration
+# Created: 2025-01-07
+# Purpose: Multi-algorithm fluorescence band detection with breakthrough computer vision approaches
+# Target: Detect 15+ fluorescent bands using FluorescenceOps algorithms
+
+pre:
+  invert_polarity: false              # CRITICAL: Preserve white bands on black background
+  clip_percentiles: [0.1, 99.9]      # Preserve full fluorescence dynamic range
+  normalize_intensity: true          # Normalize for consistent detection
+  gaussian_sigma: 0.5                 # Minimal smoothing to preserve sharp fluorescent edges
+  background_removal_radius: 0.0     # NO background subtraction for fluorescence
+  enable_deskew: false               # Skip deskewing for fluorescence gels
+  deskew_angle_threshold: 0.5
+  enable_debug_logging: true         # Enable detailed logging
+  clahe:
+    enabled: true                    # Enhance local contrast for fluorescence
+    clip_limit: 6.0                  # Higher clip limit for fluorescence enhancement
+    tile_grid: [4,4]                 # Smaller tiles for local fluorescence enhancement
+
+detect:
+  # Ultra-high sensitivity parameters for breakthrough fluorescence detection
+  min_peak_distance_frac: 0.005      # Allow very close fluorescent bands
+  prominence_frac: 0.002              # ULTRA-sensitive for bright fluorescence peaks
+  rescue_enabled: true               # Enable rescue detection for weak bands
+  
+  baseline:
+    method: "percentile"             # Better baseline estimation for dark background
+    window_frac: 0.025               # Wider window for stable dark background
+    window_px: 0
+    clamp_min_px: 8
+    clamp_max_px: 20
+    quantile: 0.01                   # Very low quantile for dark background baseline
+
+bands:
+  # Advanced fluorescence detection parameters
+  min_distance_px: 2                 # Allow very close fluorescent bands
+  min_peak_distance_frac: 0.003      # Maximum sensitivity for fluorescence
+  prominence_frac: 0.001              # BREAKTHROUGH: Ultra-low prominence threshold
+  
+  # Multi-algorithm fusion parameters
+  fusion_enabled: true               # Enable multi-algorithm detection
+  confidence_threshold: 0.3          # Minimum confidence for band acceptance
+  algorithm_agreement_bonus: 0.15    # Bonus confidence for multi-algorithm agreement
+  
+  baseline:
+    method: "percentile"             # Optimal for fluorescence dark background
+    window_frac: 0.018               # Fine-tuned for fluorescence baseline
+    window_px: 0
+    clamp_min_px: 5
+    clamp_max_px: 12
+    quantile: 0.015                  # Ultra-low quantile for proper dark background
+
+# Advanced fluorescence detection settings
+fluorescence:
+  enable_advanced_detection: true    # Use FluorescenceOps algorithms
+  detection_algorithms:
+    profile_method:
+      enabled: true                  # Enhanced profile peak detection (fixed inversion)
+      weight: 1.0                    # High weight for primary method
+      min_prominence: 0.001          # Ultra-sensitive prominence
+    
+    blob_detection:
+      enabled: true                  # 2D blob detection for fluorescent spots
+      weight: 0.8                    # Medium-high weight
+      sigma_threshold: 2.0           # 2-sigma above mean for blob detection
+    
+    morphological:
+      enabled: true                  # Top-hat morphological detection
+      weight: 0.7                    # Medium weight
+      structure_size: 3              # Small structure element for fine features
+    
+    adaptive_threshold:
+      enabled: true                  # Adaptive threshold detection
+      weight: 0.6                    # Medium weight
+      window_size: 15                # Local window for adaptive thresholding
+      brightness_offset: 20          # Minimum brightness above local mean
+
+# Execution parameters
+workflow:
+  expected_lanes: 20                 # Allow for multiple lanes + ladder
+  sensitivity: 0.99                  # Maximum sensitivity for fluorescence
+  constant_spacing: false            # Fluorescence gels can have irregular spacing
+  use_fluorescence_ops: true         # CRITICAL: Use new FluorescenceOps class
+
+# Legacy compatibility parameters
+expected_lanes: 20
+sensitivity: 0.99
+constant_spacing: false
+background_subtraction: false        # Critical: Don't subtract fluorescence signal
+peak_detection_method: "advanced_fluorescence_fusion"
+
+# Algorithm validation parameters
+validation:
+  expected_band_count_range: [10, 25]  # Expect 10-25 bands for validation
+  intensity_threshold_percentile: 85   # Bands should be in top 15% of intensities
+  width_range_px: [1, 8]              # Expected band width range
+  confidence_distribution: "high"      # Expect high confidence detections
+
+# Performance monitoring
+monitoring:
+  algorithm_comparison: true          # Compare all 4 algorithms
+  detection_heatmap: true            # Generate detection confidence heatmap
+  profile_analysis: true             # Detailed profile analysis output
+  timing_benchmarks: true            # Track algorithm performance
+
+# Comments explaining breakthrough innovations:
+# 1. FIXED CRITICAL BUG: No intensity inversion (255 - pixel) for fluorescence detection
+# 2. Multi-algorithm fusion: 4 complementary detection approaches
+# 3. Ultra-sensitive parameters: prominence_frac down to 0.001 (vs 0.02 standard)
+# 4. 2D blob detection: Detects fluorescent spots using spatial analysis
+# 5. Morphological top-hat: Enhances bright fluorescent features
+# 6. Adaptive thresholding: Handles varying fluorescence intensity
+# 7. Algorithm fusion: Combines results with confidence weighting
+# 8. Geometric validation: Filters results by expected band characteristics

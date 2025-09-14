@@ -1,0 +1,100 @@
+# Colony Retention-Optimized Configuration
+# Addresses over-aggressive filtering (25 raw → 15 final colonies)
+#
+# Key optimizations:
+# 1. Less aggressive size and shape filtering
+# 2. Enhanced small colony detection
+# 3. Improved blue/white discrimination
+# 4. Reduced false negative classification
+
+# Preprocessing optimizations for colony detection
+pre:
+  normalize_intensity: true
+  gaussian_sigma: 1.0  # Light smoothing to reduce noise
+  clip_percentiles: [2.0, 98.0]
+  enable_debug_logging: true
+  
+  # Plate illumination flattening
+  background_removal_radius: 50.0  # Large radius for plate-wide illumination
+  
+  # Enhanced contrast for colony boundaries
+  clahe:
+    enabled: true
+    clip_limit: 2.0  # Moderate enhancement
+    tile_grid: [8, 8]  # Fine-grained local enhancement
+
+# Colony segmentation parameters - less aggressive
+segmentation:
+  # Threshold parameters - more sensitive
+  method: "otsu_adaptive"
+  min_threshold: 0.3  # Lower threshold for faint colonies
+  max_threshold: 0.8
+  
+  # Size filtering - much more permissive
+  min_area: 25  # Reduced from aggressive defaults (was ~50-100)
+  max_area: 10000  # Allow larger colonies
+  min_diameter: 3  # Smaller minimum diameter
+  max_diameter: 150
+  
+  # Shape filtering - more tolerant
+  circularity_min: 0.3  # Reduced from 0.6-0.8 
+  circularity_max: 1.0
+  solidity_min: 0.6  # More tolerant of irregular shapes
+  
+  # Edge enhancement for better boundary detection
+  edge_enhancement:
+    enabled: true
+    method: "unsharp_mask"
+    radius: 1.0
+    amount: 0.5
+    threshold: 0.02
+
+# Classification parameters - retain more colonies
+classification:
+  # Blue/white discrimination - enhanced
+  colorspace: "Lab"  # Better color separation than RGB
+  blue_threshold: 0.4  # More permissive blue detection
+  white_threshold: 0.6  # More permissive white detection
+  
+  # Quality gates - less aggressive filtering
+  quality_gates:
+    size_filter_aggressive: false  # Disable aggressive size filtering
+    shape_filter_strict: false     # Disable strict shape filtering
+    intensity_filter_strict: false # Disable strict intensity filtering
+    
+    # Boundary quality - more tolerant
+    boundary_smoothness_min: 0.3  # Less strict boundary requirements
+    contrast_ratio_min: 1.2       # Lower contrast requirement
+  
+  # Enhanced small colony handling
+  small_colony_detection:
+    enabled: true
+    min_diameter_override: 2  # Special handling for very small colonies
+    contrast_boost: 1.5       # Boost contrast for small colony detection
+    
+# Workflow parameters
+workflow:
+  expected_colonies: 30  # Higher expectation to drive sensitivity
+  sensitivity: 1.1       # Increased sensitivity
+  false_positive_tolerance: 0.1  # Allow some false positives vs missing colonies
+  
+  # Multi-pass detection for difficult colonies
+  multi_pass_enabled: true
+  pass1_sensitivity: 1.0      # Standard sensitivity
+  pass2_sensitivity: 1.3      # Higher sensitivity for missed colonies
+  
+  # Post-processing - conservative filtering
+  post_processing:
+    merge_touching_colonies: true
+    split_merged_colonies: false    # Don't split, risk losing colonies
+    remove_edge_colonies: false     # Keep colonies near plate edge
+    
+# Output and validation
+output:
+  save_intermediate_images: true
+  save_rejected_colonies: true  # Debug rejected colonies
+  
+validation:
+  min_colony_count: 20       # Expect at least 20 colonies
+  max_false_positive_rate: 0.15  # Accept up to 15% false positives
+  target_retention_rate: 0.80    # Target 80% retention from raw to classified

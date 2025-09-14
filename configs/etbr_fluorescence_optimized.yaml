@@ -1,0 +1,66 @@
+# EtBr Fluorescence Detection - Optimized for White Bands on Dark Background
+# Created: 2025-01-07
+# Purpose: High sensitivity detection of fluorescent bands with proper dark background handling
+
+pre:
+  invert_polarity: false          # CRITICAL: Keep white bands on black background
+  clip_percentiles: [0.5, 99.5]  # Preserve full fluorescence dynamic range
+  normalize_intensity: true
+  gaussian_sigma: 0.8             # Light smoothing to reduce noise without blur
+  background_removal_radius: 0.0  # No background subtraction - let bands shine
+  enable_deskew: false
+  deskew_angle_threshold: 0.5
+  enable_debug_logging: true
+  clahe:
+    enabled: true                 # Enhance local contrast for fluorescence
+    clip_limit: 4.0               # Higher clip limit for fluorescence
+    tile_grid: [6,6]              # Smaller tiles for local enhancement
+
+detect:
+  # High sensitivity parameters for fluorescence detection
+  min_peak_distance_frac: 0.015   # Allow very close bands in fluorescence
+  prominence_frac: 0.008          # MUCH more sensitive for bright fluorescence peaks
+  rescue_enabled: true
+  
+  baseline:
+    method: "percentile"
+    window_frac: 0.020            # Wider window for dark background stability
+    window_px: 0
+    clamp_min_px: 5
+    clamp_max_px: 12
+    quantile: 0.02                # Very low quantile for dark background
+
+bands:
+  # Optimized for BRIGHT WHITE bands on BLACK background (fluorescence)
+  min_distance_px: 3              # Allow very close fluorescent bands
+  min_peak_distance_frac: 0.008   # High sensitivity for fluorescence
+  prominence_frac: 0.005          # VERY sensitive to fluorescent peaks
+  
+  baseline:
+    method: "percentile"          # Better for fluorescence than morphological
+    window_frac: 0.015            # Moderate window for dark background
+    window_px: 0
+    clamp_min_px: 3
+    clamp_max_px: 8
+    quantile: 0.02                # Very low quantile for dark background
+
+# Execution parameters
+workflow:
+  expected_lanes: 20              # Allow for multiple sample lanes + ladder
+  sensitivity: 0.95               # Maximum sensitivity for fluorescence
+  constant_spacing: false         # Fluorescence gels can have irregular spacing
+  
+# Legacy compatibility
+expected_lanes: 20
+sensitivity: 0.95
+constant_spacing: false
+background_subtraction: false      # Don't subtract - we want the bright bands
+peak_detection_method: "fluorescence"
+
+# Comments explaining key differences from normal gel detection:
+# 1. Much lower prominence thresholds (0.005 vs 0.02) for sensitive fluorescence detection
+# 2. Wider baseline windows to handle dark background noise
+# 3. Lower quantiles (0.02 vs 0.05) for proper dark background baseline
+# 4. No background subtraction - preserve fluorescent signal
+# 5. Higher CLAHE settings to enhance local fluorescent contrast
+# 6. Minimal Gaussian blur to preserve sharp fluorescent edges

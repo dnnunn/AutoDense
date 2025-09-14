@@ -1,0 +1,59 @@
+# API Configuration (contains sensitive keys)
+api-config.properties
+
+# Build outputs
+target/
+build/
+*.jar
+*.class
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Backup files
+*.backup
+*.backup2
+*.bak
+*.bak2
+
+# Archives and packages (except intentional releases)
+*.tar.gz
+*.zip
+*.rar
+
+# Python environment and packages
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.pytest_cache/
+
+# Autotune working directories
+audits/autotune_runs/
+
+# Claude Code working directory
+.claude/

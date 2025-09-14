@@ -1,0 +1,3 @@
+[console_scripts]
+autodense-analyze = autodense.cli:main
+autodense-bridge = autodense.service.bridge:main

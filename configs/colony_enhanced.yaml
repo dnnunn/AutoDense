@@ -1,0 +1,102 @@
+# Colony Enhanced Configuration - Retention Optimization
+# TARGET: 15/25 → 20+/25 colonies (33% improvement)
+# Based on Vision Engineer recommendations for colony retention
+
+# Minimal preprocessing to preserve colony features
+pre:
+  invert_polarity: auto
+  clip_percentiles: [0.5, 99.5]    # Very gentle clipping
+  normalize_intensity: false        # KEEP DISABLED - rescaling destroys contrast
+  gaussian_sigma: 1.0               # Basic smoothing only
+  background_removal_radius: 0.0    # Keep disabled - was removing colonies
+  enable_deskew: false              # Colonies don't need deskewing
+  deskew_angle_threshold: 0.5
+  enable_debug_logging: true
+  
+  clahe:
+    enabled: false                  # Keep disabled for colonies
+    clip_limit: 2.0
+    tile_grid: [8,8]
+
+# Colony detection parameters - retention optimized
+detect:
+  min_peak_distance_frac: 0.04       # Slightly tighter than baseline 0.05
+  prominence_frac: 0.06               # Less aggressive than baseline 0.08
+  threshold_radius: 15
+  min_colony_size: 5.0
+  rescue_enabled: true
+  
+  baseline:
+    method: "none"                   # Keep baseline disabled for colonies
+    window_frac: 0.008               # If enabled, very gentle
+    window_px: 0
+    clamp_min_px: 2
+    clamp_max_px: 8
+    quantile: 0.04                   # Lower quantile
+
+# Band parameters (not applicable but required)
+bands:
+  baseline:
+    method: "none"
+    window_frac: 0.01
+    window_px: 0
+    clamp_min_px: 2
+    clamp_max_px: 8
+    quantile: 0.05
+
+# VISION ENGINEER: Retention optimization parameters
+segmentation:
+  threshold: 0.25                   # Lower threshold for faint colonies
+  min_area: 25                      # VISION ENGINEER: Less aggressive (was ~100)
+  max_area: 2000                    # Allow larger colonies
+  
+  # Shape filtering - more tolerant
+  circularity_min: 0.3              # VISION ENGINEER: More tolerant (was 0.6+)
+  circularity_max: 1.0
+  solidity_min: 0.5                 # More tolerant of irregular shapes
+
+# Post-processing
+post:
+  merge_distance_px: 5
+
+# Enhanced workflow parameters
+workflow:
+  stain: "x-gal"
+  min_size: 5.0                     # Keep small minimum
+  max_size: 2000.0                  # Increase max size allowance
+  plate_layout: 1
+  
+  # Detection algorithm parameters
+  min_peak_distance_frac: 0.04
+  prominence_frac: 0.06             # Less aggressive
+  rescue_enabled: true
+  
+  # Baseline parameters (gentle)
+  baseline:
+    method: "none"
+    window_frac: 0.005
+    window_px: 0
+    clamp_min_px: 3
+    clamp_max_px: 12
+    quantile: 0.04
+
+# Colony-specific detection parameters
+colony_detection:
+  stain: "x-gal"
+  min_size: 5.0
+  max_size: 2000.0                  # Increased from 1000.0
+  plate_layout: 1
+
+# Enhanced color calibration for better retention
+color_calib:
+  colorspace: "Lab"
+  enable_filter_chain_ledger: true
+  enable_color_histogram: true
+
+# Quality gates - less aggressive filtering
+quality_gates:
+  size_filter_aggressive: false     # VISION ENGINEER: Disable harsh filtering
+  shape_filter_strict: false
+  intensity_filter_strict: false
+  boundary_smoothness_min: 0.2      # More tolerant boundaries
+  contrast_ratio_min: 1.1           # Lower contrast requirement

@@ -127,23 +127,30 @@ The framework uses a **layered mocking approach**:
 
 ### ⚡ Quick Commands
 
+**⚠️ IMPORTANT:** Always use single-command pattern for Claude Code compatibility.
+
 ```bash
-# Run all working tests
-pytest tests/test_calibration_instructions.py tests/test_prerequisites_panel.py tests/test_image_upload.py::TestImageUploadBasicFunctionality -v
+# Environment setup first (CRITICAL)
+cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense && source .venv/bin/activate && python verify_environment.py
 
-# Run specific component tests
-pytest tests/test_prerequisites_panel.py -v
-pytest tests/test_calibration_instructions.py -v
+# Run all working tests (SINGLE COMMAND)
+cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense && source .venv/bin/activate && cd ui && python -m pytest tests/test_calibration_instructions.py tests/test_prerequisites_panel.py tests/test_image_upload.py::TestImageUploadBasicFunctionality -v
 
-# Run with coverage
-pytest tests/ --cov=components --cov-report=html
+# Run specific component tests (SINGLE COMMAND)
+cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense && source .venv/bin/activate && cd ui && python -m pytest tests/test_prerequisites_panel.py -v
+cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense && source .venv/bin/activate && cd ui && python -m pytest tests/test_calibration_instructions.py -v
 
-# Run only unit tests (when marks are working)
-pytest tests/ -m unit -v
+# Run with coverage (SINGLE COMMAND)
+cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense && source .venv/bin/activate && cd ui && python -m pytest tests/ --cov=components --cov-report=html
 
-# Run only integration tests
-pytest tests/ -m integration -v
+# Run only unit tests (SINGLE COMMAND)
+cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense && source .venv/bin/activate && cd ui && python -m pytest tests/ -m unit -v
+
+# Run only integration tests (SINGLE COMMAND)
+cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense && source .venv/bin/activate && cd ui && python -m pytest tests/ -m integration -v
 ```
+
+**📖 See [ENVIRONMENT_SETUP.md](../../ENVIRONMENT_SETUP.md) for complete environment documentation.**
 
 ### 📊 Current Test Results
 
