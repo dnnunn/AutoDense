@@ -36,7 +36,17 @@ def obj_to_dict(x) -> Dict[str, Any]:
 
 
 def extract_json(text: str) -> Dict[str, Any]:
-    """Extract JSON object from text using regex."""
+    """Extract JSON object from text, handling markdown code blocks."""
+    # First try to extract from markdown code blocks (```json ... ```)
+    code_block_match = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", text)
+    if code_block_match:
+        json_text = code_block_match.group(1)
+        try:
+            return json.loads(json_text)
+        except json.JSONDecodeError:
+            pass
+
+    # Fallback to finding bare JSON objects
     m = re.search(r"\{[\s\S]*\}", text)
     if not m:
         raise ValueError("No JSON object found in model output")

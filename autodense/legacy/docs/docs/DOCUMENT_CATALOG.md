@@ -4,13 +4,13 @@
 > - **Purpose:** Comprehensive catalog with concise summaries of all project documentation
 > - **Scope:** All markdown files across the entire project with categories, summaries, and metadata
 > - **Owner:** @davidnunn
-> - **Last-verified:** 2025-09-03
+> - **Last-verified:** 2025-09-14
 
 ## Overview
 
 This catalog provides a centralized reference for all AutoDense documentation, including concise summaries, categories, word counts, and verification dates. Use this as a starting point to navigate the documentation ecosystem.
 
-**Total Documents:** 94 files across 9 categories
+**Total Documents:** 97 files across 9 categories
 
 ---
 
@@ -19,6 +19,7 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 | Document | Summary | Words | Last Verified |
 |----------|---------|--------|---------------|
 | **Architecture.md** | Detailed technical reference for AutoDense's handle-based architecture with Gemini orchestration and ImageJ execution | 403 | - |
+| **AI_PREPROCESSING_TIMEOUT_ANALYSIS_REPORT.md** | **NEW** - Comprehensive analysis report of AI preprocessing timeout investigation with systematic testing framework and production fix implementation | 2800 | 2025-09-14 |
 | **CLAUDE.md** | Concise session primer providing AI assistants with project context, capabilities, and development guidelines | 753 | 2025-09-01 |
 | **docs/API_REFERENCE.md** | Technical reference for tool interfaces, schemas, and canonical API surface | 1189 | - |
 | **docs/CANONICAL_TOOLS_SUMMARY.md** | Streamlined Gemini interface definition with 8 core tool actions for simplified orchestration | 704 | - |
@@ -127,10 +128,12 @@ This catalog provides a centralized reference for all AutoDense documentation, i
 | **SessionSummaries/Session_summary_August_27_2025.md** | LLM toolkit development and PMD complexity refactoring sessions with multi-provider audit analysis | 3847 | 2025-08-27 |
 | **SessionSummaries/Session_summary_August_28_2025_CLI_Architecture.md** | YAML-based preprocessing parameter architecture completion for CLI integration and systematic debugging | 1247 | 2025-08-28 |
 | **SessionSummaries/Session_summary_August_29_2025_Detection_Pipeline_Fix.md** | Breakthrough session resolving core detection failure with aggressive baseline removal fix and AI optimization roadmap | 1847 | 2025-08-29 |
+| **SessionSummaries/Session_summary_September_14_2025_AI_Preprocessing_Timeout_Analysis.md** | **NEW** - AI preprocessing timeout investigation and critical JSON parsing fix resolving production timeout issues | 1650 | 2025-09-14 |
 | **SessionSummaries/Session_summary_August_30_2025_Environment_Documentation.md** | Critical environment documentation session preventing session time waste and diagnosing fundamental lane detection algorithm flaws | 2400 | 2025-08-30 |
 | **SessionSummaries/Session_summary_August_30_2025_Configuration_Pipeline_Fix.md** | Configuration handoff resolution and build system organization with HeadlessException diagnosis | 1850 | 2025-08-30 |
 | **SessionSummaries/Session_summary_September_03_2025_Documentation_Consolidation.md** | **NEW** - Documentation consolidation session implementing doc-condenser recommendations | ~3,000 | 2025-09-03 |
 | **NextSteps/NextSteps_August_27_2025.md** | Priority tasks for LLM toolkit deployment, colony counting fixes, and consensus audit implementation | 1654 | 2025-08-27 |
+| **NextSteps/NextSteps_September_14_2025_AI_Preprocessing_Production_Deployment.md** | **NEW** - Production deployment plan for AI preprocessing timeout fix with monitoring and optimization roadmap | 850 | 2025-09-14 |
 | **NextSteps/NextSteps_August_27_2025_Evening.md** | Focused priority tasks for completing PMD complexity refactoring and error handling standardization | 1456 | 2025-08-27 |
 | **NextSteps/NextSteps_August_28_2025_CLI_Architecture.md** | Priority debugging tasks for systematic YAML-controlled preprocessing parameter testing and root cause analysis | 1521 | 2025-08-28 |
 | **NextSteps/NextSteps_August_29_2025_Detection_Pipeline_Fix.md** | Implementation roadmap and priorities following detection pipeline breakthrough with 4-phase AI optimization plan | 2156 | 2025-08-29 |
