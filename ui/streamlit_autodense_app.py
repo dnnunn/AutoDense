@@ -1,5 +1,8 @@
-import base64, json, re
+import sys
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+import base64, json, re
 from typing import Dict, Any, Optional, Tuple, List, Union, Callable
 from PIL import Image, ImageDraw, ImageOps
 
@@ -1889,7 +1892,7 @@ with tab2:
     if st.session_state.res_ba_overlay_png:
         c1, c2 = st.columns([2,1])
         with c1:
-            st.image(st.session_state.res_ba_overlay_png, caption="Band Assist overlay", use_container_width=True)
+            st.image(st.session_state.res_ba_overlay_png, caption="Band Assist overlay", use_container_width=False)
         with c2:
             st.markdown("**Lanes (summary)**")
             lane_cols = ["lane_index", "x0", "y0", "x1", "y1", "lane_type", "band_count"]

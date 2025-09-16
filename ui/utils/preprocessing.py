@@ -4,10 +4,14 @@ This module contains preprocessing logic with no Streamlit dependencies.
 These functions are extracted from the main application for better organization and testability.
 """
 
+import sys
+from pathlib import Path
+# Add parent directory to Python path to enable autodense imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 import json
 import base64
 import concurrent.futures as _futures
-from pathlib import Path
 from typing import Dict, Any, Tuple, Optional
 from PIL import Image, ImageOps
 

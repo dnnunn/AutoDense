@@ -146,8 +146,7 @@ def render_image_upload(
 
     result: Optional[ImageTuple] = None
     if uploaded_file:
-        with st.spinner("📤 Processing uploaded image..."):
-            st.info(f"🔄 Loading and validating image: {uploaded_file.name}")
+        with st.spinner(f"📤 Loading and validating image: {uploaded_file.name}..."):
             result = handle_file_upload(uploaded_file)
 
         if result:
