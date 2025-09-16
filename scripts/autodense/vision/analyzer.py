@@ -95,7 +95,8 @@ def integrate_band(arr: np.ndarray, bg: np.ndarray, x0:int, x1:int, y0:int, y1:i
 def analyze_image(path: Path, gel_type: str="protein", invert_mode: str="auto",
                   min_lanes:int=6, max_lanes:int=16, comb: Optional[int]=None,
                   num_ladders:int=2, ladder_min_bands:int=6, ladder_min_score:float=0.35,
-                  bg_radius:int=30, min_lane_width_frac:float=0.035, empty_lane_thresh:float=0.4):
+                  bg_radius:int=30, min_lane_width_frac:float=0.035, empty_lane_thresh:float=0.4,
+                  manual_lane_boundaries: Optional[List[Tuple[int, int]]]=None):
     im=Image.open(path).convert("RGB"); H,W=im.height,im.width
     gray=to_gray01(im); gray=maybe_invert(gray, gel_type, invert_mode)
     if gel_type=="dna":
@@ -105,8 +106,74 @@ def analyze_image(path: Path, gel_type: str="protein", invert_mode: str="auto",
         if comb: min_lanes=max(min_lanes, comb-2); max_lanes=min(max_lanes, comb+2)
     else:
         if comb: min_lanes=max(min_lanes, comb-2); max_lanes=min(max_lanes, comb+2)
-    lane_ranges=detect_lanes(gray, min_lanes=min_lanes, max_lanes=max_lanes, comb=comb)
+    # Use manual lane boundaries if provided, otherwise detect automatically
+    if manual_lane_boundaries is not None:
+        # Convert SimpleLaneBoundary objects to tuples if needed
+        lane_ranges = []
+        print(f"DEBUG: manual_lane_boundaries type: {type(manual_lane_boundaries)}")
+        print(f"DEBUG: manual_lane_boundaries length: {len(manual_lane_boundaries) if manual_lane_boundaries else 'None'}")
+
+        for i, boundary in enumerate(manual_lane_boundaries):
+            print(f"DEBUG: boundary[{i}] type: {type(boundary)}, value: {boundary}")
+
+            try:
+                if hasattr(boundary, 'left_px') and hasattr(boundary, 'right_px'):
+                    # Convert SimpleLaneBoundary to tuple
+                    left_px = int(boundary.left_px)
+                    right_px = int(boundary.right_px)
+                    lane_ranges.append((left_px, right_px))
+                    print(f"DEBUG: Converted SimpleLaneBoundary to tuple: ({left_px}, {right_px})")
+                elif isinstance(boundary, (list, tuple)) and len(boundary) >= 2:
+                    # Already in tuple format
+                    left_px = int(boundary[0])
+                    right_px = int(boundary[1])
+                    lane_ranges.append((left_px, right_px))
+                    print(f"DEBUG: Used existing tuple format: ({left_px}, {right_px})")
+                else:
+                    # Invalid format, skip this boundary
+                    print(f"WARNING: Invalid lane boundary format: {type(boundary)}, {boundary}")
+            except Exception as e:
+                print(f"ERROR: Failed to convert boundary[{i}]: {e}")
+                print(f"ERROR: boundary type: {type(boundary)}, value: {boundary}")
+
+        print(f"DEBUG: Final lane_ranges length: {len(lane_ranges)}")
+        print(f"DEBUG: lane_ranges content: {lane_ranges}")
+
+        # Validate that all elements in lane_ranges are tuples
+        for i, lr in enumerate(lane_ranges):
+            if not isinstance(lr, tuple):
+                print(f"ERROR: lane_ranges[{i}] is not a tuple: {type(lr)}, {lr}")
+
+        if not lane_ranges:
+            # If no valid boundaries, fall back to automatic detection
+            print("WARNING: No valid manual lane boundaries, falling back to automatic detection")
+            lane_ranges = detect_lanes(gray, min_lanes=min_lanes, max_lanes=max_lanes, comb=comb)
+        else:
+            print(f"INFO: Using {len(lane_ranges)} manual lane boundaries")
+    else:
+        lane_ranges = detect_lanes(gray, min_lanes=min_lanes, max_lanes=max_lanes, comb=comb)
     import numpy as np
+
+    # Additional validation: ensure all lane_ranges are tuples before unpacking
+    print(f"DEBUG: Before unpacking - lane_ranges type: {type(lane_ranges)}")
+    print(f"DEBUG: Before unpacking - lane_ranges content: {lane_ranges}")
+
+    # Validate and fix any non-tuple elements
+    validated_lane_ranges = []
+    for i, lr in enumerate(lane_ranges):
+        if isinstance(lr, tuple) and len(lr) >= 2:
+            validated_lane_ranges.append(lr)
+        elif hasattr(lr, 'left_px') and hasattr(lr, 'right_px'):
+            # Last resort conversion
+            print(f"WARNING: Converting SimpleLaneBoundary at index {i} to tuple")
+            validated_lane_ranges.append((int(lr.left_px), int(lr.right_px)))
+        else:
+            print(f"ERROR: Cannot process lane_ranges[{i}]: {type(lr)}, {lr}")
+            raise ValueError(f"Invalid lane range format at index {i}: {type(lr)}")
+
+    lane_ranges = validated_lane_ranges
+    print(f"DEBUG: After validation - lane_ranges: {lane_ranges}")
+
     lane_means=[float(gray[:,x0:x1].mean()) if (x1-x0)>0 else 0.0 for (x0,x1) in lane_ranges]
     if lane_means:
         med=float(np.median(lane_means)); keep=[i for i,m in enumerate(lane_means) if m>=max(1e-6, med*empty_lane_thresh)]

@@ -83,17 +83,44 @@ def translate_ui_to_backend_params(ui_params: Dict[str, Any]) -> Tuple[Dict[str,
         mw_lane = ui_params['mw_lane']
         translation_log.append(f"ℹ️ mw_lane {mw_lane} → ignored (backend uses automatic ladder detection)")
 
+    # Handle manual lane boundaries
+    if 'manual_lane_boundaries' in ui_params:
+        lane_boundaries = ui_params['manual_lane_boundaries']
+        try:
+            if lane_boundaries and len(lane_boundaries) > 0:
+                # Convert SimpleLaneBoundary objects to (x_start, x_end) tuples if needed
+                if hasattr(lane_boundaries[0], 'left_px') and hasattr(lane_boundaries[0], 'right_px'):
+                    # Convert from SimpleLaneBoundary format
+                    backend_params['manual_lane_boundaries'] = [
+                        (int(boundary.left_px), int(boundary.right_px))
+                        for boundary in lane_boundaries
+                    ]
+                    translation_log.append(f"✅ manual_lane_boundaries → {len(lane_boundaries)} manual lanes specified (SimpleLaneBoundary format)")
+                elif isinstance(lane_boundaries[0], (list, tuple)) and len(lane_boundaries[0]) >= 2:
+                    # Assume already in tuple format
+                    backend_params['manual_lane_boundaries'] = [
+                        (int(boundary[0]), int(boundary[1])) for boundary in lane_boundaries
+                    ]
+                    translation_log.append(f"✅ manual_lane_boundaries → {len(lane_boundaries)} lanes (tuple format)")
+                else:
+                    # Invalid format, skip manual boundaries
+                    translation_log.append(f"⚠️ manual_lane_boundaries → invalid format {type(lane_boundaries[0])}, using automatic detection")
+            else:
+                translation_log.append("ℹ️ manual_lane_boundaries → None (using automatic detection)")
+        except Exception as e:
+            translation_log.append(f"⚠️ manual_lane_boundaries → conversion error: {str(e)}, using automatic detection")
+
     # Pass through all other parameters that are recognized by the backend Params dataclass
     known_backend_params = {
         'min_lanes', 'max_lanes', 'comb', 'num_ladders', 'ladder_min_bands',
-        'bg_radius', 'invert'
+        'bg_radius', 'invert', 'manual_lane_boundaries'
     }
 
     for key, value in ui_params.items():
         if key in known_backend_params:
             backend_params[key] = value
             translation_log.append(f"✅ {key} {value} → passed through")
-        elif key not in ['gel_type', 'conf_threshold', 'mw_lane']:
+        elif key not in ['gel_type', 'conf_threshold', 'mw_lane', 'manual_lane_boundaries']:
             translation_log.append(f"⚠️ Unknown parameter '{key}' → ignored")
 
     return backend_params, translation_log

@@ -16,6 +16,7 @@ class Params:
     ladder_min_score: float = 0.35
     bg_radius: int = 30
     invert: str = "auto"
+    manual_lane_boundaries: Optional[list] = None
 
 def observe(res) -> Dict[str, Any]:
     return summarize(res)
@@ -35,7 +36,8 @@ def run(image: Path, p: Params, retries: int=1, use_llm: bool=False):
     res = analyze_image(image, gel_type=gel_type, invert_mode=p.invert,
                         min_lanes=p.min_lanes, max_lanes=p.max_lanes, comb=p.comb,
                         num_ladders=p.num_ladders, ladder_min_bands=p.ladder_min_bands,
-                        ladder_min_score=p.ladder_min_score, bg_radius=p.bg_radius)
+                        ladder_min_score=p.ladder_min_score, bg_radius=p.bg_radius,
+                        manual_lane_boundaries=p.manual_lane_boundaries)
     obs = observe(res)
     acc = acceptance_default(p.modality, res)
 
@@ -51,7 +53,8 @@ def run(image: Path, p: Params, retries: int=1, use_llm: bool=False):
         res = analyze_image(image, gel_type=gel_type, invert_mode=p.invert,
                             min_lanes=p.min_lanes, max_lanes=p.max_lanes, comb=p.comb,
                             num_ladders=p.num_ladders, ladder_min_bands=p.ladder_min_bands,
-                            ladder_min_score=p.ladder_min_score, bg_radius=p.bg_radius)
+                            ladder_min_score=p.ladder_min_score, bg_radius=p.bg_radius,
+                            manual_lane_boundaries=p.manual_lane_boundaries)
         obs = observe(res)
         acc = acceptance_default(p.modality, res)
         attempt += 1

@@ -321,10 +321,34 @@ def cached_analyze_gel(_image_path: str, _params_dict: Dict[str, Any], _retries:
 
 # ---- Band Assist helpers ----
 
+def get_current_lane_calibration():
+    """Extract current lane calibration from session state.
+
+    Returns:
+        Dict containing lane calibration data including boundaries,
+        calibration points, and status.
+    """
+    return {
+        'lane_boundaries': st.session_state.get('res_lane_boundaries'),
+        'calibration_lane1': st.session_state.get('calibration_lane1'),
+        'calibration_lane2': st.session_state.get('calibration_lane2'),
+        'has_manual_calibration': bool(st.session_state.get('res_lane_boundaries'))
+    }
 
 
-def _try_run_ad_band_assist(pil_img: Image.Image, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+
+def _try_run_ad_band_assist(
+    pil_img: Image.Image,
+    params: Dict[str, Any],
+    lane_boundaries: Optional[List] = None
+) -> Optional[Dict[str, Any]]:
     """Run AutoDense lanes/bands pipeline; resilient to signature changes across versions.
+
+    Args:
+        pil_img: PIL Image to analyze
+        params: Analysis parameters
+        lane_boundaries: Optional manual lane boundaries from calibration
+
     Returns dict: {lanes, bands, overlay, errors}
     """
     out: Dict[str, Any] = {"lanes": [], "bands": [], "overlay": None, "errors": []}
@@ -340,6 +364,15 @@ def _try_run_ad_band_assist(pil_img: Image.Image, params: Dict[str, Any]) -> Opt
             base = Path(tmp.name)
 
         kwargs = dict(params or {})
+
+        # Add manual lane boundaries if provided
+        if lane_boundaries is not None:
+            # Debug: print the type and content of lane_boundaries
+            print(f"DEBUG: lane_boundaries type: {type(lane_boundaries)}")
+            if lane_boundaries and len(lane_boundaries) > 0:
+                print(f"DEBUG: first boundary type: {type(lane_boundaries[0])}")
+                print(f"DEBUG: first boundary: {lane_boundaries[0]}")
+            kwargs['manual_lane_boundaries'] = lane_boundaries
 
         # Use translation layer for safe parameter handling
         ad_params = None
@@ -2062,7 +2095,16 @@ with tab2:
                     st.success("✅ Parameters validated successfully")
                     for explanation in explanations:
                         st.text(explanation)
-            res = _try_run_ad_band_assist(st.session_state.res_uploaded_image, params)
+            # Get current lane calibration data
+            lane_calibration = get_current_lane_calibration()
+            print(f"DEBUG: lane_calibration from get_current_lane_calibration: {lane_calibration}")
+            boundaries = lane_calibration['lane_boundaries']
+            print(f"DEBUG: extracted boundaries: {boundaries}, type: {type(boundaries)}")
+            res = _try_run_ad_band_assist(
+                st.session_state.res_uploaded_image,
+                params,
+                lane_boundaries=boundaries
+            )
             st.session_state.res_ba_errors = res.get("errors", [])
             st.session_state.res_ba_lanes_rows = res.get("lanes", [])
             st.session_state.res_ba_bands_rows = res.get("bands", [])
@@ -2270,7 +2312,13 @@ with tab2:
                             "conf_threshold": float(st.session_state.params_conf_threshold),
                             "mw_lane": int(st.session_state.params_mw_lane),
                         }
-                        res_ba = _try_run_ad_band_assist(img_for_pipeline, ba_params)
+                        # Get current lane calibration data
+                        lane_calibration = get_current_lane_calibration()
+                        res_ba = _try_run_ad_band_assist(
+                            img_for_pipeline,
+                            ba_params,
+                            lane_boundaries=lane_calibration['lane_boundaries']
+                        )
                         st.session_state.res_ba_errors = res_ba.get("errors", [])
                         st.session_state.res_ba_lanes_rows = res_ba.get("lanes", [])
                         st.session_state.res_ba_bands_rows = res_ba.get("bands", [])
