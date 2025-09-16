@@ -1,0 +1,6 @@
+# Default colony-counting parameters (starter template)
+segmentation:
+  threshold: 0.30       # 0..1; used by runner/spec grid
+  min_area: 30          # pixels
+post:
+  merge_distance_px: 5  # pixels

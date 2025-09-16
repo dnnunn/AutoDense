@@ -1,6 +1,72 @@
 import sys
+import os
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Comprehensive environment initialization
+def initialize_autodense_environment():
+    """Initialize all required environment variables and paths for AutoDense."""
+
+    # 1. Set up Python path for autodense imports
+    project_root = Path(__file__).parent.parent
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+    # 2. Load environment variables from .env file
+    env_file = project_root / ".env"
+    if env_file.exists():
+        with open(env_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    if key and value:
+                        os.environ[key] = value
+
+    # 3. Load API key from api_properties.config as fallback
+    api_config = project_root / "api_properties.config"
+    if api_config.exists() and not os.environ.get('OPENAI_API_KEY'):
+        with open(api_config, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith('OPENAI_API_KEY='):
+                    key, value = line.split('=', 1)
+                    if value:
+                        os.environ['OPENAI_API_KEY'] = value
+                        break
+
+    # 4. Set required environment variables if not already set
+    defaults = {
+        'STREAMLIT_BROWSER_GATHER_USAGE_STATS': 'false',
+        'PYTHONPATH': str(project_root),
+        'LOG_LEVEL': 'INFO',
+        'DEBUG': 'false'
+    }
+
+    for key, value in defaults.items():
+        if key not in os.environ:
+            os.environ[key] = value
+
+    # 5. Verify critical dependencies are available
+    try:
+        import streamlit
+        import numpy
+        import PIL
+        dependencies_ok = True
+    except ImportError as e:
+        dependencies_ok = False
+        print(f"WARNING: Missing dependency: {e}")
+
+    return {
+        'project_root': str(project_root),
+        'python_path_set': str(project_root) in sys.path,
+        'env_file_loaded': env_file.exists(),
+        'api_config_loaded': api_config.exists(),
+        'openai_key_available': bool(os.environ.get('OPENAI_API_KEY')),
+        'dependencies_ok': dependencies_ok
+    }
+
+# Initialize environment before any other imports
+_env_status = initialize_autodense_environment()
 
 import base64, json, re
 from typing import Dict, Any, Optional, Tuple, List, Union, Callable
@@ -376,6 +442,32 @@ with col2:
 
 st.markdown("*Professional gel electrophoresis analysis for bench scientists*")
 st.markdown("Built with accessibility, performance, and scientific workflows in mind.")
+
+# Display environment initialization status
+def render_environment_status():
+    """Display the automatic environment configuration status."""
+    if st.checkbox("🔧 Show Environment Status", value=False, help="View automatic environment configuration"):
+        with st.expander("Environment Configuration Details", expanded=True):
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric("Project Root", "✅ Detected" if _env_status['python_path_set'] else "❌ Missing")
+                st.metric("Dependencies", "✅ Available" if _env_status['dependencies_ok'] else "❌ Missing")
+
+            with col2:
+                st.metric("Environment File", "✅ Loaded" if _env_status['env_file_loaded'] else "❌ Missing")
+                st.metric("API Config", "✅ Found" if _env_status['api_config_loaded'] else "❌ Missing")
+
+            with col3:
+                st.metric("OpenAI API Key", "✅ Configured" if _env_status['openai_key_available'] else "❌ Missing")
+                st.metric("AutoDense Imports", "✅ Working" if HAS_PREPROCESS else "❌ Failed")
+
+            if not all([_env_status['dependencies_ok'], _env_status['openai_key_available']]):
+                st.warning("⚠️ Some components may not function properly. Check configuration files.")
+            else:
+                st.success("🚀 All environment components properly configured!")
+
+render_environment_status()
 
 # Accessibility: Skip links for keyboard navigation
 st.markdown("""

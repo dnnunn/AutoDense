@@ -1,0 +1,4 @@
+# Default SDS-PAGE parameters (starter template)
+detection:
+  min_width: 12     # pixels
+  prominence: 0.30  # 0..1 relative

@@ -1,0 +1,7 @@
+# Default EtBr agarose parameters (starter template)
+pre:
+  denoise_strength: 0.25   # 0..1
+lane:
+  min_width: 12            # pixels
+band:
+  prominence: 0.25         # 0..1

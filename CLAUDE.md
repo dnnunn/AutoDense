@@ -12,10 +12,13 @@ every session.
 
 **Quick Commands (MEMORIZE):**
 ```bash
-# Start every session with (SINGLE COMMAND):
-cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense && source .venv/bin/activate && python verify_environment.py
+# Start AutoDense (SINGLE COMMAND - AUTOMATIC ENVIRONMENT SETUP):
+cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense && source .venv/bin/activate && python start_autodense.py
 
-# For UI work (SINGLE COMMAND):
+# Alternative startup with custom port:
+python start_autodense.py --port 8501
+
+# For UI testing:
 cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense && source .venv/bin/activate && cd ui && python -m pytest tests/ -v
 
 # For Java work:
@@ -23,9 +26,12 @@ cd /Users/davidnunn/Desktop/Apps/BetterDairy/AutoDense/autodense/plugin && mvn c
 ```
 
 **Common Issues Fixed:**
+- ✅ **Environment Setup:** Fully automated via `start_autodense.py` script
+- ✅ **OpenAI API Key:** Automatically loaded from `.env` and `api_properties.config`
+- ✅ **Python Path:** Auto-configured for autodense imports from any directory
+- ✅ **Lane Calibration:** Resolved import issues and overlay sizing problems
 - ❌ `python: command not found` → Activate `.venv` first
 - ❌ `pytest: command not found` → Use `python -m pytest`
-- ❌ `ModuleNotFoundError` → `cd ui/` first for UI work
 
 ---
 
@@ -248,10 +254,35 @@ For a more detailed description of the Architecture see:
   - With `--no-exit`: Returns normally, allowing continued execution for optimization cycles
   - Error handling: Throws RuntimeException instead of `System.exit(1)` when `--no-exit` is used
 
+### 🚀 Environment Automation (September 2025)
+
+**MAJOR:** Complete elimination of manual environment setup via automatic configuration system:
+
+* **`start_autodense.py`** - One-command startup script with full environment detection
+* **Built-in environment initialization** - Streamlit app auto-loads `.env`, `api_properties.config`, Python paths
+* **Environment status dashboard** - Real-time configuration validation with green/red status indicators
+* **Zero manual configuration** - No more `export OPENAI_API_KEY`, `PYTHONPATH` setup, or port conflicts
+
+**New Startup Paradigm:**
+```bash
+# BEFORE (manual setup required):
+export OPENAI_API_KEY="..." && source .env && source .venv/bin/activate && cd ui && STREAMLIT_...
+
+# NOW (fully automatic):
+source .venv/bin/activate && python start_autodense.py
+```
+
+**Benefits:**
+- ✅ Eliminates environment troubleshooting time
+- ✅ Consistent configuration across all sessions
+- ✅ Real-time environment validation in UI
+- ✅ Automatic API key detection from multiple sources
+- ✅ Optimal Streamlit configuration defaults
+
 ### 🎯 Next Targets
 
 1. **Validate autotune performance** on representative gel/colony/PCR datasets
-2. **Implement result caching** for optimization workflow efficiency  
+2. **Implement result caching** for optimization workflow efficiency
 3. **Extend challenge packs** with additional analysis scenarios
 4. **Performance benchmarking** of optimization vs legacy modes
 5. **User interface integration** for optimization controls and feedback
