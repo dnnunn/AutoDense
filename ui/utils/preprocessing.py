@@ -141,48 +141,95 @@ def openai_guided_preprocess(pil_img):
 
     preprocessing_system = _load_prompt(
         "preprocessing.system.md",
-        fallback="You are a scientific image preprocessing expert. Analyze the gel electrophoresis image and suggest optimal preprocessing parameters."
+        fallback="You are a scientific image preprocessing expert. Analyze the gel electrophoresis image and suggest optimal preprocessing parameters in JSON format."
     )
 
-    resp = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": preprocessing_system},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "Please analyze this gel image and recommend preprocessing parameters."},
-                    {"type": "image_url", "image_url": {"url": img_to_data_url(pil_img)}}
-                ]
-            }
-        ],
-        max_tokens=300,
-        temperature=0.1
-    )
-    text = resp.choices[0].message.content
-    obj = extract_json(text)
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": preprocessing_system},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Please analyze this gel image and recommend preprocessing parameters. Return ONLY valid JSON with no additional text."},
+                        {"type": "image_url", "image_url": {"url": img_to_data_url(pil_img)}}
+                    ]
+                }
+            ],
+            max_tokens=500,  # Increased for more complete responses
+            temperature=0.1
+        )
+        text = resp.choices[0].message.content
+
+        # Enhanced JSON extraction with better error handling
+        obj = extract_json(text)
+
+        # Check if we got a fallback response due to parsing error
+        if obj.get("error"):
+            print(f"AI JSON parsing warning: {obj['error']}")
+            # Continue with fallback parameters
+
+    except Exception as e:
+        print(f"OpenAI API error: {e}")
+        # Provide fallback response for any API errors
+        obj = {
+            "error": f"API error: {str(e)}",
+            "mode": "fallback_api_error",
+            "ops": [],
+            "params": {
+                "polarity": "bands_dark",
+                "prominence_frac": 0.06,
+                "min_peak_distance_px": 12,
+                "baseline": {"method": "percentile", "window_px": 24, "quantile": 0.12},
+                "mw_lane": 0,
+                "lane_count_expected": 8
+            },
+            "ai_confidence": 0.0,
+            "ai_reasoning": f"Fallback due to API error: {str(e)}"
+        }
 
     # Apply minimal safe ops locally; leave heavy steps to your pipeline
     img2 = pil_img.copy()
     try:
         ops = obj.get("ops") or []
         for step in ops:
-            (k, v), = step.items()
-            if k == "resize":
-                w, h = v
-                img2 = img2.resize((w, h), Image.Resampling.LANCZOS)
-            elif k == "auto_contrast":
-                img2 = ImageOps.autocontrast(img2)
-            elif k == "equalize":
-                img2 = ImageOps.equalize(img2)
-    except Exception:
-        pass
+            if not isinstance(step, dict):
+                continue
+            # Handle both single key-value and multiple key operations
+            for k, v in step.items():
+                if k == "resize":
+                    if isinstance(v, list) and len(v) == 2:
+                        w, h = v
+                        img2 = img2.resize((w, h), Image.Resampling.LANCZOS)
+                elif k == "auto_contrast" and v:
+                    img2 = ImageOps.autocontrast(img2)
+                elif k == "equalize" and v:
+                    img2 = ImageOps.equalize(img2)
+                elif k == "invert" and v:
+                    img2 = ImageOps.invert(img2)
+                # Add more operations as needed
+    except Exception as e:
+        print(f"Warning: Error applying preprocessing ops: {e}")
+        # Continue with original image if preprocessing fails
 
     # Mock object to match expected interface
     class PreprocessResult:
-        def __init__(self, image, mode, params):
+        def __init__(self, image, mode, params, error_info=None):
             self.image = image
             self.mode = mode
             self.params = params
+            self.error_info = error_info
 
-    return PreprocessResult(img2, obj.get("mode", "chatgpt"), obj.get("params", {}))
+    # Determine mode based on response
+    if obj.get("error"):
+        mode = f"ChatGPT-4.1 (fallback): {obj.get('ai_reasoning', 'parsing error')}"
+    else:
+        mode = f"ChatGPT-4.1: {obj.get('ai_reasoning', 'analysis complete')}"
+
+    return PreprocessResult(
+        img2,
+        mode,
+        obj.get("params", {}),
+        obj.get("error")
+    )

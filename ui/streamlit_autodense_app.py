@@ -68,7 +68,7 @@ def initialize_autodense_environment():
 # Initialize environment before any other imports
 _env_status = initialize_autodense_environment()
 
-import base64, json, re
+import base64, json, re, tempfile
 from typing import Dict, Any, Optional, Tuple, List, Union, Callable
 from PIL import Image, ImageDraw, ImageOps
 
@@ -332,7 +332,13 @@ def _try_run_ad_band_assist(pil_img: Image.Image, params: Dict[str, Any]) -> Opt
         out["errors"].append("AutoDense analysis pipeline is not available in this environment.")
         return out
     try:
-        base = pil_img.convert("RGB")
+        base_image = pil_img.convert("RGB")
+
+        # Save PIL Image to temporary file for backend processing
+        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+            base_image.save(tmp.name, format='JPEG', quality=95)
+            base = Path(tmp.name)
+
         kwargs = dict(params or {})
 
         # Use translation layer for safe parameter handling
@@ -346,67 +352,153 @@ def _try_run_ad_band_assist(pil_img: Image.Image, params: Dict[str, Any]) -> Opt
                 # Store explanation for debugging/logging
                 out["parameter_translation"] = translation_explanation
 
-        # Try a variety of call patterns
+        # Try only valid call patterns using translated parameters
         attempts = []
         if ad_params is not None:
             attempts.append(lambda: ad_pipeline_run(image=base, p=ad_params))        # run(image=..., p=...)
-            # Removed problematic positional call - use named parameters instead
-        attempts.append(lambda: ad_pipeline_run(base, **kwargs))                    # run(image, **kwargs)
-        attempts.append(lambda: ad_pipeline_run(image=base, **kwargs))              # run(image=..., **kwargs)
-        if ad_params is not None:
-            attempts.append(lambda: ad_pipeline_run(image=base, params=ad_params))  # run(image=..., params=ADParams)
             attempts.append(lambda: ad_pipeline_run(p=ad_params, image=base))       # run(p=..., image=...)
-        attempts.append(lambda: ad_pipeline_run(**({**kwargs, "image": base})))     # run(**{..., image})
-        # REMOVED: attempts.append(lambda: ad_pipeline_run(base)) - this causes "missing 1 required positional argument: 'p'" error
+        else:
+            # If ADParams creation failed, we can't proceed since run() requires a Params object
+            out["errors"].append("Cannot call backend analysis: ADParams not available and parameter translation failed")
 
         res = None
+        params_used = None
+        observations = None
         errors = []
-        for attempt in attempts:
-            try:
-                res = attempt()
-                break
-            except Exception as e:
-                errors.append(str(e))
+
+        # Only try to run if we have valid attempts
+        if attempts:
+            for attempt in attempts:
+                try:
+                    # Backend returns tuple: (analysis_result, params, observations)
+                    pipeline_result = attempt()
+                    if isinstance(pipeline_result, tuple) and len(pipeline_result) == 3:
+                        res, params_used, observations = pipeline_result
+                    else:
+                        # Fallback for backward compatibility
+                        res = pipeline_result
+                    break
+                except Exception as e:
+                    errors.append(str(e))
 
         if res is None:
-            out["errors"].append(errors[-1] if errors else "Unknown pipeline call error")
+            if errors:
+                out["errors"].append(errors[-1])
+            else:
+                # This handles the case where ad_params is None and no attempts were made
+                out["errors"].append("Band detection failed: no valid call patterns available")
             return out
 
-        # Normalize to simple dicts
-        rdict = obj_to_dict(res)
+        # Store additional pipeline information for debugging
+        if observations is not None:
+            out["observations"] = obj_to_dict(observations)
+        if params_used is not None:
+            out["params_used"] = obj_to_dict(params_used)
+
+        # Normalize analysis result to simple dicts
+        try:
+            rdict = obj_to_dict(res)
+        except Exception as e:
+            out["errors"].append(f"Failed to process analysis result: {str(e)}")
+            return out
+        # Extract lanes with robust error handling
         lanes_src = rdict.get("lanes") or rdict.get("detected_lanes") or []
         lanes = []
-        for idx, ln in enumerate(lanes_src):
-            d = obj_to_dict(ln)
-            d.setdefault("lane_index", idx)
-            lanes.append(d)
+        try:
+            for idx, ln in enumerate(lanes_src):
+                if ln is None:
+                    continue
+                try:
+                    d = obj_to_dict(ln)
+                    d.setdefault("lane_index", idx)
+                    lanes.append(d)
+                except Exception as lane_error:
+                    out["errors"].append(f"Failed to process lane {idx}: {lane_error}")
+        except Exception as lanes_error:
+            out["errors"].append(f"Failed to process lanes: {lanes_error}")
+            lanes = []  # Ensure lanes is always a list
 
+        # Extract bands with robust error handling
         bands = []
-        for li, ln in enumerate(lanes_src):
-            d = obj_to_dict(ln)
-            for bi, b in enumerate(d.get("bands") or d.get("detected_bands") or []):
-                bd = obj_to_dict(b)
-                bd.setdefault("lane_index", d.get("lane_index", li))
-                bd.setdefault("band_index", bi)
-                bands.append(bd)
+        try:
+            for li, ln in enumerate(lanes_src):
+                if ln is None:
+                    continue
+                try:
+                    d = obj_to_dict(ln)
+                    bands_list = d.get("bands") or d.get("detected_bands") or []
+                    for bi, b in enumerate(bands_list):
+                        if b is None:
+                            continue
+                        try:
+                            bd = obj_to_dict(b)
+                            bd.setdefault("lane_index", d.get("lane_index", li))
+                            bd.setdefault("band_index", bi)
+                            bands.append(bd)
+                        except Exception as band_error:
+                            out["errors"].append(f"Failed to process band {bi} in lane {li}: {band_error}")
+                except Exception as lane_bands_error:
+                    out["errors"].append(f"Failed to process bands for lane {li}: {lane_bands_error}")
+        except Exception as bands_error:
+            out["errors"].append(f"Failed to process bands: {bands_error}")
+            bands = []  # Ensure bands is always a list
 
         # Overlay (official drawer if available, else fallback)
         overlay_bytes = None
         try:
-            if draw_ad_overlay:
-                over = draw_ad_overlay(base, lanes=lanes, bands=bands)  # type: ignore
-                if isinstance(over, Image.Image):
-                    overlay_bytes = to_png_bytes(over)
+            if draw_ad_overlay and res:
+                # Backend draw_overlay saves to file and returns None
+                # Create a temporary path for the overlay image
+                with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_overlay:
+                    tmp_overlay_path = Path(tmp_overlay.name)
+
+                # Call draw_overlay - it saves to file and returns None
+                draw_ad_overlay(base_image.copy(), res, tmp_overlay_path)  # type: ignore
+
+                # Read the saved overlay image
+                try:
+                    if tmp_overlay_path.exists():
+                        over = Image.open(tmp_overlay_path)
+                        overlay_bytes = to_png_bytes(over)
+                        over.close()  # Close file handle
+                except Exception as read_error:
+                    out["errors"].append(f"Failed to read overlay file: {read_error}")
+
+                # Clean up temporary overlay path
+                try:
+                    tmp_overlay_path.unlink(missing_ok=True)
+                except Exception:
+                    pass  # Ignore cleanup errors
+
             if overlay_bytes is None:
-                fallback = overlay_fallback(base, lanes, bands)
+                fallback = overlay_fallback(base_image, lanes, bands)
                 overlay_bytes = to_png_bytes(fallback)
         except Exception as e:
             out["errors"].append(f"Overlay error: {e}")
+            # Ensure fallback overlay is created even on error
+            try:
+                fallback = overlay_fallback(base_image, lanes, bands)
+                overlay_bytes = to_png_bytes(fallback)
+            except Exception:
+                pass  # If even fallback fails, overlay_bytes stays None
 
         out.update({"lanes": lanes, "bands": bands, "overlay": overlay_bytes})
+
+        # Clean up temporary file
+        try:
+            base.unlink(missing_ok=True)
+        except Exception:
+            pass  # Ignore cleanup errors
+
         return out
     except Exception as e:
         out["errors"].append(str(e))
+        # Clean up temporary file in case of error
+        try:
+            if 'base' in locals() and isinstance(base, Path):
+                base.unlink(missing_ok=True)
+        except Exception:
+            pass  # Ignore cleanup errors
         return out
 
 # Page configuration
