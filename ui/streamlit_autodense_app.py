@@ -760,6 +760,83 @@ button:focus, .stSelectbox:focus, .stSlider:focus, .stNumberInput:focus {
     margin: 0.5rem 0;
 }
 
+.compact-card {
+    background: #f6f9ff;
+    border: 1px solid #d7e3ff;
+    border-radius: 6px;
+    padding: 0.6rem 0.9rem;
+    margin-bottom: 0.6rem;
+}
+
+.compact-card .card-title {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #5c6c80;
+    margin-bottom: 0.2rem;
+}
+
+.compact-card .card-value {
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 0.1rem;
+}
+
+.compact-card .card-subtext {
+    font-size: 0.8rem;
+    color: #6c7a90;
+    margin: 0;
+}
+
+.hint-text {
+    font-size: 0.8rem;
+    color: #5c6c80;
+    margin-top: 0.2rem;
+}
+
+.inline-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(0, 123, 255, 0.08);
+    color: #0056b3;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.status-panel {
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin: 0.5rem 0;
+    border: 1px solid transparent;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.95rem;
+}
+
+.status-panel.success {
+    background: #e6f4ea;
+    border-color: #a8d5b8;
+    color: #1e6c3c;
+}
+
+.status-panel.error {
+    background: #fdecea;
+    border-color: #f5c2c7;
+    color: #842029;
+}
+
+.status-panel .status-title {
+    font-weight: 600;
+}
+
+.status-panel .status-subtext {
+    opacity: 0.85;
+}
+
 /* Toast notification positioning */
 .stToast {
     z-index: 1001;
@@ -1133,7 +1210,7 @@ def init_session_state() -> None:
         # Parameters
         'params_gel_type': 'sds_page',
         'params_n_lanes': 12,
-        'params_preprocessing_mode': 'AI guarded (recommended)',
+        'params_preprocessing_mode': 'Auto (heuristic)',
         'params_conf_threshold': 0.30,
         'params_mw_lane': 1,
         'params_ladder_type': 'auto',
@@ -1567,15 +1644,17 @@ def render_step_upload_and_calibration() -> None:
         points = st.session_state.res_calibration_points
         
         if len(points) >= 2:
-            
+
             if len(points) > 2:
                 st.info(f"ℹ️ Using first two points only (ignoring {len(points) - 2} extra points)")
-            
+
+            metrics_container = st.container()
+
             # Lane number assignment with smart defaults and validation
             st.markdown("#### 🏷️ Lane Number Assignment")
-            
+
             col1, col2 = st.columns(2)
-            
+
             with col1:
                 lane1 = st.number_input(
                     "MW standard lane number:",
@@ -1583,28 +1662,28 @@ def render_step_upload_and_calibration() -> None:
                     key="calibration_lane1",
                     help="Lane number for the first calibration point (typically lane 1 for MW standard)"
                 )
-                
+
                 # Visual feedback for lane 1
                 (x1, y1) = points[0]
                 st.caption(f"🎯 Point 1 at ({x1}, {y1}) → Lane {lane1}")
-            
+
             with col2:
                 # Smart default for lane 2 (avoid lane 1, prefer far lanes)
                 default_lane2 = min(n_lanes, max(8, n_lanes - 1))
                 if default_lane2 == lane1:
                     default_lane2 = max(1, min(n_lanes, lane1 + 6))
-                
+
                 lane2 = st.number_input(
                     "Reference lane number:",
                     min_value=1, max_value=n_lanes, value=default_lane2,
-                    key="calibration_lane2", 
+                    key="calibration_lane2",
                     help="Lane number for the second calibration point (choose a lane far from the first)"
                 )
-                
+
                 # Visual feedback for lane 2
                 (x2, y2) = points[1]
                 st.caption(f"🎯 Point 2 at ({x2}, {y2}) → Lane {lane2}")
-            
+
             # Validation and calibration execution
             if lane1 == lane2:
                 st.error("❌ **Validation Error:** Lane numbers must be different")
@@ -1612,53 +1691,54 @@ def render_step_upload_and_calibration() -> None:
             else:
                 # Perform calibration with error handling
                 calibration_result = perform_calibration()
-                
+
                 if calibration_result:
                     calibration, boundaries = calibration_result
-                    
-                    # Display calibration metrics with enhanced formatting
-                    st.markdown("#### 📏 Calibration Metrics")
-                    
-                    col1, col2, col3, col4 = st.columns(4)
-                    
-                    with col1:
-                        spacing = calibration.lane_spacing_px
-                        st.metric(
-                            "Lane Spacing",
-                            f"{spacing:.1f} px",
-                            help="Distance between adjacent lane centers"
-                        )
-                        if spacing < 20:
-                            st.caption("⚠️ Very narrow lanes")
-                        elif spacing > 200:
-                            st.caption("ℹ️ Wide-spaced lanes")
-                        else:
-                            st.caption("✅ Normal spacing")
-                    
-                    with col2:
-                        width = calibration.lane_width_px
-                        st.metric(
-                            "Lane Width",
-                            f"{width:.1f} px",
-                            help="Calculated width of each lane (90% of spacing)"
-                        )
-                    
-                    with col3:
-                        total_span = abs(boundaries[-1].right_px - boundaries[0].left_px)
-                        st.metric(
-                            "Total Gel Width",
-                            f"{total_span:.0f} px",
-                            help="Span covered by all lanes"
-                        )
-                    
-                    with col4:
-                        gel_coverage = (total_span / w) * 100
-                        st.metric(
-                            "Image Coverage",
-                            f"{gel_coverage:.1f}%",
-                            help="Percentage of image width used by lanes"
-                        )
-                    
+
+                    with metrics_container:
+                        # Display calibration metrics directly beneath the gel image
+                        st.markdown("#### 📏 Calibration Metrics")
+
+                        col1, col2, col3, col4 = st.columns(4)
+
+                        with col1:
+                            spacing = calibration.lane_spacing_px
+                            st.metric(
+                                "Lane Spacing",
+                                f"{spacing:.1f} px",
+                                help="Distance between adjacent lane centers"
+                            )
+                            if spacing < 20:
+                                st.caption("⚠️ Very narrow lanes")
+                            elif spacing > 200:
+                                st.caption("ℹ️ Wide-spaced lanes")
+                            else:
+                                st.caption("✅ Normal spacing")
+
+                        with col2:
+                            width = calibration.lane_width_px
+                            st.metric(
+                                "Lane Width",
+                                f"{width:.1f} px",
+                                help="Calculated width of each lane (90% of spacing)"
+                            )
+
+                        with col3:
+                            total_span = abs(boundaries[-1].right_px - boundaries[0].left_px)
+                            st.metric(
+                                "Total Gel Width",
+                                f"{total_span:.0f} px",
+                                help="Span covered by all lanes"
+                            )
+
+                        with col4:
+                            gel_coverage = (total_span / w) * 100
+                            st.metric(
+                                "Image Coverage",
+                                f"{gel_coverage:.1f}%",
+                                help="Percentage of image width used by lanes"
+                            )
+
                     # Enhanced lane preview with quality assessment
                     st.markdown("#### 🔍 Lane Alignment Preview")
                     
@@ -1963,9 +2043,9 @@ def _render_analysis_inner() -> None:
     st.markdown('<div data-testid="preprocessing-section" role="region" aria-label="Preprocessing Configuration">', unsafe_allow_html=True)
     
     # Determine available preprocessing modes
-    mode_options = ["AI guarded (recommended)", "Manual", "Off"]
+    mode_options = ["Auto (heuristic)", "Manual", "Off"]
     mode_descriptions = {
-        "AI guarded (recommended)": "🧠 Automatic optimization based on image analysis metrics and gel electrophoresis principles",
+        "Auto (heuristic)": "🧠 Automatic optimization using AutoDense's built-in image heuristics",
         "Manual": "🛠️ Use custom preprocessing parameters with full control",
         "Off": "📷 Analyze raw image without any preprocessing"
     }
@@ -2002,19 +2082,17 @@ def _render_analysis_inner() -> None:
                 
                 api_key = get_openai_api_key()
                 if api_key:
-                    st.success("🧠 **ChatGPT-4.1 Ready** - Advanced AI analysis available")
-                    st.info(f"🔐 **API Key Status:** {mask_key_for_logging(api_key)}")
-                    
-                    # Scientific validation notice
-                    st.markdown("""
-                    <div class="info-panel">
-                    <strong>🧪 Scientific Validation Enabled:</strong><br>
-                    AI preprocessing decisions are validated against established gel electrophoresis principles.
-                    The system verifies that suggested optimizations improve image quality metrics relevant
-                    to band detection and quantification.
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
+                    st.markdown(
+                        f"""
+                        <div class="status-panel success">
+                            <div class="status-title">🧠 ChatGPT-4.1 Ready</div>
+                            <div class="status-subtext">Advanced AI analysis available</div>
+                            <div class="status-subtext">🔐 API Key: {mask_key_for_logging(api_key)}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
                     # Model configuration info
                     try:
                         from autodense.preprocess.openai_policy import OpenAIPreprocessingClient
@@ -2146,14 +2224,22 @@ def _render_analysis_inner() -> None:
     
     with col1:
         st.markdown("**🧬 Sample Type & Standards**")
-        
+
         # Derive modality from gel type
         modality = "sds" if st.session_state.params_gel_type == "sds_page" else "dna"
         gel_type_display = "Protein (SDS-PAGE)" if modality == "sds" else "DNA (Agarose + EtBr)"
-        
-        st.info(f"**Analysis Type:** {gel_type_display}")
-        st.caption(f"Derived from gel configuration: {st.session_state.params_gel_type}")
-        
+
+        st.markdown(
+            f"""
+            <div class="compact-card">
+                <div class="card-title">Analysis Type</div>
+                <div class="card-value">{gel_type_display}</div>
+                <p class="card-subtext">Derived from gel configuration: {st.session_state.params_gel_type}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
         # Molecular weight standard selection
         ladder_options = ["auto", "pageruler_10_180", "precision_plus"] if modality == "sds" else ["auto", "neb_1kb", "lambda_hindiii"]
         ladder_descriptions = {
@@ -2163,59 +2249,101 @@ def _render_analysis_inner() -> None:
             "neb_1kb": "🧬 NEB 1kb DNA Ladder",
             "lambda_hindiii": "🧬 Lambda DNA/HindIII"
         }
-        
-        ladder_type = st.selectbox(
-            "Molecular Weight Standard:",
-            ladder_options,
-            index=0,
-            help=f"Choose the MW standard used in your {modality.upper()} gel"
-        )
-        
+
+        st.caption("Molecular Weight Standard")
+        try:
+            ladder_type = st.selectbox(
+                "Molecular Weight Standard:",
+                ladder_options,
+                index=0,
+                help=f"Choose the MW standard used in your {modality.upper()} gel",
+                label_visibility="collapsed"
+            )
+        except TypeError:
+            ladder_type = st.selectbox(
+                "Molecular Weight Standard:",
+                ladder_options,
+                index=0,
+                help=f"Choose the MW standard used in your {modality.upper()} gel"
+            )
+
         if ladder_type in ladder_descriptions:
-            st.caption(f"📋 {ladder_descriptions[ladder_type]}")
-        
+            st.markdown(f"<div class='hint-text'>{ladder_descriptions[ladder_type]}</div>", unsafe_allow_html=True)
+
         st.session_state.params_ladder_type = ladder_type
-    
+
     with col2:
         st.markdown("**🔍 Detection Parameters**")
-        
-        # Band confidence threshold with intelligent defaults
-        conf_threshold = st.slider(
-            "Band Confidence Threshold:",
-            min_value=0.0, max_value=1.0, 
-            value=st.session_state.params_conf_threshold, 
-            step=0.01,
-            help="Minimum confidence required to report a band (higher = more stringent)"
-        )
-        st.session_state.params_conf_threshold = conf_threshold
-        
-        # Confidence level guidance
-        if conf_threshold < 0.2:
-            st.caption("⚠️ Very permissive (may include noise)")
-        elif conf_threshold < 0.5:
-            st.caption("✅ Standard setting (good sensitivity)")
-        elif conf_threshold < 0.8:
-            st.caption("🎯 Conservative (high precision)")
-        else:
-            st.caption("🔒 Very strict (minimal false positives)")
-        
-        # MW standard lane specification
-        mw_lane = st.number_input(
-            "MW Standard Lane:",
-            min_value=1, max_value=st.session_state.params_n_lanes,
-            value=st.session_state.params_mw_lane,
-            step=1,
-            help="Lane number containing your molecular weight standards"
-        )
-        st.session_state.params_mw_lane = mw_lane
-        
-        # Visual validation of MW lane
-        if st.session_state.res_lane_boundaries:
-            total_lanes = len(st.session_state.res_lane_boundaries)
-            if 1 <= mw_lane <= total_lanes:
-                st.caption(f"✅ MW lane {mw_lane} of {total_lanes} configured lanes")
+
+        slider_col, lane_col = st.columns((3, 1))
+
+        with slider_col:
+            st.caption("Band Confidence Threshold")
+            try:
+                conf_threshold = st.slider(
+                    "Band Confidence Threshold:",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=st.session_state.params_conf_threshold,
+                    step=0.01,
+                    help="Minimum confidence required to report a band (higher = more stringent)",
+                    label_visibility="collapsed"
+                )
+            except TypeError:
+                conf_threshold = st.slider(
+                    "Band Confidence Threshold:",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=st.session_state.params_conf_threshold,
+                    step=0.01,
+                    help="Minimum confidence required to report a band (higher = more stringent)"
+                )
+            st.session_state.params_conf_threshold = conf_threshold
+
+            if conf_threshold < 0.2:
+                threshold_hint = "⚠️ Very permissive (may include noise)"
+            elif conf_threshold < 0.5:
+                threshold_hint = "✅ Standard setting (good sensitivity)"
+            elif conf_threshold < 0.8:
+                threshold_hint = "🎯 Conservative (high precision)"
             else:
-                st.caption(f"⚠️ MW lane {mw_lane} not in range (1-{total_lanes})")
+                threshold_hint = "🔒 Very strict (minimal false positives)"
+
+            st.markdown(f"<div class='hint-text'>{threshold_hint}</div>", unsafe_allow_html=True)
+
+        with lane_col:
+            st.caption("MW Standard Lane")
+            try:
+                mw_lane = st.number_input(
+                    "MW Standard Lane:",
+                    min_value=1,
+                    max_value=st.session_state.params_n_lanes,
+                    value=st.session_state.params_mw_lane,
+                    step=1,
+                    help="Lane number containing your molecular weight standards",
+                    label_visibility="collapsed"
+                )
+            except TypeError:
+                mw_lane = st.number_input(
+                    "MW Standard Lane:",
+                    min_value=1,
+                    max_value=st.session_state.params_n_lanes,
+                    value=st.session_state.params_mw_lane,
+                    step=1,
+                    help="Lane number containing your molecular weight standards"
+                )
+            st.session_state.params_mw_lane = mw_lane
+
+            lane_hint = ""
+            if st.session_state.res_lane_boundaries:
+                total_lanes = len(st.session_state.res_lane_boundaries)
+                if 1 <= mw_lane <= total_lanes:
+                    lane_hint = f"✅ MW lane {mw_lane} of {total_lanes} configured lanes"
+                else:
+                    lane_hint = f"⚠️ MW lane {mw_lane} not in range (1-{total_lanes})"
+
+            if lane_hint:
+                st.markdown(f"<div class='hint-text'>{lane_hint}</div>", unsafe_allow_html=True)
     
     # Advanced analysis options
     with st.expander("⚙️ Advanced Analysis Options", expanded=False):
@@ -2799,7 +2927,7 @@ def _render_analysis_inner() -> None:
                        - Ensure all parameters are valid
             
                     2. **Try Different Settings:**
-                       - Switch to "AI guarded" preprocessing mode
+                       - Switch to "Auto (heuristic)" preprocessing mode
                        - Reduce image size if very large
                        - Verify MW lane number is correct
             
