@@ -788,40 +788,225 @@ button:focus, .stSelectbox:focus, .stSlider:focus, .stNumberInput:focus {
 .loading-indicator {
     animation: pulse 1.5s ease-in-out infinite;
 }
+
+/* AGGRESSIVE WHITESPACE REDUCTION */
+
+/* Main layout - drastically reduce padding */
+.main .block-container {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    max-width: 1200px;
+}
+
+/* Remove excessive spacing from all Streamlit elements */
+.element-container {
+    margin-bottom: 0.25rem !important;
+    margin-top: 0 !important;
+}
+
+/* Compact section spacing */
+.stMarkdown {
+    margin-bottom: 0.5rem !important;
+}
+
+/* Reduce header spacing */
+h1, h2, h3, h4, h5, h6 {
+    margin-top: 0.5rem !important;
+    margin-bottom: 0.5rem !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+/* Compact form elements */
+.stSelectbox > div {
+    margin-bottom: 0.5rem !important;
+}
+
+.stNumberInput > div {
+    margin-bottom: 0.5rem !important;
+}
+
+.stButton > button {
+    margin-top: 0.5rem !important;
+    margin-bottom: 0.5rem !important;
+}
+
+/* Compact columns */
+.stColumns {
+    gap: 0.5rem !important;
+}
+
+/* Compact alerts and messages */
+.stAlert {
+    margin-top: 0.5rem !important;
+    margin-bottom: 0.5rem !important;
+    padding: 0.75rem !important;
+}
+
+/* Workflow progress indicator - compact */
+.workflow-progress {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background: white;
+    border-bottom: 1px solid #f0f2f6;
+    padding: 0.25rem 0;
+    margin: 0.5rem 0;
+}
+
+.progress-steps {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 600px;
+    margin: 0 auto;
+    gap: 0.5rem;
+}
+
+.progress-step {
+    display: flex;
+    align-items: center;
+    font-size: 0.85rem;
+    color: #666;
+    padding: 0.25rem 0.5rem;
+    white-space: nowrap;
+}
+
+.progress-step.active {
+    color: #ff4b4b;
+    font-weight: 600;
+    background: #fff5f5;
+    border-radius: 4px;
+}
+
+.progress-step.completed {
+    color: #00cc44;
+    font-weight: 500;
+}
+
+/* Sticky calibration controls - compact */
+.calibration-controls {
+    position: sticky;
+    top: 45px;
+    z-index: 999;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 0.75rem;
+    margin: 0.5rem 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Workflow section headers - compact */
+.workflow-section {
+    margin: 1rem 0 0.5rem 0;
+    padding: 0.75rem;
+    border-left: 3px solid #ff4b4b;
+    background: #fafafa;
+    border-radius: 0 6px 6px 0;
+}
+
+/* Compact expanders */
+.streamlit-expander {
+    margin: 0.5rem 0 !important;
+}
+
+.streamlit-expander > div > div {
+    padding: 0.5rem !important;
+}
+
+/* Compact file uploader */
+.stFileUploader {
+    margin: 0.5rem 0 !important;
+}
+
+.stFileUploader > div {
+    padding: 1rem !important;
+}
+
+/* Results prioritization - compact */
+.results-primary {
+    order: 1;
+    margin-bottom: 1rem;
+}
+
+.results-secondary {
+    order: 2;
+    margin-top: 0.5rem;
+}
+
+/* Auto-scroll behaviour */
+.scroll-target {
+    scroll-margin-top: 60px;
+}
+
+/* Navigation frame - compact */
+.stIframe {
+    margin: 0.5rem 0 !important;
+}
+
+/* Compact spacing for specific components */
+.stRadio > div {
+    gap: 0.25rem !important;
+}
+
+.stCheckbox {
+    margin: 0.25rem 0 !important;
+}
+
+/* Reduce gaps in status displays */
+.stSuccess, .stError, .stInfo, .stWarning {
+    margin: 0.25rem 0 !important;
+    padding: 0.5rem !important;
+}
 </style>
 
 """, unsafe_allow_html=True)
 
+# Navigation frame for workflow
+st.components.v1.iframe(
+    src="data:text/html;charset=utf-8,%3Chtml%3E%3Chead%3E%3Cstyle%3Ebody%7Bfont-family%3AArial%2Csans-serif%3Bpadding%3A8px%3Bmargin%3A0%3Bbackground%3A%23f8f9fa%3B%7D.nav%7Bdisplay%3Aflex%3Balign-items%3Acenter%3Bjustify-content%3Aspace-between%3Bgap%3A1rem%3B%7D.btn%7Bpadding%3A4px%2012px%3Bborder%3A1px%2520solid%2520%23ddd%3Bborder-radius%3A4px%3Bbackground%3Awhite%3Bcursor%3Apointer%3Bfont-size%3A12px%3B%7D.btn%3Adisabled%7Bopacity%3A0.5%3Bcursor%3Anot-allowed%3B%7D.info%7Bfont-size%3A11px%3Bcolor%3A%23666%3B%7D%3C/style%3E%3C/head%3E%3Cbody%3E%3Cdiv%2520class%3D%22nav%22%3E%3Cbutton%2520class%3D%22btn%22%2520disabled%3E%E2%AC%85%EF%B8%8F%2520Back%3C/button%3E%3Cspan%2520class%3D%22info%22%3EUse%2520Back/Next%2520to%2520move%2520through%2520Upload%2520%E2%86%92%2520Calibrate%2520%E2%86%92%2520Analyze%2520%E2%86%92%2520Results%3C/span%3E%3Cbutton%2520class%3D%22btn%22%3ENext%2520%E2%9E%A1%EF%B8%8F%3C/button%3E%3C/div%3E%3C/body%3E%3C/html%3E",
+    height=40
+)
+
 # Session state initialization with consistent patterns
-# --- Simple DOM-click helper to programmatically switch Streamlit tabs ---
+# --- Helper to smoothly scroll to workflow sections ---
+def scroll_to_section(section_id: str) -> None:
+    """Scroll the parent document to the element with the provided id."""
+    st.markdown(f"""
+    <script>
+    const target = document.getElementById('{section_id}');
+    if (target) {{
+        target.scrollIntoView({{
+            behavior: 'smooth',
+            block: 'start'
+        }});
+    }}
+    </script>
+    """, unsafe_allow_html=True)
+
+
+SECTION_ANCHORS = [
+    ("📸", "section-upload"),
+    ("🎯", "section-calibrate"),
+    ("🔬", "section-analyze"),
+    ("📊", "section-results"),
+]
+
+
 def goto_tab(label_prefix: str) -> None:
-    """Switch to a tab whose label starts with label_prefix (e.g., '🔬 Analysis').
-    Works by clicking the DOM tab button; resilient to Streamlit updates by matching role="tab".
-    """
-    components.html(f"""
-        <script>
-        const pref = `{label_prefix}`;
-        // Try a few times until the tablist renders
-        let tries = 0;
-        const iv = setInterval(() => {{
-            tries += 1;
-            const doc = window.parent.document;
-            const tabs = doc.querySelectorAll('[role="tab"]');
-            if (tabs && tabs.length) {{
-                for (const t of tabs) {{
-                    const txt = (t.innerText || t.textContent).trim();
-                    if (txt.startsWith(pref)) {{
-                        t.click();
-                        window.parent.scrollTo({{top: 0, behavior: 'smooth'}});
-                        clearInterval(iv);
-                        break;
-                    }}
-                }}
-            }}
-            if (tries > 40) clearInterval(iv);
-        }}, 75);
-        </script>
-    """, height=0)
+    """Preserve legacy navigation API by scrolling to progressive workflow sections."""
+    target_id = None
+    normalized = label_prefix.strip()
+    for prefix, section_id in SECTION_ANCHORS:
+        if normalized.startswith(prefix) or prefix.startswith(normalized):
+            target_id = section_id
+            break
+    if target_id is None:
+        target_id = "section-upload"
+    scroll_to_section(target_id)
 
 def init_session_state() -> None:
     """Initialize session state following ui_* params_* res_* convention"""
@@ -858,7 +1043,13 @@ def init_session_state() -> None:
         'res_ba_errors': [],
 
         # Control
-        'analysis_cancelled': False,}
+        'analysis_cancelled': False,
+
+        # Scroll flags
+        '_scrolled_to_calibrate': False,
+        '_scrolled_to_analyze': False,
+        '_scrolled_to_results': False,
+    }
     
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -924,86 +1115,49 @@ def handle_errors(operation_name: str) -> Callable[[Callable[..., Any]], Callabl
 
 
 
-# Sticky tabs CSS for better navigation - Updated for Streamlit 1.28+
-st.markdown("""
-<style>
-    /* Primary sticky tabs CSS */
-    .stTabs [data-baseweb="tab-list"] {
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 999 !important;
-        background: white !important;
-        padding: 10px 0 !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
-        border-bottom: 1px solid #e0e0e0 !important;
-        margin-bottom: 10px !important;
-    }
-    
-    /* Alternative selectors for different Streamlit versions */
-    .stTabs > div > div > div[role="tablist"] {
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 999 !important;
-        background: white !important;
-        padding: 10px 0 !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
-        border-bottom: 1px solid #e0e0e0 !important;
-        margin-bottom: 10px !important;
-    }
-    
-    /* Tab styling */
-    .stTabs [data-baseweb="tab"] {
-        padding: 8px 16px !important;
-        font-weight: 500 !important;
-    }
-    
-    .stTabs [data-baseweb="tab"]:hover {
-        background-color: #f0f2f6 !important;
-        border-radius: 4px !important;
-    }
-    
-    /* Force sticky positioning across browsers */
-    .stTabs [role="tablist"] {
-        position: -webkit-sticky !important;
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 999 !important;
-        background: white !important;
-        padding: 10px 0 !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
-        border-bottom: 1px solid #e0e0e0 !important;
-    }
-</style>
+# Workflow progress indicator
+upload_done = bool(st.session_state.get('res_uploaded_image'))
+calibration_done = bool(st.session_state.get('res_lane_boundaries'))
+analysis_done = bool(st.session_state.get('res_analysis_data'))
+
+def _progress_class(completed: bool, active: bool) -> str:
+    if completed:
+        return "progress-step completed"
+    if active:
+        return "progress-step active"
+    return "progress-step"
+
+step1_class = _progress_class(upload_done, not upload_done)
+step2_class = _progress_class(calibration_done, upload_done and not calibration_done)
+step3_class = _progress_class(analysis_done, calibration_done and not analysis_done)
+step4_class = _progress_class(analysis_done, analysis_done)
+
+st.markdown('<nav id="workflow-nav" aria-label="Workflow progress" class="workflow-progress" role="navigation">', unsafe_allow_html=True)
+st.markdown(f"""
+<div class="progress-steps">
+    <div class=\"{step1_class}\" id=\"step-upload\">
+        <span>1. Upload Image</span>
+    </div>
+    <div class=\"{step2_class}\" id=\"step-calibrate\">
+        <span>2. Calibrate Lanes</span>
+    </div>
+    <div class=\"{step3_class}\" id=\"step-analyze\">
+        <span>3. Analyze</span>
+    </div>
+    <div class=\"{step4_class}\" id=\"step-results\">
+        <span>4. Results</span>
+    </div>
+</div>
 """, unsafe_allow_html=True)
-
-# Accessibility: Add semantic navigation landmark
-st.markdown('<nav id="navigation" aria-label="Main navigation" role="navigation">', unsafe_allow_html=True)
-
-# Main interface with enhanced tab system
-tab1, tab2, tab3 = st.tabs([
-    "🎯 Lane Calibration",
-    "🔬 Analysis & Processing",
-    "📊 Results & Export"
-])
-
 st.markdown('</nav>', unsafe_allow_html=True)
-
-# --- Segmented navigation (radio) mirroring the tabs ---
-_seg_opts = ["🎯 Lane Calibration", "🔬 Analysis & Processing", "📊 Results & Export"]
-seg = st.radio("Workflow", _seg_opts, horizontal=True, label_visibility="collapsed", key="segmented_nav")
-if seg.startswith("🎯"):
-    goto_tab("🎯")
-elif seg.startswith("🔬"):
-    goto_tab("🔬")
-elif seg.startswith("📊"):
-    goto_tab("📊")
-
 
 # Accessibility: Add main content landmark
 st.markdown('<main id="main-content" role="main">', unsafe_allow_html=True)
 
-with tab1:
-    
+def render_step_upload_and_calibration() -> None:
+    st.markdown('<div class="workflow-section scroll-target" id="section-upload">', unsafe_allow_html=True)
+    st.markdown("### 📸 Step 1: Upload & Configure Image")
+
     # Image upload component
     render_image_upload(key_prefix="main", show_metadata=True)
     
@@ -1064,61 +1218,77 @@ with tab1:
             else:
                 st.info("💡 Configure lanes based on your gel specifications")
         
-        # Enhanced calibration section
-        st.markdown("### 🎯 Two-Point Lane Calibration")
-        
-        # Instructions with progressive disclosure
-        render_calibration_instructions(expanded=False)
-        
-        # Calibration interface with enhanced error handling
-        @handle_errors("Lane Calibration")
-        def perform_calibration():
-            points = st.session_state.res_calibration_points
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        with st.expander("🎯 Step 2: Lane Calibration", expanded=not st.session_state.get('res_lane_boundaries')):
+            st.markdown('<div class="scroll-target" id="section-calibrate">', unsafe_allow_html=True)
+
+            if st.session_state.get('res_lane_boundaries'):
+                st.markdown('<div class="calibration-controls">', unsafe_allow_html=True)
+                st.markdown("**⚙️ Calibration Active** - Lane boundaries are set and ready for analysis")
+                if st.button("♻️ Recalibrate Lanes", key="recalibrate_lanes", help="Modify the current lane calibration"):
+                    st.session_state.res_lane_boundaries = None
+                    st.session_state.res_calibration_points = []
+                    st.session_state.ui_canvas_key += 1
+                    st.session_state._scrolled_to_analyze = False
+                    st.session_state._scrolled_to_results = False
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            # Instructions with progressive disclosure
+            render_calibration_instructions(expanded=False)
             
-            if len(points) < 2:
-                return None
-            
-            # Get lane assignments
-            lane1 = st.session_state.get('calibration_lane1', 1)
-            lane2 = st.session_state.get('calibration_lane2', min(n_lanes, 12))
-            
-            if lane1 == lane2:
-                st.error("❌ Lane numbers must be different")
-                return None
-            
-            (x1, _), (x2, _) = points[:2]
-            
-            # Enhanced validation
-            if HAS_LANE_MAPPING:
-                is_valid, validation_msg = validate_calibration_points(x1, lane1, x2, lane2, n_lanes, w)
+            # Calibration interface with enhanced error handling
+            @handle_errors("Lane Calibration")
+            def perform_calibration():
+                points = st.session_state.res_calibration_points
                 
-                if not is_valid:
-                    st.error(f"❌ {validation_msg}")
+                if len(points) < 2:
                     return None
                 
-                # Create calibration
-                calibration = TwoPointCalibration(
-                    point1_x=x1, point1_lane=lane1,
-                    point2_x=x2, point2_lane=lane2,
-                    total_lanes=n_lanes
-                )
+                # Get lane assignments
+                lane1 = st.session_state.get('calibration_lane1', 1)
+                lane2 = st.session_state.get('calibration_lane2', min(n_lanes, 12))
                 
-                boundaries = calculate_lane_positions(calibration)
-                st.session_state.res_lane_boundaries = boundaries
-                st.session_state.ui_last_action = "calibration"
+                if lane1 == lane2:
+                    st.error("❌ Lane numbers must be different")
+                    return None
                 
-                return calibration, boundaries
+                (x1, _), (x2, _) = points[:2]
+                
+                # Enhanced validation
+                if HAS_LANE_MAPPING:
+                    is_valid, validation_msg = validate_calibration_points(x1, lane1, x2, lane2, n_lanes, w)
+                    
+                    if not is_valid:
+                        st.error(f"❌ {validation_msg}")
+                        return None
+                    
+                    # Create calibration
+                    calibration = TwoPointCalibration(
+                        point1_x=x1, point1_lane=lane1,
+                        point2_x=x2, point2_lane=lane2,
+                        total_lanes=n_lanes
+                    )
+                    
+                    boundaries = calculate_lane_positions(calibration)
+                    st.session_state.res_lane_boundaries = boundaries
+                    st.session_state.ui_last_action = "calibration"
+                    st.session_state._scrolled_to_analyze = False
+                    st.session_state._scrolled_to_results = False
+
+                    return calibration, boundaries
+                
+                return None
             
-            return None
-        
-        # Get image data from session state for calibration
-        if st.session_state.res_uploaded_image and st.session_state.res_uploaded_array is not None:
-            img = st.session_state.res_uploaded_image
-            img_array = st.session_state.res_uploaded_array
-            h, w, _ = img_array.shape
-        else:
-            st.error("❌ Image data not available. Please upload an image first.")
-            st.stop()
+            # Get image data from session state for calibration
+            if st.session_state.res_uploaded_image and st.session_state.res_uploaded_array is not None:
+                img = st.session_state.res_uploaded_image
+                img_array = st.session_state.res_uploaded_array
+                h, w, _ = img_array.shape
+            else:
+                st.error("❌ Image data not available. Please upload an image first.")
+                st.stop()
         
         # Interactive calibration canvas or fallback
         if HAS_IMAGE_COORDINATES:
@@ -1707,8 +1877,11 @@ with tab1:
                         
                         with adj_col3:
                             st.button("⚙️ **Change Lanes**", help="Adjust lane numbers without changing points", disabled=True, use_container_width=True)
-    
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
     else:
+        st.markdown('</div>', unsafe_allow_html=True)
         # No image uploaded - show upload guidance
         st.markdown("""
         <div class="info-panel">
@@ -1740,20 +1913,17 @@ with tab1:
                 - Avoid camera shake or blur
                 """)
 
-with tab2:
-    st.markdown("""
-    ## 🔬 Analysis & Processing
-    Configure preprocessing parameters and run comprehensive gel analysis with your calibrated lane boundaries.
-    """)
+def _render_analysis_inner() -> None:
+    st.caption("Configure preprocessing parameters and launch analysis with your calibrated lanes.")
     
     # Prerequisites status check using component
     prerequisites_met = render_prerequisites_panel(goto_tab)
 
     if not prerequisites_met:
-        st.stop()  # Exit early if prerequisites not met
+        return
     
     # Analysis configuration section
-    st.markdown("### ⚙️ Analysis Configuration")
+    st.markdown("#### ⚙️ Analysis Configuration")
     
     # Enhanced preprocessing mode selection
     st.markdown('<div data-testid="preprocessing-section" role="region" aria-label="Preprocessing Configuration">', unsafe_allow_html=True)
@@ -2436,7 +2606,7 @@ with tab2:
                 st.session_state['_analysis_running'] = False
                 # Store comprehensive analysis results
                 analysis_timestamp = pd.Timestamp.now()
-        
+
                 st.session_state.res_analysis_data = {
                     'analysis_id': f"AD_{st.session_state.ui_analysis_count:03d}_{int(analysis_timestamp.timestamp())}",
                     'timestamp': analysis_timestamp.isoformat(),
@@ -2456,7 +2626,8 @@ with tab2:
                     'status': 'completed',
                     'warnings': analysis_warnings
                 }
-        
+                st.session_state._scrolled_to_results = False
+
                 # Success celebration
                 st.success("🎉 **Analysis completed successfully!** 🎉")
         
@@ -2638,24 +2809,29 @@ with tab2:
                         # Stack trace
                         import traceback
                         st.code(traceback.format_exc())
-with tab3:
-    st.markdown("""
-    ## 📊 Results & Export
-    View comprehensive analysis results, interactive visualizations, and export data in various formats.
-    """)
-    
-    # Check for analysis results
-    has_results = st.session_state.res_analysis_data is not None
-    
+def render_step_analysis() -> None:
+    if not st.session_state.get('res_lane_boundaries'):
+        return
+
+    expanded = not bool(st.session_state.get('res_analysis_data'))
+    with st.expander("🔬 Step 3: Analysis & Processing", expanded=expanded):
+        st.markdown('<div class="workflow-section scroll-target" id="section-analyze">', unsafe_allow_html=True)
+        _render_analysis_inner()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+
+def render_step_results() -> None:
+    st.markdown('<div class="workflow-section scroll-target" id="section-results">', unsafe_allow_html=True)
+    st.markdown("### 📊 Step 4: Results & Export")
+
+    has_results = bool(st.session_state.get('res_analysis_data'))
+
     if not has_results:
-        st.markdown("### 📊 No Analysis Results Available")
-        
         st.info("Complete a gel analysis to view results here. The results dashboard will show:")
-        
-        # Preview of available features
+
         with st.expander("🔮 Results Dashboard Preview", expanded=True):
             col1, col2 = st.columns(2)
-            
+
             with col1:
                 st.markdown("""
                 **📈 Analysis Summary:**
@@ -2670,7 +2846,7 @@ with tab3:
                 - Statistical significance testing
                 - Comparative analysis between lanes
                 """)
-            
+
             with col2:
                 st.markdown("""
                 **🖼️ Visual Results:**
@@ -2685,36 +2861,39 @@ with tab3:
                 - Complete analysis reports (PDF)
                 - Raw data for further analysis
                 """)
-        
-        # Status of prerequisites
-        st.markdown("### 📋 Analysis Prerequisites")
-        
+
         col1, col2, col3 = st.columns(3)
-        
+
         with col1:
             if st.session_state.res_uploaded_image:
                 st.success("✅ **Image Uploaded**")
             else:
                 st.error("❌ **Image Missing**")
-        
+
         with col2:
             if st.session_state.res_lane_boundaries:
                 st.success("✅ **Lanes Calibrated**")
             else:
                 st.error("❌ **Calibration Missing**")
-        
+
         with col3:
-            if has_results:
-                st.success("✅ **Analysis Complete**")
-            else:
-                st.info("⏳ **Analysis Pending**")
-        
-        st.stop()  # Exit early if no results
-    
-    # Display comprehensive results
+            st.info("⏳ **Analysis Pending**")
+
+        st.markdown('</div>', unsafe_allow_html=True)
+        return
+
     results = st.session_state.res_analysis_data
+
+    st.markdown('<div class="results-primary">', unsafe_allow_html=True)
+    overlay_png = st.session_state.get('res_ba_overlay_png')
+    if overlay_png:
+        st.image(overlay_png, caption="Analysis Results – Gel Overlay", width='stretch')
+    else:
+        st.info("Visual overlay will appear here after running analysis or Band Assist.")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="results-secondary">', unsafe_allow_html=True)
     
-    # Results header with key information
     st.success(f"""
     ✅ **Analysis Complete** - ID: {results['analysis_id']}  
     📅 **Completed:** {results['timestamp'][:19]} | 🔄 **Run #{results['analysis_count']}**
@@ -3013,7 +3192,10 @@ with tab3:
             help="Comprehensive analysis report (coming soon)",
             use_container_width=True
         )
-    
+
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
     with col3:
         st.markdown("**🖼️ Visual Exports**")
         
@@ -3197,7 +3379,7 @@ def render_global_sticky_footer() -> None:
             justify-content: space-between;
             align-items: center;
         }
-        
+
         #ad-sticky-footer .btn {
             background: #f8f9fa;
             border: 1px solid #dee2e6;
@@ -3213,30 +3395,30 @@ def render_global_sticky_footer() -> None:
             align-items: center;
             gap: 6px;
         }
-        
+
         #ad-sticky-footer .btn:hover {
             background: #e9ecef;
             border-color: #adb5bd;
             transform: translateY(-1px);
         }
-        
+
         #ad-sticky-footer .btn.primary {
             background: #0d6efd;
             border-color: #0d6efd;
             color: white;
         }
-        
+
         #ad-sticky-footer .btn.primary:hover {
             background: #0b5ed7;
             border-color: #0a58ca;
         }
-        
+
         #ad-sticky-footer .btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             transform: none !important;
         }
-        
+
         #ad-sticky-footer .hint {
             color: #6c757d;
             font-size: 13px;
@@ -3244,82 +3426,86 @@ def render_global_sticky_footer() -> None:
             flex: 1;
             margin: 0 16px;
         }
-        
-        /* Hide on mobile to avoid overlay issues */
+
         @media (max-width: 768px) {
             #ad-sticky-footer {
                 display: none;
             }
         }
     </style>
-    
+
     <div id="ad-sticky-footer">
         <button id="ad-back" class="btn">⬅️ Back</button>
-        <div class="hint">Use Back/Next to move through Calibration → Analysis → Results</div>
+        <div class="hint">Use Back/Next to move through Upload → Calibrate → Analyze → Results</div>
         <button id="ad-next" class="btn primary">Next ➡️</button>
     </div>
-    
+
     <script>
-      const doc = window.parent.document;
-      function clickTabByPrefix(prefixes) {
-        const tabs = Array.from(doc.querySelectorAll('[role="tab"]'));
-        for (const pref of prefixes) {
-          for (const t of tabs) {
-            const txt = (t.innerText || t.textContent).trim();
-            if (txt.startsWith(pref)) { 
-              t.click(); 
-              window.parent.scrollTo({top: 0, behavior: 'smooth'}); 
-              return true; 
-            }
-          }
+      const parentWin = window.parent;
+      const doc = parentWin.document;
+      const sections = ['section-upload','section-calibrate','section-analyze','section-results'];
+
+      function scrollToSection(idx) {
+        if (idx < 0 || idx >= sections.length) return;
+        const el = doc.getElementById(sections[idx]);
+        if (el) {
+          el.scrollIntoView({behavior: 'smooth', block: 'start'});
         }
-        return false;
       }
-      function currentTabLabel() {
-        const tabs = Array.from(doc.querySelectorAll('[role="tab"]'));
-        const curr = tabs.find(t => t.getAttribute('aria-selected') === 'true');
-        return curr ? (curr.innerText || curr.textContent).trim() : '';
+
+      function nearestSectionIdx() {
+        let bestIdx = 0;
+        let minDelta = Number.POSITIVE_INFINITY;
+        sections.forEach((id, idx) => {
+          const el = doc.getElementById(id);
+          if (!el) return;
+          const rect = el.getBoundingClientRect();
+          const center = rect.top + rect.height / 2;
+          const delta = Math.abs(center);
+          if (delta < minDelta) {
+            minDelta = delta;
+            bestIdx = idx;
+          }
+        });
+        return bestIdx;
       }
+
       function configureButtons() {
         const back = document.getElementById('ad-back');
         const next = document.getElementById('ad-next');
-        const label = currentTabLabel();
-        const isCal = label.startsWith('🎯');
-        const isAna = label.startsWith('🔬');
-        const isRes = label.startsWith('📊');
-        // Reset
-        back.removeAttribute('disabled'); next.removeAttribute('disabled');
-        back.onclick = null; next.onclick = null;
-        if (isCal) {
-          back.setAttribute('disabled','true');
-          next.onclick = () => clickTabByPrefix(['🔬 Analysis', '🔬 Analysis & Processing']);
-        } else if (isAna) {
-          back.onclick = () => clickTabByPrefix(['🎯 Lane Calibration']);
-          next.onclick = () => clickTabByPrefix(['📊 Results', '📊 Results & Export']);
-        } else if (isRes) {
-          back.onclick = () => clickTabByPrefix(['🔬 Analysis', '🔬 Analysis & Processing']);
-          next.setAttribute('disabled','true');
-        } else {
-          // Unknown: default to enabling both
-          back.onclick = () => clickTabByPrefix(['🎯 Lane Calibration']);
-          next.onclick = () => clickTabByPrefix(['🔬 Analysis', '🔬 Analysis & Processing']);
-        }
+        const current = nearestSectionIdx();
+
+        back.disabled = current <= 0;
+        next.disabled = current >= sections.length - 1;
+
+        back.onclick = () => scrollToSection(current - 1);
+        next.onclick = () => scrollToSection(current + 1);
       }
-      // Try repeatedly until the tablist exists, then observe changes
-      let tries = 0;
-      const iv = setInterval(() => {
-        tries += 1;
-        const tablist = doc.querySelector('[role="tablist"]');
-        if (tablist) {
-          configureButtons();
-          const obs = new MutationObserver(configureButtons);
-          obs.observe(tablist, {attributes:true, subtree:true, childList:true, characterData:true});
-          clearInterval(iv);
-        }
-        if (tries > 60) clearInterval(iv);
-      }, 100);
+
+      configureButtons();
+      parentWin.addEventListener('scroll', () => {
+        window.requestAnimationFrame(configureButtons);
+      }, { passive: true });
     </script>
     """, height=0)
+
+# Render progressive workflow sections
+render_step_upload_and_calibration()
+render_step_analysis()
+render_step_results()
+
+# Auto-scroll progressive workflow when state advances
+if st.session_state.get('res_uploaded_image') and not st.session_state._scrolled_to_calibrate:
+    scroll_to_section('section-calibrate')
+    st.session_state._scrolled_to_calibrate = True
+
+if st.session_state.get('res_lane_boundaries') and not st.session_state._scrolled_to_analyze:
+    scroll_to_section('section-analyze')
+    st.session_state._scrolled_to_analyze = True
+
+if st.session_state.get('res_analysis_data') and not st.session_state._scrolled_to_results:
+    scroll_to_section('section-results')
+    st.session_state._scrolled_to_results = True
 
 # Accessibility: Close main content landmark
 st.markdown('</main>', unsafe_allow_html=True)
