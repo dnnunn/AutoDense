@@ -555,22 +555,8 @@ st.set_page_config(
     }
 )
 
-# Better Dairy logo in header
-col1, col2 = st.columns([1, 8])
-with col1:
-    try:
-        st.image("betterdairyicon.png", width=60)
-    except:
-        pass  # Skip if logo not found
-with col2:
-    st.title("AutoDense – UX Optimized Interface")
-
-st.markdown("*Professional gel electrophoresis analysis for bench scientists*")
-st.markdown("Built with accessibility, performance, and scientific workflows in mind.")
-
 # Display environment initialization status
-def render_environment_status():
-    """Display the automatic environment configuration status."""
+def render_environment_status() -> None:
     if st.checkbox("🔧 Show Environment Status", value=False, help="View automatic environment configuration"):
         with st.expander("Environment Configuration Details", expanded=True):
             col1, col2, col3 = st.columns(3)
@@ -592,7 +578,14 @@ def render_environment_status():
             else:
                 st.success("🚀 All environment components properly configured!")
 
-render_environment_status()
+# Better Dairy logo in header
+header_col1, header_col2 = st.columns([8, 2])
+with header_col1:
+    st.title("AutoDense – UX Optimized Interface")
+    st.markdown("*Professional gel electrophoresis analysis for bench scientists*")
+
+with header_col2:
+    render_environment_status()
 
 # Accessibility: Skip links for keyboard navigation
 st.markdown("""
@@ -901,11 +894,8 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Workflow section headers - compact */
 .workflow-section {
-    margin: 1rem 0 0.5rem 0;
-    padding: 0.75rem;
-    border-left: 3px solid #ff4b4b;
-    background: #fafafa;
-    border-radius: 0 6px 6px 0;
+    margin: 0 0 0.5rem 0;
+    padding: 0.15rem 0;
 }
 
 /* Compact expanders */
@@ -942,6 +932,109 @@ h1, h2, h3, h4, h5, h6 {
     scroll-margin-top: 60px;
 }
 
+/* Inline step tracker */
+.step-tracker {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 0.25rem 0 0.5rem 0;
+}
+
+.step-tracker .step-pill {
+    flex: 1 1 0;
+    text-align: center;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 0.9rem;
+    color: #6c757d;
+    background: #f4f5f7;
+    border: 1px solid transparent;
+}
+
+.step-tracker .step-pill.completed {
+    color: #17813d;
+    font-weight: 600;
+    background: rgba(23, 129, 61, 0.12);
+    border-color: rgba(23, 129, 61, 0.2);
+}
+
+.step-tracker .step-pill.active {
+    color: #ff4b4b;
+    font-weight: 600;
+    background: rgba(255, 75, 75, 0.12);
+    border-color: rgba(255, 75, 75, 0.3);
+}
+
+/* Sticky footer navigation */
+#ad-sticky-footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9999;
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(6px);
+    border-top: 1px solid #e0e0e0;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#ad-sticky-footer .btn {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    color: #495057;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#ad-sticky-footer .btn:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+    transform: translateY(-1px);
+}
+
+#ad-sticky-footer .btn.primary {
+    background: #0d6efd;
+    border-color: #0d6efd;
+    color: #fff;
+}
+
+#ad-sticky-footer .btn.primary:hover {
+    background: #0b5ed7;
+    border-color: #0a58ca;
+}
+
+#ad-sticky-footer .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+#ad-sticky-footer .hint {
+    color: #6c757d;
+    font-size: 13px;
+    text-align: center;
+    flex: 1;
+    margin: 0 16px;
+}
+
+@media (max-width: 768px) {
+    #ad-sticky-footer {
+        display: none;
+    }
+}
+
 /* Navigation frame - compact */
 .stIframe {
     margin: 0.5rem 0 !important;
@@ -964,12 +1057,6 @@ h1, h2, h3, h4, h5, h6 {
 </style>
 
 """, unsafe_allow_html=True)
-
-# Navigation frame for workflow
-st.components.v1.iframe(
-    src="data:text/html;charset=utf-8,%3Chtml%3E%3Chead%3E%3Cstyle%3Ebody%7Bfont-family%3AArial%2Csans-serif%3Bpadding%3A8px%3Bmargin%3A0%3Bbackground%3A%23f8f9fa%3B%7D.nav%7Bdisplay%3Aflex%3Balign-items%3Acenter%3Bjustify-content%3Aspace-between%3Bgap%3A1rem%3B%7D.btn%7Bpadding%3A4px%2012px%3Bborder%3A1px%2520solid%2520%23ddd%3Bborder-radius%3A4px%3Bbackground%3Awhite%3Bcursor%3Apointer%3Bfont-size%3A12px%3B%7D.btn%3Adisabled%7Bopacity%3A0.5%3Bcursor%3Anot-allowed%3B%7D.info%7Bfont-size%3A11px%3Bcolor%3A%23666%3B%7D%3C/style%3E%3C/head%3E%3Cbody%3E%3Cdiv%2520class%3D%22nav%22%3E%3Cbutton%2520class%3D%22btn%22%2520disabled%3E%E2%AC%85%EF%B8%8F%2520Back%3C/button%3E%3Cspan%2520class%3D%22info%22%3EUse%2520Back/Next%2520to%2520move%2520through%2520Upload%2520%E2%86%92%2520Calibrate%2520%E2%86%92%2520Analyze%2520%E2%86%92%2520Results%3C/span%3E%3Cbutton%2520class%3D%22btn%22%3ENext%2520%E2%9E%A1%EF%B8%8F%3C/button%3E%3C/div%3E%3C/body%3E%3C/html%3E",
-    height=40
-)
 
 # Session state initialization with consistent patterns
 # --- Helper to smoothly scroll to workflow sections ---
@@ -1115,42 +1202,6 @@ def handle_errors(operation_name: str) -> Callable[[Callable[..., Any]], Callabl
 
 
 
-# Workflow progress indicator
-upload_done = bool(st.session_state.get('res_uploaded_image'))
-calibration_done = bool(st.session_state.get('res_lane_boundaries'))
-analysis_done = bool(st.session_state.get('res_analysis_data'))
-
-def _progress_class(completed: bool, active: bool) -> str:
-    if completed:
-        return "progress-step completed"
-    if active:
-        return "progress-step active"
-    return "progress-step"
-
-step1_class = _progress_class(upload_done, not upload_done)
-step2_class = _progress_class(calibration_done, upload_done and not calibration_done)
-step3_class = _progress_class(analysis_done, calibration_done and not analysis_done)
-step4_class = _progress_class(analysis_done, analysis_done)
-
-st.markdown('<nav id="workflow-nav" aria-label="Workflow progress" class="workflow-progress" role="navigation">', unsafe_allow_html=True)
-st.markdown(f"""
-<div class="progress-steps">
-    <div class=\"{step1_class}\" id=\"step-upload\">
-        <span>1. Upload Image</span>
-    </div>
-    <div class=\"{step2_class}\" id=\"step-calibrate\">
-        <span>2. Calibrate Lanes</span>
-    </div>
-    <div class=\"{step3_class}\" id=\"step-analyze\">
-        <span>3. Analyze</span>
-    </div>
-    <div class=\"{step4_class}\" id=\"step-results\">
-        <span>4. Results</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-st.markdown('</nav>', unsafe_allow_html=True)
-
 # Accessibility: Add main content landmark
 st.markdown('<main id="main-content" role="main">', unsafe_allow_html=True)
 
@@ -1158,9 +1209,34 @@ def render_step_upload_and_calibration() -> None:
     st.markdown('<div class="workflow-section scroll-target" id="section-upload">', unsafe_allow_html=True)
     st.markdown("### 📸 Step 1: Upload & Configure Image")
 
+    upload_done = bool(st.session_state.get('res_uploaded_image'))
+    calibration_done = bool(st.session_state.get('res_lane_boundaries'))
+    analysis_done = bool(st.session_state.get('res_analysis_data'))
+
+    step_defs = [
+        ("1. Upload Image", upload_done, not upload_done),
+        ("2. Calibrate Lanes", calibration_done, upload_done and not calibration_done),
+        ("3. Analyze", analysis_done, calibration_done and not analysis_done),
+        ("4. Results", False, analysis_done),
+    ]
+
+    tracker_html = ["<div class=\"step-tracker\">"]
+    for label, completed, active in step_defs:
+        cls = "step-pill"
+        if completed:
+            cls += " completed"
+        elif active:
+            cls += " active"
+        tracker_html.append(f'<div class="{cls}">{label}</div>')
+    tracker_html.append('</div>')
+    st.markdown("".join(tracker_html), unsafe_allow_html=True)
+
+    if not upload_done:
+        st.caption("🚀 Upload a gel electrophoresis image to begin the workflow.")
+
     # Image upload component
     render_image_upload(key_prefix="main", show_metadata=True)
-    
+
     if st.session_state.res_uploaded_image:
         # Gel configuration section
         st.markdown("### 🧪 Gel Configuration")
@@ -1883,13 +1959,6 @@ def render_step_upload_and_calibration() -> None:
     else:
         st.markdown('</div>', unsafe_allow_html=True)
         # No image uploaded - show upload guidance
-        st.markdown("""
-        <div class="info-panel">
-        <h4>🚀 Getting Started</h4>
-        <p>Upload a gel electrophoresis image to begin the analysis workflow.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
         with st.expander("💡 Image Upload Guidelines", expanded=False):
             col1, col2 = st.columns(2)
             
@@ -2821,84 +2890,28 @@ def render_step_analysis() -> None:
 
 
 def render_step_results() -> None:
-    st.markdown('<div class="workflow-section scroll-target" id="section-results">', unsafe_allow_html=True)
-    st.markdown("### 📊 Step 4: Results & Export")
-
-    has_results = bool(st.session_state.get('res_analysis_data'))
-
-    if not has_results:
-        st.info("Complete a gel analysis to view results here. The results dashboard will show:")
-
-        with st.expander("🔮 Results Dashboard Preview", expanded=True):
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.markdown("""
-                **📈 Analysis Summary:**
-                - Gel configuration and parameters
-                - Processing statistics and metrics
-                - Lane and band detection summary
-                - Quality assessment scores
-                
-                **📊 Quantitative Results:**
-                - Band intensity measurements
-                - Molecular weight calculations
-                - Statistical significance testing
-                - Comparative analysis between lanes
-                """)
-
-            with col2:
-                st.markdown("""
-                **🖼️ Visual Results:**
-                - Annotated gel images with overlays
-                - Lane boundary visualizations
-                - Band detection highlights
-                - MW calibration curves
-                
-                **📥 Export Options:**
-                - CSV data tables (Excel/GraphPad compatible)
-                - High-resolution annotated images
-                - Complete analysis reports (PDF)
-                - Raw data for further analysis
-                """)
-
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            if st.session_state.res_uploaded_image:
-                st.success("✅ **Image Uploaded**")
-            else:
-                st.error("❌ **Image Missing**")
-
-        with col2:
-            if st.session_state.res_lane_boundaries:
-                st.success("✅ **Lanes Calibrated**")
-            else:
-                st.error("❌ **Calibration Missing**")
-
-        with col3:
-            st.info("⏳ **Analysis Pending**")
-
-        st.markdown('</div>', unsafe_allow_html=True)
+    results = st.session_state.get('res_analysis_data')
+    if not results:
         return
 
-    results = st.session_state.res_analysis_data
+    st.markdown('<div class="workflow-section scroll-target" id="section-results">', unsafe_allow_html=True)
+    st.markdown("### 📊 Step 4: Results & Export")
 
     st.markdown('<div class="results-primary">', unsafe_allow_html=True)
     overlay_png = st.session_state.get('res_ba_overlay_png')
     if overlay_png:
-        st.image(overlay_png, caption="Analysis Results – Gel Overlay", width='stretch')
+        st.image(overlay_png, caption="Analysis Results – Gel Overlay", use_container_width=True)
     else:
-        st.info("Visual overlay will appear here after running analysis or Band Assist.")
+        st.info("Visual overlay will appear here after running Band Assist.")
     st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="results-secondary">', unsafe_allow_html=True)
-    
+
     st.success(f"""
     ✅ **Analysis Complete** - ID: {results['analysis_id']}  
     📅 **Completed:** {results['timestamp'][:19]} | 🔄 **Run #{results['analysis_count']}**
     """)
-    
+
     # Main results dashboard
     st.markdown("### 📊 Analysis Dashboard")
     
@@ -3284,208 +3297,90 @@ def render_step_results() -> None:
             }
             st.json(system_info)
 
-# Enhanced footer with comprehensive status and help
-st.markdown("---")
-
-# Status bar with detailed information
-col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
-
-with col1:
-    # Dynamic status based on workflow progress
-    status_items = []
-    
-    if st.session_state.res_uploaded_image:
-        metadata = st.session_state.res_image_metadata or {}
-        filename = metadata.get('filename', 'Image')[:20] + ('...' if len(metadata.get('filename', '')) > 20 else '')
-        status_items.append(f"📤 {filename}")
-    
-    if st.session_state.res_lane_boundaries:
-        n_lanes = len(st.session_state.res_lane_boundaries)
-        gel_type = st.session_state.params_gel_type.upper().replace('_', '-')
-        status_items.append(f"🎯 {n_lanes} lanes ({gel_type})")
-    
-    if st.session_state.res_analysis_data:
-        analysis_id = st.session_state.res_analysis_data.get('analysis_id', 'Unknown')[-7:]  # Last 7 chars
-        status_items.append(f"🔬 {analysis_id}")
-    
-    if status_items:
-        st.success(" | ".join(status_items))
-    else:
-        st.info("🚀 Ready to begin - upload a gel image to start")
-
-with col2:
-    # Analysis counter with session info
-    count = st.session_state.ui_analysis_count
-    if count > 0:
-        st.metric("Analyses", count, help="Number of analyses completed this session")
-    else:
-        st.caption("No analyses yet")
-
-with col3:
-    # Error counter (only show if errors occurred)
-    error_count = st.session_state.ui_error_count
-    if error_count > 0:
-        st.metric("Errors", error_count, help="Number of errors encountered", delta_color="off")
-    else:
-        st.caption("No errors")
-
-with col4:
-    # Help and shortcuts
-    if st.button("❓ **Help**", help="Show keyboard shortcuts and tips", use_container_width=True):
-        # Create help modal content
-        st.info("""
-        **⌨️ Keyboard Shortcuts:**
-        - `Ctrl + Enter`: Run analysis
-        - `Tab`: Navigate between fields  
-        - `Esc`: Clear current selection
-        - `?`: Show this help
-        
-        **💡 Usage Tips:**
-        - Use high-contrast, focused gel images
-        - Calibrate with distinct, well-separated bands
-        - Choose calibration points far apart for accuracy
-        - Verify lane alignment before proceeding
-        
-        **🔧 Troubleshooting:**
-        - Check Prerequisites Status in Analysis tab
-        - Try different preprocessing modes
-        - Verify image quality and format
-        - Use manual calibration if canvas fails
-        
-        **📞 Support:**
-        - GitHub: [AutoDense Repository](https://github.com/your-org/autodense)
-        - Email: support@autodense.com
-        """)
-
-# TODO: Keyboard event handling for future enhancement
-# This would require streamlit-keyup or similar package
-
 def render_global_sticky_footer() -> None:
-    """Fixed footer with Back / Next that follows the current active tab."""
+    """Fixed footer with Back / Next buttons anchored to workflow sections."""
     import streamlit.components.v1 as components
-    
+
     components.html("""
-    <style>
-        #ad-sticky-footer {
-            position: fixed;
-            left: 0; right: 0; bottom: 0;
-            z-index: 9999;
-            padding: 10px 16px;
-            background: rgba(255,255,255,0.92);
-            backdrop-filter: blur(6px);
-            border-top: 1px solid #e0e0e0;
-            box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        #ad-sticky-footer .btn {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            color: #495057;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        #ad-sticky-footer .btn:hover {
-            background: #e9ecef;
-            border-color: #adb5bd;
-            transform: translateY(-1px);
-        }
-
-        #ad-sticky-footer .btn.primary {
-            background: #0d6efd;
-            border-color: #0d6efd;
-            color: white;
-        }
-
-        #ad-sticky-footer .btn.primary:hover {
-            background: #0b5ed7;
-            border-color: #0a58ca;
-        }
-
-        #ad-sticky-footer .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none !important;
-        }
-
-        #ad-sticky-footer .hint {
-            color: #6c757d;
-            font-size: 13px;
-            text-align: center;
-            flex: 1;
-            margin: 0 16px;
-        }
-
-        @media (max-width: 768px) {
-            #ad-sticky-footer {
-                display: none;
-            }
-        }
-    </style>
-
-    <div id="ad-sticky-footer">
-        <button id="ad-back" class="btn">⬅️ Back</button>
-        <div class="hint">Use Back/Next to move through Upload → Calibrate → Analyze → Results</div>
-        <button id="ad-next" class="btn primary">Next ➡️</button>
-    </div>
-
     <script>
-      const parentWin = window.parent;
-      const doc = parentWin.document;
-      const sections = ['section-upload','section-calibrate','section-analyze','section-results'];
-
-      function scrollToSection(idx) {
-        if (idx < 0 || idx >= sections.length) return;
-        const el = doc.getElementById(sections[idx]);
-        if (el) {
-          el.scrollIntoView({behavior: 'smooth', block: 'start'});
+    (function() {
+        const parentWin = window.parent;
+        if (!parentWin || !parentWin.document) {
+            return;
         }
-      }
+        const doc = parentWin.document;
 
-      function nearestSectionIdx() {
-        let bestIdx = 0;
-        let minDelta = Number.POSITIVE_INFINITY;
-        sections.forEach((id, idx) => {
-          const el = doc.getElementById(id);
-          if (!el) return;
-          const rect = el.getBoundingClientRect();
-          const center = rect.top + rect.height / 2;
-          const delta = Math.abs(center);
-          if (delta < minDelta) {
-            minDelta = delta;
-            bestIdx = idx;
-          }
-        });
-        return bestIdx;
-      }
+        if (!doc.getElementById('ad-sticky-footer')) {
+            const footer = doc.createElement('div');
+            footer.id = 'ad-sticky-footer';
+            footer.setAttribute('role', 'navigation');
+            footer.setAttribute('aria-label', 'Workflow navigation');
+            footer.innerHTML = `
+                <button id="ad-back" class="btn" type="button">⬅️ Back</button>
+                <div class="hint">Use Back/Next to move through Upload → Calibrate → Analyze → Results</div>
+                <button id="ad-next" class="btn primary" type="button">Next ➡️</button>
+            `;
+            doc.body.appendChild(footer);
+        }
 
-      function configureButtons() {
-        const back = document.getElementById('ad-back');
-        const next = document.getElementById('ad-next');
-        const current = nearestSectionIdx();
+        const sections = ['section-upload','section-calibrate','section-analyze','section-results'];
 
-        back.disabled = current <= 0;
-        next.disabled = current >= sections.length - 1;
+        function scrollToSection(idx) {
+            if (idx < 0 || idx >= sections.length) return;
+            const el = doc.getElementById(sections[idx]);
+            if (!el) return;
+            parentWin.scrollTo({
+                top: el.getBoundingClientRect().top + parentWin.scrollY - 60,
+                behavior: 'smooth'
+            });
+        }
 
-        back.onclick = () => scrollToSection(current - 1);
-        next.onclick = () => scrollToSection(current + 1);
-      }
+        function nearestSectionIdx() {
+            let bestIdx = 0;
+            let minDelta = Number.POSITIVE_INFINITY;
+            sections.forEach((id, idx) => {
+                const el = doc.getElementById(id);
+                if (!el) return;
+                const rect = el.getBoundingClientRect();
+                const center = rect.top + rect.height / 2;
+                const delta = Math.abs(center);
+                if (delta < minDelta) {
+                    minDelta = delta;
+                    bestIdx = idx;
+                }
+            });
+            return bestIdx;
+        }
 
-      configureButtons();
-      parentWin.addEventListener('scroll', () => {
-        window.requestAnimationFrame(configureButtons);
-      }, { passive: true });
+        function configureButtons() {
+            const backBtn = doc.getElementById('ad-back');
+            const nextBtn = doc.getElementById('ad-next');
+            if (!backBtn || !nextBtn) {
+                return;
+            }
+            const current = nearestSectionIdx();
+            backBtn.disabled = current <= 0;
+            nextBtn.disabled = current >= sections.length - 1;
+            backBtn.onclick = () => scrollToSection(current - 1);
+            nextBtn.onclick = () => scrollToSection(current + 1);
+        }
+
+        if (!parentWin.__adStickyFooterListenersAttached) {
+            parentWin.addEventListener('scroll', () => {
+                parentWin.requestAnimationFrame(configureButtons);
+            }, { passive: true });
+            parentWin.addEventListener('resize', () => {
+                parentWin.requestAnimationFrame(configureButtons);
+            });
+            parentWin.__adStickyFooterListenersAttached = true;
+        }
+
+        configureButtons();
+
+        if (document && document.body) {
+            document.body.innerHTML = '';
+        }
+    })();
     </script>
     """, height=0)
 
@@ -3512,32 +3407,6 @@ st.markdown('</main>', unsafe_allow_html=True)
 
 # Render sticky footer navigation
 render_global_sticky_footer()
-
-# Performance monitoring (development mode)
-if st.checkbox("⚡ Performance Monitor", help="Show performance metrics"):
-    import psutil
-    import time
-    
-    # System metrics
-    cpu_percent = psutil.cpu_percent(interval=1)
-    memory = psutil.virtual_memory()
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric("CPU Usage", f"{cpu_percent:.1f}%")
-    
-    with col2:
-        st.metric("Memory", f"{memory.percent:.1f}%")
-    
-    with col3:
-        try:
-            # Try to get cache stats (may not be available in all Streamlit versions)
-            cache_info = getattr(st.cache_data, 'cache', {})
-            cache_hits = len(cache_info) if hasattr(cache_info, '__len__') else 0
-        except Exception:
-            cache_hits = 0
-        st.metric("Cache Hits", cache_hits)
 
 def main() -> None:
     """Entry point for the UX-optimized AutoDense interface"""
