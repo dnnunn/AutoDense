@@ -126,12 +126,28 @@ def _guarded_preprocess_with_timeout(pil_img: Image.Image, timeout_sec: int = 60
     def _task():
         from autodense.preprocess.policy import guarded_preprocess
         outcome = guarded_preprocess(pil_img)
+        raw_mode = getattr(outcome, "mode", "auto") or "auto"
+        mode_lower = raw_mode.lower() if isinstance(raw_mode, str) else "auto"
+
+        if mode_lower in {"auto", "heuristic"}:
+            friendly_mode = "Auto (heuristic)"
+        elif mode_lower == "none":
+            friendly_mode = "Auto (heuristic) — no changes needed"
+        else:
+            friendly_mode = f"Auto (heuristic) — {raw_mode}" if raw_mode else "Auto (heuristic)"
+
+        meta_note = None
+        if mode_lower == "none":
+            meta_note = "Heuristic preprocessing determined no adjustments were necessary."
+
         return outcome.image, {
-            "mode": outcome.mode,
+            "mode": friendly_mode,
+            "raw_mode": raw_mode,
             "before": outcome.before,
             "after": outcome.after,
             "params": outcome.params,
             "status": "success",
+            **({"note": meta_note} if meta_note else {}),
         }
 
     with _futures.ThreadPoolExecutor(max_workers=1) as ex:

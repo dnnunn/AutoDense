@@ -80,8 +80,7 @@ from utils.image_processing import (
 from utils.data_helpers import obj_to_dict, extract_json, calculate_lane_metrics, convert_to_csv
 from utils.preprocessing import (
     _load_prompt, filter_supported_preproc_params,
-    _guarded_preprocess_with_timeout, _openai_preprocess_with_timeout,
-    openai_guided_preprocess, HAS_PREPROCESS, HAS_OPENAI,
+    _guarded_preprocess_with_timeout, HAS_PREPROCESS,
     sanitize_openai_error, summarize_openai_error
 )
 from utils.parameter_management import (
@@ -105,14 +104,6 @@ def announce_to_screen_reader(message: str, priority: str = "polite") -> None:
         {message}
     </div>
     """, unsafe_allow_html=True)
-
-
-def _set_chatgpt_status(available: bool, message: Optional[str] = None) -> None:
-    """Persist the latest ChatGPT availability status for UI diagnostics."""
-    st.session_state.chatgpt_status = {
-        "available": bool(available),
-        "message": message,
-    }
 
 
 # Enhanced loading state management
@@ -166,27 +157,17 @@ def cached_preprocess_image(image_hash: str, mode: str, manual_params_str: str =
     manual_params: Optional[Dict[str, Any]] = json.loads(manual_params_str) if manual_params_str else None
 
     try:
-        if mode.startswith("ChatGPT") and HAS_OPENAI:
-            with st.spinner(f"🤖 Processing image with ChatGPT... (up to 75s)"):
-                st.info("🔄 Sending image to OpenAI for intelligent preprocessing...")
-                img2, meta = _openai_preprocess_with_timeout(img, timeout_sec=75)
-                announce_to_screen_reader("ChatGPT preprocessing completed successfully", "assertive")
-                status_flag = (meta.get("status") or "success").lower()
-                error_msg = meta.get("error") or meta.get("reasoning")
-                if status_flag in {"fallback", "error"}:
-                    _set_chatgpt_status(False, error_msg)
-                else:
-                    _set_chatgpt_status(True, None)
-            return img2, meta
+        normalized_mode = (mode or "").lower()
 
-        elif mode.startswith("AI") and HAS_PREPROCESS:
-            with st.spinner(f"🔬 AI preprocessing in progress... (up to 60s)"):
-                st.info("🔄 Applying intelligent image enhancement algorithms...")
+        if normalized_mode.startswith("auto") and HAS_PREPROCESS:
+            with st.spinner(f"🔬 Applying AutoDense heuristic preprocessing..."):
+                st.info("🔄 Optimizing image contrast and background...")
                 img2, meta = _guarded_preprocess_with_timeout(img, timeout_sec=60)
-                announce_to_screen_reader("AI preprocessing completed successfully", "assertive")
+                meta.setdefault("mode", "Auto (heuristic)")
+                announce_to_screen_reader("Auto preprocessing completed successfully", "assertive")
             return img2, meta
 
-        elif mode == "Manual" and manual_params and HAS_PREPROCESS:
+        elif normalized_mode.startswith("manual") and manual_params and HAS_PREPROCESS:
             with st.spinner("⚙️ Applying manual preprocessing parameters..."):
                 st.info(f"🔄 Processing with {len(manual_params)} custom parameters...")
                 # Filter parameters to only include those supported by PreprocParams
@@ -204,14 +185,15 @@ def cached_preprocess_image(image_hash: str, mode: str, manual_params_str: str =
             with st.spinner("📸 Preparing raw image data..."):
                 arr = np.asarray(img.convert("L")).astype(np.float32)
                 prepped = (arr - arr.min())/(arr.max()-arr.min()+1e-6)
-            return prepped, {"mode": "Raw (no preprocessing)", "status": "fallback"}
+            mode_label = "Raw (no preprocessing)" if normalized_mode.startswith("off") else f"Fallback ({mode})"
+            status = "success" if normalized_mode.startswith("off") else "fallback"
+            return prepped, {"mode": mode_label, "status": status}
 
     except Exception as e:
         # Return raw image on any preprocessing failure with error annotation
         friendly_error = sanitize_openai_error(e)
         st.error(f"⚠️ Preprocessing failed: {friendly_error}")
         announce_to_screen_reader(f"Preprocessing failed: {friendly_error}", "assertive")
-        _set_chatgpt_status(False, friendly_error)
         with st.spinner("🔧 Falling back to raw image processing..."):
             arr = np.asarray(img.convert("L")).astype(np.float32)
             prepped = (arr - arr.min())/(arr.max()-arr.min()+1e-6)
@@ -289,12 +271,6 @@ try:
     HAS_IMAGE_COORDINATES = True
 except ImportError:
     HAS_IMAGE_COORDINATES = False
-
-try:
-    from autodense.preprocess.openai_policy import openai_guided_preprocess
-    HAS_OPENAI = True
-except ImportError:
-    HAS_OPENAI = False
 
 try:
     from autodense.preprocess.simple_lane_mapping import (
@@ -1256,6 +1232,7 @@ def init_session_state() -> None:
         '_scrolled_to_calibrate': False,
         '_scrolled_to_analyze': False,
         '_scrolled_to_results': False,
+        'band_assist_manual_run': False,
     }
     
     for key, value in defaults.items():
@@ -2071,15 +2048,13 @@ def _render_analysis_inner() -> None:
         "Manual": "🛠️ Use custom preprocessing parameters with full control",
         "Off": "📷 Analyze raw image without any preprocessing"
     }
-    
-    if HAS_OPENAI:
-        mode_options.insert(0, "ChatGPT-4.1 (premium)")
-        mode_descriptions["ChatGPT-4.1 (premium)"] = "🤖 Advanced AI vision analysis with scientific reasoning and validation"
-    
+
+    if st.session_state.get("preprocessing_mode_select") not in mode_options:
+        st.session_state.preprocessing_mode_select = mode_options[0]
+
     preprocessing_mode = st.selectbox(
         "**Preprocessing Method:**",
         mode_options,
-        index=0,
         help="Choose how to optimize your gel image before analysis",
         key="preprocessing_mode_select"
     )
@@ -2094,85 +2069,10 @@ def _render_analysis_inner() -> None:
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # API status and security information for ChatGPT mode
-    if preprocessing_mode.startswith("ChatGPT"):
-        st.markdown("#### 🤖 ChatGPT-4.1 Status")
-        
-        if HAS_OPENAI:
-            try:
-                from autodense.security.key_manager import get_openai_api_key, mask_key_for_logging
-                
-                api_key = get_openai_api_key()
-                if api_key:
-                    status_info = st.session_state.get("chatgpt_status") or {}
-                    if status_info.get("available") is False:
-                        message = status_info.get("message") or "OpenAI request failed. Verify your API key."
-                        st.markdown(
-                            f"""
-                            <div class="status-panel error">
-                                <div class="status-title">⚠️ ChatGPT-4.1 Unavailable</div>
-                                <div class="status-subtext">Latest request fallback activated</div>
-                                <div class="status-subtext">🔐 API Key detected: {mask_key_for_logging(api_key)}</div>
-                                <div class="status-subtext">🛠️ {message}</div>
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
-                        st.info("💡 AutoDense is using the heuristic preprocessing path until ChatGPT succeeds.")
-                    else:
-                        st.markdown(
-                            f"""
-                            <div class="status-panel success">
-                                <div class="status-title">🧠 ChatGPT-4.1 Ready</div>
-                                <div class="status-subtext">Advanced AI analysis available</div>
-                                <div class="status-subtext">🔐 API Key: {mask_key_for_logging(api_key)}</div>
-                            </div>
-                            """,
-                            unsafe_allow_html=True,
-                        )
+    # Compact contextual guidance instead of a persistent status banner
+    with st.expander("📘 Preprocessing guidance", expanded=False):
+        st.write("Select a deterministic preprocessing strategy. You can fine-tune parameters later if needed.")
 
-                    # Model configuration info
-                    try:
-                        from autodense.preprocess.openai_policy import OpenAIPreprocessingClient
-                        client = OpenAIPreprocessingClient()
-                        st.caption(f"🔧 Model: {client.config.model} | Max tokens: {client.config.max_tokens}")
-                    except Exception as e:
-                        st.caption(f"⚠️ Client config unavailable: {e}")
-
-                else:
-                    st.error("❌ **OpenAI API Key Required**")
-                    st.markdown("""
-                    **🔧 Setup Instructions:**
-                    1. Obtain API key from [OpenAI Platform](https://platform.openai.com/api-keys)
-                    2. Set environment variable: `export OPENAI_API_KEY="your-key-here"`
-                    3. Restart the application
-                    
-                    **🔐 Security Notice:**
-                    - Never store API keys in code or configuration files
-                    - Use environment variables or secure key management
-                    - Keys are masked in logs for security
-                    """)
-                    st.warning("💡 **Fallback:** Will use algorithmic AI preprocessing instead")
-                    
-            except ValueError as e:
-                if "API key not found" in str(e):
-                    st.error("❌ **API Key Configuration Error**")
-                    st.error("🔧 **Required:** Set `OPENAI_API_KEY` environment variable")
-                    st.warning("⚠️ **SECURITY WARNING:** Never store API keys in files or code repositories")
-                else:
-                    st.error(f"❌ **Configuration Error:** {str(e)}")
-                st.info("💡 **Fallback:** Using algorithmic AI preprocessing")
-                
-            except Exception as e:
-                st.error("❌ **ChatGPT-4.1 Service Unavailable**")
-                st.caption(f"Technical details: {str(e)}")
-                st.info("💡 **Fallback:** Using algorithmic AI preprocessing")
-        
-        else:
-            st.error("❌ **OpenAI Package Not Installed**")
-            st.code("pip install openai", language="bash")
-            st.info("💡 Install the OpenAI package to enable ChatGPT-4.1 preprocessing")
-    
     # Manual preprocessing parameters (collapsible when not selected)
     manual_params = {}
     if preprocessing_mode == "Manual":
@@ -2432,100 +2332,118 @@ def _render_analysis_inner() -> None:
             )
 
     # --- AutoDense Band Assist (lanes/bands pipeline) ---
-    st.markdown("### 🧪 AutoDense Band Assist (Beta)")
-    st.caption("Runs the AutoDense lanes/bands pipeline and shows an editable bands table with overlay.")
+    if not st.session_state.get('res_analysis_data'):
+        st.info("Run the analysis first to enable Band Assist fine-tuning.")
+    else:
+        with st.expander("🧪 Band Assist (optional)", expanded=False):
+            st.caption("Run the deterministic lanes/bands pipeline using your current calibration, then fine-tune detections if needed.")
 
-    ba_cols = st.columns([2,1])
-    with ba_cols[0]:
-        run_ba = st.button("🚀 Run Band Assist Pipeline", use_container_width=True)
-    with ba_cols[1]:
-        st.caption("Requires image upload; uses your current calibration and detection params.")
+            ctrl_run, ctrl_help = st.columns([1, 1])
+            with ctrl_run:
+                run_ba = st.button("🚀 Run Band Assist", use_container_width=True)
+            with ctrl_help:
+                st.caption("Uses the uploaded image and lane calibration from Step 1.")
 
-    if run_ba:
-        if not st.session_state.res_uploaded_image:
-            st.error("Upload an image first.")
-        else:
-            # Build minimal params from UI
-            params = {
-                "gel_type": st.session_state.params_gel_type,  # Use internal format for translation
-                "conf_threshold": float(st.session_state.params_conf_threshold),
-                "mw_lane": int(st.session_state.params_mw_lane),
-                # Optional background radius from manual params if available
-            }
-
-            # Show parameter translation preview
-            with st.expander("🔧 Parameter Translation Details", expanded=False):
-                is_valid, backend_params, explanations, errors = validate_and_explain_params(params)
-
-                if errors:
-                    st.error("Parameter validation failed:")
-                    for error in errors:
-                        st.error(f"• {error}")
+            if run_ba:
+                if not st.session_state.res_uploaded_image:
+                    st.error("Upload an image first.")
                 else:
-                    st.success("✅ Parameters validated successfully")
-                    for explanation in explanations:
-                        st.text(explanation)
-            # Get current lane calibration data
-            lane_calibration = get_current_lane_calibration()
-            print(f"DEBUG: lane_calibration from get_current_lane_calibration: {lane_calibration}")
-            boundaries = lane_calibration['lane_boundaries']
-            print(f"DEBUG: extracted boundaries: {boundaries}, type: {type(boundaries)}")
-            res = _try_run_ad_band_assist(
-                st.session_state.res_uploaded_image,
-                params,
-                lane_boundaries=boundaries
-            )
-            st.session_state.res_ba_errors = res.get("errors", [])
-            st.session_state.res_ba_lanes_rows = res.get("lanes", [])
-            st.session_state.res_ba_bands_rows = res.get("bands", [])
-            st.session_state.res_ba_overlay_png = res.get("overlay")
-            if res.get("errors"):
-                st.warning(" ; ".join(res["errors"]))
-            else:
-                st.success("Band Assist completed")
+                    params = {
+                        "gel_type": st.session_state.params_gel_type,
+                        "conf_threshold": float(st.session_state.params_conf_threshold),
+                        "mw_lane": int(st.session_state.params_mw_lane),
+                    }
 
-    # Preview overlay + lanes table
-    if st.session_state.res_ba_overlay_png:
-        c1, c2 = st.columns([2,1])
-        with c1:
-            st.image(st.session_state.res_ba_overlay_png, caption="Band Assist overlay", use_container_width=False)
-        with c2:
-            st.markdown("**Lanes (summary)**")
-            lane_cols = ["lane_index", "x0", "y0", "x1", "y1", "lane_type", "band_count"]
-            lanes_tbl = []
-            for r in (st.session_state.res_ba_lanes_rows or []):
-                lanes_tbl.append({k: r.get(k, "") for k in lane_cols})
-            st.dataframe(lanes_tbl, use_container_width=True, hide_index=True)
+                    with st.expander("🔧 Parameter translation", expanded=False):
+                        is_valid, backend_params, explanations, errors = validate_and_explain_params(params)
+                        if errors:
+                            st.error("Parameter validation failed:")
+                            for error in errors:
+                                st.error(f"• {error}")
+                        else:
+                            st.success("✅ Parameters validated successfully")
+                            for explanation in explanations:
+                                st.text(explanation)
 
-    # Editable bands table
-    if st.session_state.res_ba_bands_rows:
-        st.markdown("**Band Assist — editable bands**")
-        band_cols = ["lane_index", "band_index", "x0", "x1", "y0", "y1", "intensity", "confidence"]
-        edited = st.data_editor(
-            [{k: row.get(k, "") for k in band_cols} for row in st.session_state.res_ba_bands_rows],
-            key="ba_bands_editor",
-            num_rows="dynamic",
-            use_container_width=True,
-            hide_index=True,
-        )
-        if st.button("✏️ Apply Band Edits and Update Overlay"):
-            with st.spinner("✏️ Applying band edits..."):
-                st.info("🔄 Processing band modifications and regenerating overlay...")
-                st.session_state.res_ba_bands_rows = edited
-                try:
-                    base2 = st.session_state.res_uploaded_image.convert("RGB")
-                    if draw_ad_overlay and HAS_AD_PIPELINE:
-                        over = draw_ad_overlay(base2, lanes=st.session_state.res_ba_lanes_rows, bands=st.session_state.res_ba_bands_rows)  # type: ignore
-                        if isinstance(over, Image.Image):
-                            st.session_state.res_ba_overlay_png = to_png_bytes(over)
+                    lane_calibration = get_current_lane_calibration()
+                    boundaries = lane_calibration['lane_boundaries']
+                    res = _try_run_ad_band_assist(
+                        st.session_state.res_uploaded_image,
+                        params,
+                        lane_boundaries=boundaries
+                    )
+                    st.session_state.res_ba_errors = res.get("errors", [])
+                    st.session_state.res_ba_lanes_rows = res.get("lanes", [])
+                    st.session_state.res_ba_bands_rows = res.get("bands", [])
+                    st.session_state.res_ba_overlay_png = res.get("overlay")
+                    if res.get("errors"):
+                        st.session_state.band_assist_manual_run = False
+                        st.warning(" ; ".join(res["errors"]))
                     else:
-                        fallback = overlay_fallback(base2, st.session_state.res_ba_lanes_rows, st.session_state.res_ba_bands_rows)
-                        st.session_state.res_ba_overlay_png = to_png_bytes(fallback)
-                    st.success("✅ Band edits applied successfully!")
-                    announce_to_screen_reader("Band edits applied successfully", "assertive")
-                except Exception as e:
-                    st.error(f"⚠️ Failed to update overlay: {e}")
-                    announce_to_screen_reader(f"Band edits failed: {str(e)}", "assertive")
+                        st.session_state.band_assist_manual_run = True
+                        st.success("Band Assist completed")
+
+            has_overlay = bool(st.session_state.res_ba_overlay_png)
+            has_lanes = bool(st.session_state.res_ba_lanes_rows)
+            has_bands = bool(st.session_state.res_ba_bands_rows)
+
+            if has_overlay or has_lanes:
+                overlay_col, lanes_col = st.columns([3, 2])
+                with overlay_col:
+                    if has_overlay:
+                        st.image(
+                            st.session_state.res_ba_overlay_png,
+                            caption="Band Assist overlay",
+                            use_container_width=True,
+                        )
+                with lanes_col:
+                    st.markdown("**Lane summary**")
+                    lane_cols = ["lane_index", "x0", "y0", "x1", "y1", "lane_type", "band_count"]
+                    lanes_tbl = [
+                        {k: row.get(k, "") for k in lane_cols}
+                        for row in (st.session_state.res_ba_lanes_rows or [])
+                    ]
+                    if lanes_tbl:
+                        st.dataframe(lanes_tbl, use_container_width=True, hide_index=True)
+                    else:
+                        st.caption("No lanes detected yet.")
+
+            if has_bands:
+                with st.expander("✏️ Edit detected bands", expanded=False):
+                    st.caption("Adjust lane/band listings, then regenerate the overlay.")
+                    band_cols = ["lane_index", "band_index", "x0", "x1", "y0", "y1", "intensity", "confidence"]
+                    edited = st.data_editor(
+                        [{k: row.get(k, "") for k in band_cols} for row in st.session_state.res_ba_bands_rows],
+                        key="ba_bands_editor",
+                        num_rows="dynamic",
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                    if st.button("Apply edits and refresh overlay", key="apply_ba_edits"):
+                        with st.spinner("Updating band overlay..."):
+                            st.session_state.res_ba_bands_rows = edited
+                            try:
+                                base2 = st.session_state.res_uploaded_image.convert("RGB")
+                                if draw_ad_overlay and HAS_AD_PIPELINE:
+                                    over = draw_ad_overlay(
+                                        base2,
+                                        lanes=st.session_state.res_ba_lanes_rows,
+                                        bands=st.session_state.res_ba_bands_rows,
+                                    )  # type: ignore
+                                    if isinstance(over, Image.Image):
+                                        st.session_state.res_ba_overlay_png = to_png_bytes(over)
+                                else:
+                                    fallback = overlay_fallback(
+                                        base2,
+                                        st.session_state.res_ba_lanes_rows,
+                                        st.session_state.res_ba_bands_rows,
+                                    )
+                                    st.session_state.res_ba_overlay_png = to_png_bytes(fallback)
+                                st.success("✅ Band edits applied")
+                                announce_to_screen_reader("Band edits applied successfully", "assertive")
+                            except Exception as e:
+                                st.error(f"⚠️ Failed to update overlay: {e}")
+                                announce_to_screen_reader(f"Band edits failed: {str(e)}", "assertive")
     # Analysis execution section
     # Analysis execution section
     st.markdown("### 🚀 Execute Analysis")
@@ -2620,21 +2538,18 @@ def _render_analysis_inner() -> None:
                 # Step 1: Image preprocessing
                 if not st.session_state.get('analysis_cancelled', False):
                     status_text.info("🔬 **Step 1/5:** Preprocessing gel image...")
-                    progress_bar.progress(10, text="🔬 Starting image analysis...")
-            
-                    # Add specific feedback for AI preprocessing
-                    if preprocessing_mode.startswith("ChatGPT"):
-                        status_text.info("🤖 **Step 1/5:** AI is analyzing your gel image (this may take 30-60 seconds)...")
-                        progress_bar.progress(15, text="🤖 Contacting OpenAI ChatGPT-4.1...")
-                    else:
-                        progress_bar.progress(20, text="🔬 Optimizing image quality...")
-            
+                    progress_bar.progress(20, text="🔬 Optimizing image quality...")
+
                     img_hash = (st.session_state.res_image_metadata or {}).get('hash', '')
                     manual_params_str = json.dumps(manual_params) if preprocessing_mode == "Manual" else ""
-            
-                    # Enhanced spinner text for AI preprocessing
-                    spinner_text = "🤖 ChatGPT-4.1 is analyzing your gel image and recommending optimal preprocessing..." if preprocessing_mode.startswith("ChatGPT") else "Applying preprocessing algorithms..."
-            
+
+                    spinner_messages = {
+                        "auto": "Applying AutoDense heuristic preprocessing...",
+                        "manual": "Applying manual preprocessing parameters...",
+                        "off": "Skipping preprocessing — using the raw image...",
+                    }
+                    spinner_text = spinner_messages.get(preprocessing_mode.lower(), "Applying preprocessing algorithms...")
+
                     with st.spinner(spinner_text):
                         # Check for cancellation before expensive operation
                         if st.session_state.get('analysis_cancelled', False):
@@ -2850,30 +2765,16 @@ def _render_analysis_inner() -> None:
 
                 status_flag = (preproc_metadata.get('status') or 'success').lower()
 
-                if preprocessing_mode.startswith("ChatGPT"):
-                    confidence = preproc_metadata.get('confidence', 0.0)
-                    reasoning = preproc_metadata.get('reasoning', 'No reasoning provided')
-                    mode_display = preproc_metadata.get('mode', 'ChatGPT-4.1')
+                mode_display = preproc_metadata.get('mode', preprocessing_mode)
+                raw_mode = preproc_metadata.get('raw_mode')
+                note = preproc_metadata.get('note')
 
-                    message = f"🧠 **AI Decision:** {mode_display} (Confidence: {confidence:.1%})"
-                    if status_flag in {"fallback", "error"}:
-                        st.error(message)
-                    else:
-                        st.success(message)
-
-                    with st.expander("🤖 AI Reasoning & Analysis"):
-                        st.info(f"**AI Reasoning:** {reasoning}")
-                        if 'params' in preproc_metadata:
-                            st.json(preproc_metadata['params'])
-        
-                elif preprocessing_mode.startswith("AI"):
-                    mode_display = preproc_metadata.get('mode', 'AI Guarded')
-                    st.info(f"🧠 **Preprocessing:** {mode_display}")
-            
+                if preprocessing_mode == "Auto (heuristic)":
+                    banner = st.success
+                    banner(f"🧠 **Preprocessing:** {mode_display}")
                     if 'before' in preproc_metadata and 'after' in preproc_metadata:
                         before_metrics = preproc_metadata['before']
                         after_metrics = preproc_metadata['after']
-                
                         col1, col2, col3 = st.columns(3)
                         with col1:
                             snr_delta = after_metrics.get('snr', 0) - before_metrics.get('snr', 0)
@@ -2883,17 +2784,31 @@ def _render_analysis_inner() -> None:
                             st.metric("Separation Δ", f"{sep_delta:+.3f}")
                         with col3:
                             st.metric("Quality Score", f"{after_metrics.get('quality', 0):.2f}")
-        
-                else:
-                    mode_display = preproc_metadata.get('mode', 'Manual/Raw')
+                    if note:
+                        st.caption(note)
+
+                elif preprocessing_mode == "Manual":
                     st.info(f"🛠️ **Preprocessing:** {mode_display}")
+                    if 'params' in preproc_metadata:
+                        with st.expander("Manual parameter snapshot", expanded=False):
+                            st.json(preproc_metadata['params'])
+                    if note:
+                        st.caption(note)
+
+                else:  # Off
+                    warning_text = "Preprocessing was skipped; results reflect the raw image."
+                    if status_flag in {"fallback", "error"} and preproc_metadata.get('error'):
+                        warning_text = preproc_metadata['error']
+                    st.warning(f"📷 **Preprocessing:** {mode_display}\n\n{warning_text}")
+                    if note:
+                        st.caption(note)
         
                 # Analysis pipeline status
                 st.markdown("#### 🔄 Analysis Pipeline Status")
 
                 preprocessing_icon = "✅"
                 preprocessing_fn = st.success
-                if preprocessing_mode.startswith("ChatGPT") and status_flag in {"fallback", "error"}:
+                if status_flag in {"fallback", "error"}:
                     preprocessing_icon = "⚠️"
                     preprocessing_fn = st.warning
 
@@ -3044,339 +2959,131 @@ def render_step_results() -> None:
         return
 
     st.markdown('<div class="workflow-section scroll-target" id="section-results">', unsafe_allow_html=True)
-    st.markdown("### 📊 Step 4: Results & Export")
+    st.markdown("### 📊 Step 4: Results Overview")
 
     st.markdown('<div class="results-primary">', unsafe_allow_html=True)
     overlay_png = st.session_state.get('res_ba_overlay_png')
     if overlay_png:
-        st.image(overlay_png, caption="Analysis Results – Gel Overlay", use_container_width=True)
+        st.image(overlay_png, caption="Analysis overlay", use_container_width=True)
     else:
-        st.info("Visual overlay will appear here after running Band Assist.")
+        st.caption("Run analysis and Band Assist to view the annotated gel overlay.")
     st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="results-secondary">', unsafe_allow_html=True)
 
     st.success(f"""
-    ✅ **Analysis Complete** - ID: {results['analysis_id']}  
-    📅 **Completed:** {results['timestamp'][:19]} | 🔄 **Run #{results['analysis_count']}**
+    ✅ **Analysis complete** — ID: {results['analysis_id']}  
+    📅 Completed: {results['timestamp'][:19]}  |  🔄 Run #{results['analysis_count']}
     """)
 
-    # Main results dashboard
-    st.markdown("### 📊 Analysis Dashboard")
-    
-    # Key metrics overview
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        gel_type_display = results['parameters']['gel_type'].replace('_', ' ').title()
-        st.metric(
-            "Gel Type",
-            gel_type_display,
-            help="Type of gel analyzed"
-        )
-    
-    with col2:
-        st.metric(
-            "Total Lanes",
-            results['parameters']['n_lanes'],
-            help="Number of configured lanes"
-        )
-    
-    with col3:
-        st.metric(
-            "MW Standard",
-            f"Lane {results['parameters']['mw_lane']}",
-            help="Lane containing molecular weight standards"
-        )
-    
-    with col4:
-        modality_display = results['parameters']['modality'].upper()
-        st.metric(
-            "Analysis Type",
-            modality_display,
-            help="Protein (SDS) or DNA analysis"
-        )
-    
-    # Detailed results sections
-    
-    # 1. Preprocessing Results
-    with st.expander("🔬 Preprocessing Analysis", expanded=True):
-        preproc = results['preprocessing']
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**Processing Summary:**")
-            
-            mode = preproc.get('mode', 'Unknown')
-            status = preproc.get('status', 'unknown')
-            
-            if status == 'success':
-                st.success(f"✅ **Method:** {mode}")
-            elif status == 'error':
-                st.error(f"❌ **Method:** {mode} (with errors)")
-            else:
-                st.info(f"ℹ️ **Method:** {mode}")
-            
-            # ChatGPT-specific results
-            if 'confidence' in preproc:
-                confidence = preproc['confidence']
-                reasoning = preproc.get('reasoning', 'No reasoning provided')
-                
-                st.metric("AI Confidence", f"{confidence:.1%}")
-                
-                with st.expander("🤖 AI Reasoning"):
-                    st.info(f"**Analysis:** {reasoning}")
-            
-            # Algorithmic AI results
-            elif 'before' in preproc and 'after' in preproc:
-                before_metrics = preproc['before']
-                after_metrics = preproc['after']
-                
-                st.markdown("**Quality Improvements:**")
-                
-                # Calculate improvements
-                snr_improvement = after_metrics.get('snr', 0) - before_metrics.get('snr', 0)
-                sep_improvement = after_metrics.get('sep', 0) - before_metrics.get('sep', 0)
-                
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    st.metric("SNR Δ", f"{snr_improvement:+.2f} dB")
-                with col_b:
-                    st.metric("Separation Δ", f"{sep_improvement:+.3f}")
-        
-        with col2:
-            st.markdown("**Technical Details:**")
-            
-            # Show preprocessing parameters in a formatted way
-            if 'params' in preproc:
-                params = preproc['params']
-                if isinstance(params, dict) and params:
-                    for key, value in params.items():
-                        if isinstance(value, (int, float)):
-                            st.caption(f"• **{key}:** {value:.3f}")
-                        else:
-                            st.caption(f"• **{key}:** {value}")
-            
-            # Error information if present
-            if 'error' in preproc:
-                st.warning(f"⚠️ **Note:** {preproc['error']}")
-            
-            # Processing time (if available)
-            if 'processing_time' in preproc:
-                st.caption(f"⏱️ **Processing time:** {preproc['processing_time']:.2f}s")
-        
-        # Full preprocessing data (collapsible)
-        with st.expander("📄 Complete Preprocessing Data"):
+    params = results.get('parameters', {})
+    lane_boundaries = results.get('lane_boundaries') or []
+    detected_bands = st.session_state.get('res_ba_bands_rows') or []
+    preproc = results.get('preprocessing', {})
+
+    summary_cols = st.columns(3)
+    with summary_cols[0]:
+        st.metric("Total lanes", params.get('n_lanes', len(lane_boundaries)))
+        st.metric("MW lane", f"Lane {params.get('mw_lane', '—')}")
+    with summary_cols[1]:
+        st.metric("Bands listed", len(detected_bands))
+        st.metric("Confidence", f"{params.get('conf_threshold', 0):.2f}")
+    with summary_cols[2]:
+        st.metric("Gel type", params.get('gel_type', '—').replace('_', ' ').title())
+        st.metric("Modality", params.get('modality', '—').upper())
+
+    with st.expander("🔬 Preprocessing details", expanded=False):
+        mode = preproc.get('mode', 'Unknown')
+        status = preproc.get('status', 'unknown')
+        if status == 'success':
+            st.success(f"Method: {mode}")
+        elif status == 'error':
+            st.error(f"Method failed: {mode}")
+            if preproc.get('error'):
+                st.caption(preproc['error'])
+        else:
+            st.info(f"Method: {mode}")
+
+        before_metrics = preproc.get('before') or {}
+        after_metrics = preproc.get('after') or {}
+        if before_metrics and after_metrics:
+            delta_cols = st.columns(2)
+            with delta_cols[0]:
+                st.metric("SNR", f"{after_metrics.get('snr', 0):.2f}", f"{after_metrics.get('snr',0) - before_metrics.get('snr',0):+.2f}")
+            with delta_cols[1]:
+                st.metric("Lane separation", f"{after_metrics.get('sep', 0):.2f}", f"{after_metrics.get('sep',0) - before_metrics.get('sep',0):+.2f}")
+        if preproc.get('note'):
+            st.caption(preproc['note'])
+        with st.expander("Raw preprocessing metadata", expanded=False):
             st.json(preproc)
-    
-    # 2. Lane Configuration Results
-    with st.expander("🎯 Lane Configuration Analysis", expanded=True):
-        lane_boundaries = results['lane_boundaries']
-        
+
+    with st.expander("🎯 Lane & band details", expanded=False):
         if lane_boundaries and HAS_LANE_MAPPING:
             try:
                 from autodense.preprocess.simple_lane_mapping import boundaries_to_dataframe
-                
-                # Convert to DataFrame for better display
-                df = boundaries_to_dataframe(lane_boundaries)
-                
-                st.markdown("**Lane Boundary Configuration:**")
-                
-                # Enhanced dataframe display
-                st.dataframe(
-                    df,
-                    use_container_width=True,
-                    column_config={
-                        "lane_index": st.column_config.NumberColumn(
-                            "Lane #",
-                            format="%d",
-                            help="Lane number"
-                        ),
-                        "center_px": st.column_config.NumberColumn(
-                            "Center (px)",
-                            format="%.1f",
-                            help="Lane center position"
-                        ),
-                        "left_px": st.column_config.NumberColumn(
-                            "Left Edge (px)",
-                            format="%.1f",
-                            help="Left boundary position"
-                        ),
-                        "right_px": st.column_config.NumberColumn(
-                            "Right Edge (px)",
-                            format="%.1f",
-                            help="Right boundary position"
-                        ),
-                        "width_px": st.column_config.NumberColumn(
-                            "Width (px)",
-                            format="%.1f",
-                            help="Lane width"
-                        )
-                    }
-                )
-                
-                # Lane statistics
-                st.markdown("**Lane Statistics:**")
-                col1, col2, col3, col4 = st.columns(4)
-                
-                lane_widths = [b.width_px for b in lane_boundaries]
-                lane_spacings = [lane_boundaries[i].center_px - lane_boundaries[i-1].center_px 
-                               for i in range(1, len(lane_boundaries))]
-                
-                with col1:
-                    st.metric("Avg Width", f"{np.mean(lane_widths):.1f} px")
-                with col2:
-                    st.metric("Width StdDev", f"{np.std(lane_widths):.1f} px")
-                with col3:
-                    st.metric("Avg Spacing", f"{np.mean(lane_spacings):.1f} px")
-                with col4:
-                    coverage = ((lane_boundaries[-1].right_px - lane_boundaries[0].left_px) / 
-                               st.session_state.res_image_metadata['dimensions'][0] * 100)
-                    st.metric("Coverage", f"{coverage:.1f}%")
-                
-            except Exception as e:
-                st.error(f"Error displaying lane data: {e}")
-                st.json([{"lane": b.lane_index, "center": b.center_px} for b in lane_boundaries[:5]])
-        
+                st.dataframe(boundaries_to_dataframe(lane_boundaries), use_container_width=True)
+            except Exception as exc:
+                st.warning(f"Could not render lane table: {exc}")
         else:
-            st.info("Lane boundary data not available or display modules missing")
-    
-    # 3. Analysis Parameters Summary
-    with st.expander("⚙️ Analysis Parameters", expanded=False):
-        params = results['parameters']
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**Gel Configuration:**")
-            st.info(f"• **Type:** {params['gel_type']}")
-            st.info(f"• **Modality:** {params['modality'].upper()}")
-            st.info(f"• **Lanes:** {params['n_lanes']}")
-            st.info(f"• **MW Lane:** {params['mw_lane']}")
-        
-        with col2:
-            st.markdown("**Detection Settings:**")
-            st.info(f"• **Confidence:** {params['conf_threshold']:.2f}")
-            st.info(f"• **MW Standard:** {params['ladder_type']}")
-            st.info(f"• **Preprocessing:** {params['preprocessing_mode']}")
-            
+            st.caption("Lane boundary table not available.")
+
+        if detected_bands:
+            st.metric("Bands recorded", len(detected_bands))
+            st.caption("Modify bands from the Band Assist panel above.")
+
+    with st.expander("⚙️ Analysis parameters", expanded=False):
+        config_cols = st.columns(2)
+        with config_cols[0]:
+            st.markdown("**Gel configuration**")
+            st.write(f"• Type: {params.get('gel_type', '—')}")
+            st.write(f"• Modality: {params.get('modality', '—').upper()}")
+            st.write(f"• Total lanes: {params.get('n_lanes', '—')}")
+            st.write(f"• MW lane: {params.get('mw_lane', '—')}")
+        with config_cols[1]:
+            st.markdown("**Detection settings**")
+            st.write(f"• Confidence threshold: {params.get('conf_threshold', 0):.2f}")
+            st.write(f"• Ladder type: {params.get('ladder_type', '—')}")
+            st.write(f"• Preprocessing mode: {params.get('preprocessing_mode', '—')}")
             if params.get('manual_params'):
-                st.caption("• Custom preprocessing parameters applied")
-        
-        # Analysis warnings
+                st.caption("Manual preprocessing parameters were applied.")
         if results.get('warnings'):
-            st.markdown("**Analysis Warnings:**")
-            for warning in results['warnings']:
-                st.warning(f"⚠️ {warning}")
-    
-    # 4. Export and Download Options
-    st.markdown("### 📥 Export & Download Options")
-    # --- AutoDense Band Assist exports ---
-    st.markdown("### 🧾 AutoDense Band Assist — Exports")
-    lanes = st.session_state.get("res_ba_lanes_rows") or []
-    bands = st.session_state.get("res_ba_bands_rows") or []
-    if lanes or bands or st.session_state.get("res_ba_overlay_png"):
+            st.warning("Warnings: " + "; ".join(results['warnings']))
+
+    st.markdown("### 💾 Save & Continue")
+    st.button("💾 Save analysis snapshot", disabled=True, help="Persistence workspace coming soon")
+    st.caption("Use this checkpoint to persist results before deeper analysis or reporting.")
+
+    st.markdown("### 💬 Analysis Companion (coming soon)")
+    st.info("A guided chat workspace will appear here to help interpret results and design follow-up workflows.")
+
+    with st.expander("📥 Export & download", expanded=False):
+        lanes = st.session_state.get("res_ba_lanes_rows") or []
+        bands = st.session_state.get("res_ba_bands_rows") or []
+        overlay = st.session_state.get("res_ba_overlay_png")
+
         lane_cols = ["lane_index", "x0", "y0", "x1", "y1", "lane_type", "band_count"]
         band_cols = ["lane_index", "band_index", "x0", "x1", "y0", "y1", "intensity", "confidence"]
-        lcsv = convert_to_csv(lanes, lane_cols) if lanes else ""
-        bcsv = convert_to_csv(bands, band_cols) if bands else ""
-        ec1, ec2, ec3 = st.columns(3)
-        with ec1:
-            st.download_button("⬇️ lanes.csv", data=lcsv, file_name="lanes.csv", mime="text/csv", use_container_width=True, disabled=not bool(lanes))
-        with ec2:
-            st.download_button("⬇️ bands.csv", data=bcsv, file_name="bands.csv", mime="text/csv", use_container_width=True, disabled=not bool(bands))
-        with ec3:
-            if st.session_state.get("res_ba_overlay_png"):
-                st.download_button("⬇️ overlay.png", data=st.session_state.res_ba_overlay_png, file_name="overlay.png", mime="image/png", use_container_width=True)
-    else:
-        st.caption("No Band Assist data yet.")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("**🗂️ Data Tables**")
-        
-        # Lane configuration CSV
-        if lane_boundaries and HAS_LANE_MAPPING:
-            try:
-                csv_data = boundaries_to_csv(lane_boundaries)
-                
-                st.download_button(
-                    "📊 **Lane Boundaries CSV**",
-                    csv_data,
-                    f"autodense_lanes_{results['analysis_id']}.csv",
-                    "text/csv",
-                    help="Download lane boundary data for external analysis",
-                    use_container_width=True
-                )
-            except Exception as e:
-                st.button(
-                    "📊 Lane CSV",
-                    disabled=True,
-                    help=f"Export failed: {e}",
-                    use_container_width=True
-                )
-        else:
-            st.button(
-                "📊 Lane CSV",
-                disabled=True,
-                help="Lane data not available",
-                use_container_width=True
-            )
-        
-        # Band intensity data (placeholder)
-        st.button(
-            "📈 **Band Data CSV**",
-            disabled=True,
-            help="Band quantification data (coming soon)",
-            use_container_width=True
-        )
-    
-    with col2:
-        st.markdown("**📋 Analysis Reports**")
-        
-        # Complete analysis parameters JSON
-        analysis_json = json.dumps(results, indent=2, default=str)
-        st.download_button(
-            "⚙️ **Analysis Report JSON**",
-            analysis_json,
-            f"autodense_analysis_{results['analysis_id']}.json",
-            "application/json",
-            help="Complete analysis configuration and metadata",
-            use_container_width=True
-        )
-        
-        # Summary report (placeholder)
-        st.button(
-            "📄 **Summary Report PDF**",
-            disabled=True,
-            help="Comprehensive analysis report (coming soon)",
-            use_container_width=True
-        )
+        lane_data = convert_to_csv(lanes, lane_cols) if lanes else ""
+        band_data = convert_to_csv(bands, band_cols) if bands else ""
+
+        export_cols = st.columns(3)
+        with export_cols[0]:
+            st.markdown("**Lanes/Bands CSV**")
+            st.download_button("⬇️ lanes.csv", data=lane_data, file_name="lanes.csv", mime="text/csv", use_container_width=True, disabled=not lanes)
+            st.download_button("⬇️ bands.csv", data=band_data, file_name="bands.csv", mime="text/csv", use_container_width=True, disabled=not bands)
+        with export_cols[1]:
+            st.markdown("**Analysis snapshot**")
+            analysis_json = json.dumps(results, indent=2, default=str)
+            st.download_button("⚙️ analysis.json", data=analysis_json, file_name=f"autodense_analysis_{results['analysis_id']}.json", mime="application/json", use_container_width=True)
+            st.button("📄 summary.pdf", disabled=True, help="Coming soon", use_container_width=True)
+        with export_cols[2]:
+            st.markdown("**Visuals**")
+            st.download_button("🖼️ overlay.png", data=overlay or b"", file_name="overlay.png", mime="image/png", use_container_width=True, disabled=overlay is None)
+            st.button("📊 charts.zip", disabled=True, help="Coming soon", use_container_width=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    with col3:
-        st.markdown("**🖼️ Visual Exports**")
-        
-        # Annotated gel images (placeholder)
-        st.button(
-            "🎨 **Annotated Gel Image**",
-            disabled=True,
-            help="High-resolution gel with overlays (coming soon)",
-            use_container_width=True
-        )
-        
-        # Results visualization (placeholder)
-        st.button(
-            "📊 **Results Visualization**",
-            disabled=True,
-            help="Interactive charts and graphs (coming soon)",
-            use_container_width=True
-        )
-    
     # 5. Analysis History and Management
     with st.expander("🗂️ Analysis History & Management", expanded=False):
         st.markdown(f"**Current Analysis:** {results['analysis_id']}")
@@ -3438,7 +3145,6 @@ def render_step_results() -> None:
             st.markdown("**System Information:**")
             system_info = {
                 "has_preprocess": HAS_PREPROCESS,
-                "has_openai": HAS_OPENAI,
                 "has_drawable_canvas": HAS_DRAWABLE_CANVAS,
                 "has_lane_mapping": HAS_LANE_MAPPING,
                 "session_analysis_count": st.session_state.ui_analysis_count,
