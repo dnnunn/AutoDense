@@ -1319,7 +1319,11 @@ def render_step_upload_and_calibration() -> None:
         ("1. Upload Image", upload_done, not upload_done),
         ("2. Calibrate Lanes", calibration_done, upload_done and not calibration_done),
         ("3. Analyze", analysis_done, calibration_done and not analysis_done),
-        ("4. Results", False, analysis_done),
+        (
+            "4. Results",
+            analysis_done,
+            analysis_done and not bool(st.session_state.get('res_export_data')),
+        ),
     ]
 
     tracker_html = ["<div class=\"step-tracker\">"]
