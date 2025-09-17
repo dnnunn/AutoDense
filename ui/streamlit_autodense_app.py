@@ -965,6 +965,31 @@ h1, h2, h3, h4, h5, h6 {
     border-color: rgba(255, 75, 75, 0.3);
 }
 
+.calibration-tip {
+    background: rgba(255, 75, 75, 0.06);
+    border-left: 3px solid rgba(255, 75, 75, 0.4);
+    padding: 8px 12px;
+    margin-bottom: 0.5rem;
+    border-radius: 6px;
+    color: #4c4c4c;
+    transition: opacity 0.25s ease;
+}
+
+.calibration-tip .calibration-icon {
+    margin-right: 8px;
+}
+
+.calibration-tip.step2 {
+    background: rgba(36, 155, 64, 0.1);
+    border-left-color: rgba(36, 155, 64, 0.4);
+    color: #1f5131;
+}
+
+.calibration-tip.step-done {
+    background: rgba(223, 240, 216, 0.5);
+    border-left-color: rgba(36, 155, 64, 0.2);
+}
+
 /* Sticky footer navigation */
 #ad-sticky-footer {
     position: fixed;
@@ -1241,7 +1266,7 @@ def render_step_upload_and_calibration() -> None:
         # Gel configuration section
         st.markdown("### 🧪 Gel Configuration")
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         
         with col1:
             gel_type = st.selectbox(
@@ -1260,10 +1285,13 @@ def render_step_upload_and_calibration() -> None:
                 st.markdown("🧬 **DNA Analysis** (Agarose + EtBr)")
         
         with col2:
+            default_lanes = 12 if gel_type == "sds_page" else 20
+            if st.session_state.params_n_lanes not in (12, 20):
+                default_lanes = st.session_state.params_n_lanes
             n_lanes = st.number_input(
                 "Number of lanes:",
                 min_value=2, max_value=30,
-                value=st.session_state.params_n_lanes,
+                value=default_lanes,
                 step=1,
                 help="Total number of sample lanes including molecular weight standard"
             )
@@ -1276,23 +1304,6 @@ def render_step_upload_and_calibration() -> None:
                 st.markdown("📏 **Medium density** (standard commercial gels)")
             else:
                 st.markdown("📏 **High density** (may need careful calibration)")
-        
-        with col3:
-            # Gel recommendations based on type and lane count
-            if HAS_LANE_MAPPING:
-                try:
-                    gel_settings = get_recommended_gel_settings(gel_type, n_lanes)
-                    st.info(f"💡 **Recommendation:** {gel_settings['description']}")
-                    
-                    # Show additional tips
-                    if 'tips' in gel_settings:
-                        with st.expander("💡 Optimization Tips"):
-                            for tip in gel_settings['tips']:
-                                st.markdown(f"- {tip}")
-                except:
-                    st.info("💡 Configure based on your specific gel setup")
-            else:
-                st.info("💡 Configure lanes based on your gel specifications")
         
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1371,9 +1382,9 @@ def render_step_upload_and_calibration() -> None:
             st.markdown("#### 🖱️ Interactive Calibration")
             
             # Canvas controls with improved UX
-            col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
-            
-            with col2:
+            controls_col1, controls_col2, controls_col3 = st.columns([1, 1, 1])
+
+            with controls_col1:
                 clear_btn = st.button(
                     "🔄 Clear Points",
                     help="Remove all calibration points and start over",
@@ -1384,8 +1395,8 @@ def render_step_upload_and_calibration() -> None:
                     st.session_state.ui_canvas_key += 1
                     st.session_state.ui_last_action = "clear_calibration"
                     st.rerun()
-            
-            with col3:
+
+            with controls_col2:
                 undo_btn = st.button(
                     "↩️ Undo Last",
                     help="Remove the most recently placed point",
@@ -1396,8 +1407,8 @@ def render_step_upload_and_calibration() -> None:
                     st.session_state.res_calibration_points = st.session_state.res_calibration_points[:-1]
                     st.session_state.ui_canvas_key += 1
                     st.rerun()
-            
-            with col4:
+
+            with controls_col3:
                 help_btn = st.button(
                     "❓ Help",
                     help="Show detailed calibration guidance",
@@ -1412,55 +1423,38 @@ def render_step_upload_and_calibration() -> None:
                  role="img" 
                  aria-label="Interactive gel image for two-point calibration"
                  tabindex="0">
-            <p style="font-size: 12px; color: #6c757d; margin-bottom: 8px;">
-                Click on two band centers to calibrate lane positions. Points: {len(st.session_state.res_calibration_points)}/2
-            </p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Accessibility: Keyboard navigation options
-            st.markdown("""
-            <div role="application" aria-label="Gel calibration interface">
-                <p><strong>Keyboard Navigation:</strong> Use the coordinate input fields below if you cannot use the interactive image.</p>
             </div>
             """, unsafe_allow_html=True)
 
-            # Keyboard accessibility: Manual coordinate input option
-            with st.expander("⌨️ Keyboard/Manual Coordinate Entry", expanded=False):
-                st.markdown("**Alternative input method for precise coordinate entry or keyboard navigation:**")
-                col1, col2 = st.columns(2)
+            points_existing = st.session_state.res_calibration_points
+            if len(points_existing) == 0:
+                tip_text = "Step 1: Place the first calibration point in the exact center of a distinct band in the left-most lane (ideally the molecular weight ladder)."
+                tip_class = "calibration-tip step1"
+                tip_icon = "☝️"
+            elif len(points_existing) == 1:
+                tip_text = "Step 2: Place the second calibration point in the exact center of a distinct band in a right-hand lane (preferably as far right as possible)."
+                tip_class = "calibration-tip step2"
+                tip_icon = "☝️"
+            else:
+                tip_text = "Calibration points captured. Use Clear or Undo to adjust if needed."
+                tip_class = "calibration-tip step-done"
+                tip_icon = "✅"
+            st.markdown(
+                f"<div class='{tip_class}'><span class='calibration-icon'>{tip_icon}</span> {tip_text}</div>",
+                unsafe_allow_html=True
+            )
 
-                with col1:
-                    manual_x = st.number_input("X Coordinate", min_value=0, max_value=w, value=w//2,
-                                             help="Horizontal position on the image (0 = left edge)")
-                with col2:
-                    manual_y = st.number_input("Y Coordinate", min_value=0, max_value=h, value=h//2,
-                                             help="Vertical position on the image (0 = top edge)")
+            # Use streamlit-image-coordinates for better UX
+            display_width = min(w, 800)  # Max display width
+            display_height = int(display_width * h / w)
 
-                if st.button("Add Manual Coordinate Point", help="Add the coordinate point using the values above"):
-                    with st.spinner("📍 Processing coordinate point..."):
-                        # Handle manual coordinate input
-                        coord_result = {'x': manual_x, 'y': manual_y}
-                        # Add brief processing delay to show loading state for user feedback
-                        import time
-                        time.sleep(0.5)  # Brief pause to demonstrate loading state
-                    st.success(f"✅ Manual coordinate added: ({manual_x}, {manual_y})")
-                    announce_to_screen_reader(f"Coordinate point added at {manual_x}, {manual_y}", "assertive")
-                else:
-                    coord_result = None
-
-            if coord_result is None:  # Only show interactive canvas if no manual input
-                # Use streamlit-image-coordinates for better UX
-                display_width = min(w, 800)  # Max display width
-                display_height = int(display_width * h / w)
-
-                coord_result = streamlit_image_coordinates(
-                    img,
-                    width=display_width,
-                    height=display_height,
-                    cursor="crosshair",
-                    key=f"calibration_coords_{st.session_state.ui_canvas_key}"
-                )
+            coord_result = streamlit_image_coordinates(
+                img,
+                width=display_width,
+                height=display_height,
+                cursor="crosshair",
+                key=f"calibration_coords_{st.session_state.ui_canvas_key}"
+            )
             
             # Handle coordinate clicks
             if coord_result is not None and coord_result.get('x') is not None:
@@ -1572,36 +1566,7 @@ def render_step_upload_and_calibration() -> None:
         # Calibration status and lane assignment
         points = st.session_state.res_calibration_points
         
-        if len(points) == 0:
-            st.info("👆 **Step 1:** Place first calibration point on the gel image")
-            
-            # Show calibration tips when no points
-            st.markdown("""
-            <div class="info-panel">
-            <strong>💡 Getting started:</strong><br>
-            • Look for distinct, well-defined bands in your gel<br>
-            • Start with the molecular weight standard lane (usually leftmost)<br>
-            • Click precisely on the center of a clear band
-            </div>
-            """, unsafe_allow_html=True)
-        
-        elif len(points) == 1:
-            (x1, y1) = points[0]
-            st.success(f"✅ **First calibration point set:** ({x1}, {y1})")
-            st.info("👆 **Step 2:** Place second calibration point in a different lane")
-            
-            # Show progress and guidance
-            st.markdown(f"""
-            <div class="info-panel">
-            <strong>Next step:</strong><br>
-            • Choose a lane far from the first point (lane separation helps accuracy)<br>
-            • Look for another distinct band at roughly the same gel height<br>
-            • Click precisely on the band center
-            </div>
-            """, unsafe_allow_html=True)
-        
-        elif len(points) >= 2:
-            st.success(f"✅ **Calibration points ready:** {len(points)} points captured")
+        if len(points) >= 2:
             
             if len(points) > 2:
                 st.info(f"ℹ️ Using first two points only (ignoring {len(points) - 2} extra points)")

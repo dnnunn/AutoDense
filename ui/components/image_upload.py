@@ -118,18 +118,6 @@ def render_image_upload(
 
         st.session_state.ui_last_action = "upload"
 
-        # Quality assessment with standardization info
-        if metadata['standardized']:
-            st.info(f"📏 Image standardized: {original_size[0]}×{original_size[1]}px → {w}×{h}px")
-            st.success(f"✅ Standardized for optimal processing and ChatGPT compatibility")
-        else:
-            st.success(f"✅ Image size already optimal: {w}×{h}px")
-
-        if w < 500 or h < 300:
-            st.warning(f"⚠️ Small image ({w}×{h}px) may produce less accurate results.")
-        elif original_size[0] > 4000 or original_size[1] > 4000:
-            st.success(f"🚀 Large image optimized: {original_size[0]}×{original_size[1]}px → {w}×{h}px")
-
         return img, img_array, metadata
 
     # Render the component UI
@@ -155,16 +143,6 @@ def render_image_upload(
             metadata: ImageMetadata
             img, img_array, metadata = result
             h, w, _ = img_array.shape
-
-            st.success(f"✅ Image successfully loaded: {metadata['filename']}")
-            st.toast(f"Image loaded: {metadata['filename']}", icon="✅")
-
-            # Announce to screen readers for accessibility
-            try:
-                from ..streamlit_autodense_app import announce_to_screen_reader
-                announce_to_screen_reader(f"Image {metadata['filename']} loaded successfully", "assertive")
-            except ImportError:
-                pass  # Fallback if announce function not available
 
             # Display image metadata if requested
             if show_metadata:
