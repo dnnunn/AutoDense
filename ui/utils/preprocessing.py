@@ -12,7 +12,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 import json
 import base64
 import concurrent.futures as _futures
-from typing import Dict, Any, Tuple, Optional
+import re
+from typing import Dict, Any, Tuple, Optional, Union
 from PIL import Image, ImageOps
 
 # Import Phase 1 utilities
@@ -22,6 +23,42 @@ from .data_helpers import extract_json
 # Initialize preprocessing capabilities
 HAS_PREPROCESS = False
 HAS_OPENAI = False
+
+_API_KEY_PATTERN = re.compile(r"sk-[A-Za-z0-9_\-\*]{8,}")
+
+
+def _mask_openai_keys(text: str) -> str:
+    """Mask API key-like substrings to avoid leaking secrets."""
+    def _replacer(match: re.Match) -> str:
+        token = match.group(0)
+        if len(token) <= 8:
+            return "sk-***"
+        return f"{token[:8]}…{token[-4:]}"
+
+    return _API_KEY_PATTERN.sub(_replacer, text)
+
+
+def sanitize_openai_error(error: Union[str, Exception]) -> str:
+    """Sanitize raw OpenAI error text by masking sensitive substrings."""
+    return _mask_openai_keys(str(error))
+
+
+def summarize_openai_error(error: Union[str, Exception]) -> str:
+    """Provide a user-friendly OpenAI error description without leaking secrets."""
+    raw = str(error)
+    sanitized = sanitize_openai_error(raw)
+    lowered = raw.lower()
+
+    if "incorrect api key" in lowered or "invalid_api_key" in lowered:
+        return "Invalid OpenAI API key. Set a valid `OPENAI_API_KEY`."
+    if "rate limit" in lowered:
+        return "OpenAI API rate limit exceeded. Try again soon."
+    if "timeout" in lowered:
+        return "OpenAI API request timed out. Please retry."
+    if "organization" in lowered and "does not exist" in lowered:
+        return "OpenAI organization not found. Check `OPENAI_ORG`."
+
+    return sanitized
 
 def _initialize_capabilities():
     """Initialize preprocessing capabilities on module load."""
@@ -113,7 +150,41 @@ def _openai_preprocess_with_timeout(pil_img: Image.Image, timeout_sec: int = 75)
     def _task():
         # Image is already standardized at upload time, no need to resize again
         outcome = openai_guided_preprocess(pil_img)
-        meta = {"mode": f"ChatGPT-4.1: {getattr(outcome, 'mode', 'unknown')}", "status": "success"}
+        mode_label = getattr(outcome, "mode", "ChatGPT-4.1")
+        meta: Dict[str, Any] = {"mode": mode_label, "status": "success"}
+
+        extra_meta = getattr(outcome, "meta", {})
+        if isinstance(extra_meta, dict):
+            confidence = extra_meta.get("confidence")
+            if confidence is not None:
+                meta["confidence"] = confidence
+            elif extra_meta.get("ai_confidence") is not None:
+                meta["confidence"] = extra_meta["ai_confidence"]
+
+            reasoning = extra_meta.get("reasoning")
+            if reasoning:
+                meta["reasoning"] = reasoning
+            elif extra_meta.get("ai_reasoning"):
+                meta["reasoning"] = extra_meta["ai_reasoning"]
+
+            if extra_meta.get("error") and "error" not in meta:
+                meta["error"] = extra_meta["error"]
+
+            if extra_meta.get("status"):
+                meta["status"] = extra_meta["status"]
+
+            for key, value in extra_meta.items():
+                if key in {"confidence", "ai_confidence", "reasoning", "ai_reasoning", "error", "status"}:
+                    continue
+                if value is not None and key not in meta:
+                    meta[key] = value
+
+        error_info = getattr(outcome, "error_info", None)
+        if error_info and "error" not in meta:
+            meta["error"] = error_info
+        if error_info and meta.get("status") == "success":
+            meta["status"] = "fallback"
+
         params = getattr(outcome, "params", None)
         if isinstance(params, dict):
             meta.update(params)
@@ -171,11 +242,13 @@ def openai_guided_preprocess(pil_img):
             # Continue with fallback parameters
 
     except Exception as e:
-        print(f"OpenAI API error: {e}")
+        friendly_error = summarize_openai_error(e)
+        print(f"OpenAI API error: {friendly_error}")
         # Provide fallback response for any API errors
+        fallback_reason = f"Fallback due to OpenAI error: {friendly_error}"
         obj = {
-            "error": f"API error: {str(e)}",
-            "mode": "fallback_api_error",
+            "error": f"API error: {friendly_error}",
+            "mode": "OpenAI error",
             "ops": [],
             "params": {
                 "polarity": "bands_dark",
@@ -185,9 +258,25 @@ def openai_guided_preprocess(pil_img):
                 "mw_lane": 0,
                 "lane_count_expected": 8
             },
+            "status": "fallback",
             "ai_confidence": 0.0,
-            "ai_reasoning": f"Fallback due to API error: {str(e)}"
+            "confidence": 0.0,
+            "ai_reasoning": fallback_reason,
+            "reasoning": fallback_reason
         }
+
+    # Normalize optional fields for downstream consumers
+    ai_reasoning = obj.get("ai_reasoning") or obj.get("reasoning")
+    if ai_reasoning and "reasoning" not in obj:
+        obj["reasoning"] = ai_reasoning
+    if ai_reasoning and "ai_reasoning" not in obj:
+        obj["ai_reasoning"] = ai_reasoning
+
+    confidence = obj.get("confidence") or obj.get("ai_confidence")
+    if confidence is not None and "confidence" not in obj:
+        obj["confidence"] = confidence
+    if confidence is not None and "ai_confidence" not in obj:
+        obj["ai_confidence"] = confidence
 
     # Apply minimal safe ops locally; leave heavy steps to your pipeline
     img2 = pil_img.copy()
@@ -215,21 +304,41 @@ def openai_guided_preprocess(pil_img):
 
     # Mock object to match expected interface
     class PreprocessResult:
-        def __init__(self, image, mode, params, error_info=None):
+        def __init__(self, image, mode, params, error_info=None, meta=None):
             self.image = image
             self.mode = mode
             self.params = params
             self.error_info = error_info
+            self.meta = meta or {}
 
-    # Determine mode based on response
+    # Determine mode and metadata based on response
+    ai_reasoning = obj.get("ai_reasoning") or obj.get("reasoning") or "analysis complete"
+    base_label = obj.get("mode")
     if obj.get("error"):
-        mode = f"ChatGPT-4.1 (fallback): {obj.get('ai_reasoning', 'parsing error')}"
+        mode = "ChatGPT-4.1 (fallback)"
     else:
-        mode = f"ChatGPT-4.1: {obj.get('ai_reasoning', 'analysis complete')}"
+        mode = "ChatGPT-4.1"
+    if base_label:
+        mode = f"{mode}: {base_label}"
+
+    extra_meta: Dict[str, Any] = {}
+    if ai_reasoning:
+        extra_meta["ai_reasoning"] = ai_reasoning
+        extra_meta.setdefault("reasoning", ai_reasoning)
+    if obj.get("ai_confidence") is not None:
+        extra_meta["ai_confidence"] = obj["ai_confidence"]
+        extra_meta.setdefault("confidence", obj["ai_confidence"])
+    if obj.get("confidence") is not None:
+        extra_meta["confidence"] = obj["confidence"]
+    if obj.get("status"):
+        extra_meta["status"] = obj["status"]
+    if obj.get("error"):
+        extra_meta["error"] = obj["error"]
 
     return PreprocessResult(
         img2,
         mode,
         obj.get("params", {}),
-        obj.get("error")
+        obj.get("error"),
+        extra_meta
     )

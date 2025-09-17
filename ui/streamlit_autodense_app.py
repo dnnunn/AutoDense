@@ -81,7 +81,8 @@ from utils.data_helpers import obj_to_dict, extract_json, calculate_lane_metrics
 from utils.preprocessing import (
     _load_prompt, filter_supported_preproc_params,
     _guarded_preprocess_with_timeout, _openai_preprocess_with_timeout,
-    openai_guided_preprocess, HAS_PREPROCESS, HAS_OPENAI
+    openai_guided_preprocess, HAS_PREPROCESS, HAS_OPENAI,
+    sanitize_openai_error, summarize_openai_error
 )
 from utils.parameter_management import (
     translate_ui_to_backend_params, validate_and_explain_params,
@@ -104,6 +105,15 @@ def announce_to_screen_reader(message: str, priority: str = "polite") -> None:
         {message}
     </div>
     """, unsafe_allow_html=True)
+
+
+def _set_chatgpt_status(available: bool, message: Optional[str] = None) -> None:
+    """Persist the latest ChatGPT availability status for UI diagnostics."""
+    st.session_state.chatgpt_status = {
+        "available": bool(available),
+        "message": message,
+    }
+
 
 # Enhanced loading state management
 def show_loading_context(operation_name: str, details: str = "", estimated_time: str = ""):
@@ -161,6 +171,12 @@ def cached_preprocess_image(image_hash: str, mode: str, manual_params_str: str =
                 st.info("🔄 Sending image to OpenAI for intelligent preprocessing...")
                 img2, meta = _openai_preprocess_with_timeout(img, timeout_sec=75)
                 announce_to_screen_reader("ChatGPT preprocessing completed successfully", "assertive")
+                status_flag = (meta.get("status") or "success").lower()
+                error_msg = meta.get("error") or meta.get("reasoning")
+                if status_flag in {"fallback", "error"}:
+                    _set_chatgpt_status(False, error_msg)
+                else:
+                    _set_chatgpt_status(True, None)
             return img2, meta
 
         elif mode.startswith("AI") and HAS_PREPROCESS:
@@ -192,12 +208,14 @@ def cached_preprocess_image(image_hash: str, mode: str, manual_params_str: str =
 
     except Exception as e:
         # Return raw image on any preprocessing failure with error annotation
-        st.error(f"⚠️ Preprocessing failed: {str(e)}")
-        announce_to_screen_reader(f"Preprocessing failed: {str(e)}", "assertive")
+        friendly_error = sanitize_openai_error(e)
+        st.error(f"⚠️ Preprocessing failed: {friendly_error}")
+        announce_to_screen_reader(f"Preprocessing failed: {friendly_error}", "assertive")
+        _set_chatgpt_status(False, friendly_error)
         with st.spinner("🔧 Falling back to raw image processing..."):
             arr = np.asarray(img.convert("L")).astype(np.float32)
             prepped = (arr - arr.min())/(arr.max()-arr.min()+1e-6)
-        return prepped, {"mode": "Fallback (preprocessing failed)", "error": str(e), "status": "error"}
+        return prepped, {"mode": "Fallback (preprocessing failed)", "error": friendly_error, "status": "error"}
 def _apply_footer_hide() -> None:
     """Hide sticky footer while a run is active."""
     try:
@@ -2086,16 +2104,32 @@ def _render_analysis_inner() -> None:
                 
                 api_key = get_openai_api_key()
                 if api_key:
-                    st.markdown(
-                        f"""
-                        <div class="status-panel success">
-                            <div class="status-title">🧠 ChatGPT-4.1 Ready</div>
-                            <div class="status-subtext">Advanced AI analysis available</div>
-                            <div class="status-subtext">🔐 API Key: {mask_key_for_logging(api_key)}</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
+                    status_info = st.session_state.get("chatgpt_status") or {}
+                    if status_info.get("available") is False:
+                        message = status_info.get("message") or "OpenAI request failed. Verify your API key."
+                        st.markdown(
+                            f"""
+                            <div class="status-panel error">
+                                <div class="status-title">⚠️ ChatGPT-4.1 Unavailable</div>
+                                <div class="status-subtext">Latest request fallback activated</div>
+                                <div class="status-subtext">🔐 API Key detected: {mask_key_for_logging(api_key)}</div>
+                                <div class="status-subtext">🛠️ {message}</div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                        st.info("💡 AutoDense is using the heuristic preprocessing path until ChatGPT succeeds.")
+                    else:
+                        st.markdown(
+                            f"""
+                            <div class="status-panel success">
+                                <div class="status-title">🧠 ChatGPT-4.1 Ready</div>
+                                <div class="status-subtext">Advanced AI analysis available</div>
+                                <div class="status-subtext">🔐 API Key: {mask_key_for_logging(api_key)}</div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
 
                     # Model configuration info
                     try:
@@ -2104,7 +2138,7 @@ def _render_analysis_inner() -> None:
                         st.caption(f"🔧 Model: {client.config.model} | Max tokens: {client.config.max_tokens}")
                     except Exception as e:
                         st.caption(f"⚠️ Client config unavailable: {e}")
-                
+
                 else:
                     st.error("❌ **OpenAI API Key Required**")
                     st.markdown("""
@@ -2765,7 +2799,7 @@ def _render_analysis_inner() -> None:
             
                     except Exception as _e:
             
-                        st.caption(f"AI explainer unavailable: {_e}")
+                        st.caption(f"AI explainer unavailable: {sanitize_openai_error(_e)}")
             
                     # --- end explainer ----------------------------------------------------------
 
@@ -2813,14 +2847,20 @@ def _render_analysis_inner() -> None:
         
                 # Preprocessing results section
                 st.markdown("#### 🔬 Preprocessing Results")
-        
+
+                status_flag = (preproc_metadata.get('status') or 'success').lower()
+
                 if preprocessing_mode.startswith("ChatGPT"):
                     confidence = preproc_metadata.get('confidence', 0.0)
                     reasoning = preproc_metadata.get('reasoning', 'No reasoning provided')
                     mode_display = preproc_metadata.get('mode', 'ChatGPT-4.1')
-            
-                    st.success(f"🧠 **AI Decision:** {mode_display} (Confidence: {confidence:.1%})")
-            
+
+                    message = f"🧠 **AI Decision:** {mode_display} (Confidence: {confidence:.1%})"
+                    if status_flag in {"fallback", "error"}:
+                        st.error(message)
+                    else:
+                        st.success(message)
+
                     with st.expander("🤖 AI Reasoning & Analysis"):
                         st.info(f"**AI Reasoning:** {reasoning}")
                         if 'params' in preproc_metadata:
@@ -2850,19 +2890,31 @@ def _render_analysis_inner() -> None:
         
                 # Analysis pipeline status
                 st.markdown("#### 🔄 Analysis Pipeline Status")
-        
+
+                preprocessing_icon = "✅"
+                preprocessing_fn = st.success
+                if preprocessing_mode.startswith("ChatGPT") and status_flag in {"fallback", "error"}:
+                    preprocessing_icon = "⚠️"
+                    preprocessing_fn = st.warning
+
                 pipeline_steps = [
-                    ("✅", "Image preprocessing", True, f"Complete - {mode_display}"),
-                    ("✅", "Custom lane boundaries", True, f"{len(st.session_state.res_lane_boundaries)} lanes applied"),
+                    (preprocessing_icon, preprocessing_fn, "Image preprocessing", True, f"Complete - {mode_display}"),
+                    ("✅", st.success, "Custom lane boundaries", True, f"{len(st.session_state.res_lane_boundaries)} lanes applied"),
                     ("🔄", "Band detection & quantification", False, "Integration with full pipeline in progress"),
                     ("⏳", "MW calibration", False, f"Using {ladder_type} standard"),
                     ("⏳", "Statistical analysis", False, "Pending band quantification"),
                     ("⏳", "Report generation", False, "Ready for implementation")
                 ]
-        
-                for icon, step, complete, status_desc in pipeline_steps:
+
+                for step_item in pipeline_steps:
+                    if len(step_item) == 5:
+                        icon, renderer, step, complete, status_desc = step_item
+                    else:
+                        icon, step, complete, status_desc = step_item
+                        renderer = st.success if complete else st.info
+
                     if complete:
-                        st.success(f"{icon} **{step}:** {status_desc}")
+                        renderer(f"{icon} **{step}:** {status_desc}")
                     else:
                         st.info(f"{icon} **{step}:** {status_desc}")
         
@@ -3539,17 +3591,22 @@ def chatgpt_postrun_explainer(run_summary: Dict[str, Any]) -> Dict[str, Any]:
     sys_prompt = _load_prompt("analysis.system.md", "<embedded>")
     from openai import OpenAI
     client = OpenAI()
-    resp = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{
-            "role": "system",
-            "content": sys_prompt
-        }, {
-            "role": "user", 
-            "content": json.dumps(run_summary)
-        }],
-        temperature=0
-    )
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{
+                "role": "system",
+                "content": sys_prompt
+            }, {
+                "role": "user", 
+                "content": json.dumps(run_summary)
+            }],
+            temperature=0
+        )
+    except Exception as exc:
+        friendly = summarize_openai_error(exc)
+        raise RuntimeError(f"OpenAI API error: {friendly}") from exc
+
     text = resp.choices[0].message.content
     return extract_json(text)
 # --- end glue ---------------------------------------------------------------
