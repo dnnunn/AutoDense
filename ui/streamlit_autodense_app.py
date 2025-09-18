@@ -1548,33 +1548,34 @@ def render_step_upload_and_calibration(section: str = "both") -> None:
     if show_upload:
         st.markdown('<div class="workflow-section scroll-target" id="section-upload">', unsafe_allow_html=True)
         st.markdown("### 📸 Step 1: Upload & Configure Image")
-    
-        upload_done = bool(st.session_state.get('res_uploaded_image'))
-        calibration_done = bool(st.session_state.get('res_lane_boundaries'))
-        analysis_done = bool(st.session_state.get('res_analysis_data'))
-    
-        step_defs = [
-            ("1. Upload Image", upload_done, not upload_done),
-            ("2. Calibrate Lanes", calibration_done, upload_done and not calibration_done),
-            ("3. Analyze", analysis_done, calibration_done and not analysis_done),
-            (
-                "4. Results",
-                analysis_done,
-                analysis_done and not bool(st.session_state.get('res_export_data')),
-            ),
-        ]
-    
-        tracker_html = ["<div class=\"step-tracker\">"]
-        for label, completed, active in step_defs:
-            cls = "step-pill"
-            if completed:
-                cls += " completed"
-            elif active:
-                cls += " active"
-            tracker_html.append(f'<div class="{cls}">{label}</div>')
-        tracker_html.append('</div>')
-        st.markdown("".join(tracker_html), unsafe_allow_html=True)
-    
+
+        if section in ("both", "full"):
+            upload_done = bool(st.session_state.get('res_uploaded_image'))
+            calibration_done = bool(st.session_state.get('res_lane_boundaries'))
+            analysis_done = bool(st.session_state.get('res_analysis_data'))
+
+            step_defs = [
+                ("1. Upload Image", upload_done, not upload_done),
+                ("2. Calibrate Lanes", calibration_done, upload_done and not calibration_done),
+                ("3. Analyze", analysis_done, calibration_done and not analysis_done),
+                (
+                    "4. Results",
+                    analysis_done,
+                    analysis_done and not bool(st.session_state.get('res_export_data')),
+                ),
+            ]
+
+            tracker_html = ["<div class=\"step-tracker\">"]
+            for label, completed, active in step_defs:
+                cls = "step-pill"
+                if completed:
+                    cls += " completed"
+                elif active:
+                    cls += " active"
+                tracker_html.append(f'<div class="{cls}">{label}</div>')
+            tracker_html.append('</div>')
+            st.markdown("".join(tracker_html), unsafe_allow_html=True)
+
         # Image upload component
         render_image_upload(key_prefix="main", show_metadata=True)
     
@@ -1768,12 +1769,26 @@ def render_step_upload_and_calibration(section: str = "both") -> None:
                 unsafe_allow_html=True
             )
 
+            # Prepare annotated display image showing selected points
+            display_img = img.copy()
+            if points_existing:
+                draw = ImageDraw.Draw(display_img)
+                marker_specs = [
+                    ("#FF5A5F", "P1"),
+                    ("#3C82F6", "P2"),
+                ]
+                radius = max(4, int(min(w, h) * 0.005))
+                for idx, (px, py) in enumerate(points_existing[:2]):
+                    color, label = marker_specs[idx]
+                    draw.ellipse((px - radius, py - radius, px + radius, py + radius), fill=color, outline="white", width=2)
+                    draw.text((px + radius + 4, py - radius - 4), label, fill=color)
+
             # Use streamlit-image-coordinates for better UX
             display_width = min(w, 800)  # Max display width
             display_height = int(display_width * h / w)
 
             coord_result = streamlit_image_coordinates(
-                img,
+                display_img,
                 width=display_width,
                 height=display_height,
                 cursor="crosshair",
@@ -3662,92 +3677,24 @@ def render_chat_companion_tab() -> None:
         "launch predefined analysis playbooks, and draft reports from natural language prompts."
     )
 
-def render_global_sticky_footer() -> None:
-    """Fixed footer with Back / Next buttons anchored to workflow sections."""
-    import streamlit.components.v1 as components
+def render_footer_navigation(current_tab: str) -> None:
+    """Render back/next workflow controls within the Streamlit layout."""
+    current_idx = WORKFLOW_TABS.index(current_tab)
+    st.markdown("---")
+    back_col, hint_col, next_col = st.columns([1, 2, 1])
+    with back_col:
+        if st.button("⬅️ Back", key=f"footer_back_{current_idx}", disabled=current_idx == 0):
+            goto_tab(WORKFLOW_TABS[current_idx - 1])
+    with hint_col:
+        st.caption("Use Back/Next to move through Upload → Calibrate → Analyze → Results")
+    with next_col:
+        pad_col, button_col = st.columns([2, 1])
+        with pad_col:
+            st.empty()
+        with button_col:
+            if st.button("Next ➡️", key=f"footer_next_{current_idx}", disabled=current_idx >= len(WORKFLOW_TABS) - 1):
+                goto_tab(WORKFLOW_TABS[current_idx + 1])
 
-    components.html("""
-    <script>
-    (function() {
-        const parentWin = window.parent;
-        if (!parentWin || !parentWin.document) {
-            return;
-        }
-        const doc = parentWin.document;
-
-        if (!doc.getElementById('ad-sticky-footer')) {
-            const footer = doc.createElement('div');
-            footer.id = 'ad-sticky-footer';
-            footer.setAttribute('role', 'navigation');
-            footer.setAttribute('aria-label', 'Workflow navigation');
-            footer.innerHTML = `
-                <button id="ad-back" class="btn" type="button">⬅️ Back</button>
-                <div class="hint">Use Back/Next to move through Upload → Calibrate → Analyze → Results</div>
-                <button id="ad-next" class="btn primary" type="button">Next ➡️</button>
-            `;
-            doc.body.appendChild(footer);
-        }
-
-        const sections = ['section-upload','section-calibrate','section-analyze','section-results'];
-
-        function scrollToSection(idx) {
-            if (idx < 0 || idx >= sections.length) return;
-            const el = doc.getElementById(sections[idx]);
-            if (!el) return;
-            parentWin.scrollTo({
-                top: el.getBoundingClientRect().top + parentWin.scrollY - 60,
-                behavior: 'smooth'
-            });
-        }
-
-        function nearestSectionIdx() {
-            let bestIdx = 0;
-            let minDelta = Number.POSITIVE_INFINITY;
-            sections.forEach((id, idx) => {
-                const el = doc.getElementById(id);
-                if (!el) return;
-                const rect = el.getBoundingClientRect();
-                const center = rect.top + rect.height / 2;
-                const delta = Math.abs(center);
-                if (delta < minDelta) {
-                    minDelta = delta;
-                    bestIdx = idx;
-                }
-            });
-            return bestIdx;
-        }
-
-        function configureButtons() {
-            const backBtn = doc.getElementById('ad-back');
-            const nextBtn = doc.getElementById('ad-next');
-            if (!backBtn || !nextBtn) {
-                return;
-            }
-            const current = nearestSectionIdx();
-            backBtn.disabled = current <= 0;
-            nextBtn.disabled = current >= sections.length - 1;
-            backBtn.onclick = () => scrollToSection(current - 1);
-            nextBtn.onclick = () => scrollToSection(current + 1);
-        }
-
-        if (!parentWin.__adStickyFooterListenersAttached) {
-            parentWin.addEventListener('scroll', () => {
-                parentWin.requestAnimationFrame(configureButtons);
-            }, { passive: true });
-            parentWin.addEventListener('resize', () => {
-                parentWin.requestAnimationFrame(configureButtons);
-            });
-            parentWin.__adStickyFooterListenersAttached = true;
-        }
-
-        configureButtons();
-
-        if (document && document.body) {
-            document.body.innerHTML = '';
-        }
-    })();
-    </script>
-    """, height=0)
 
 # Workflow navigation tabs
 render_workflow_tracker()
@@ -3777,8 +3724,8 @@ else:
 # Accessibility: Close main content landmark
 st.markdown('</main>', unsafe_allow_html=True)
 
-# Render sticky footer navigation
-render_global_sticky_footer()
+# Render workflow footer
+render_footer_navigation(current_tab)
 
 def main() -> None:
     """Entry point for the UX-optimized AutoDense interface"""
