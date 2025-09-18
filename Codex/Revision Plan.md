@@ -8,7 +8,11 @@
 2. Solidify Deterministic Pipeline
 
 - Audit the lane/band pipeline (Band Assist) so it remains untouched by LLM logic.
-- Improve manual correction tooling: redesign the “Band Assist — editable bands” surface into the intended click-to-add/remove experience, with hooks to re-run metrics.
+- ✅ Improve manual correction tooling: redesigned the “Band Assist” surface with click-to-add/remove editing, automatic overlay refresh, and streamlined feedback (2025-09-17).
+- Exercise the interactive editor in Streamlit to validate the add/remove heuristics; tune default span/tolerance values as needed.
+- ✅ Move Band Assist into the post-analysis workflow with finalize/reopen controls so acceptance happens before reporting (2025-09-18).
+- Hook manual band additions into downstream confidence/QC metrics so results panels reflect mixed auto/manual provenance.
+- Implement band-level tooltips on the overlay with quick delete, and auto-propagate accepted bands across lanes when extrapolation is possible.
 - Update tests/docs to reflect the trimmed preprocessing API (remove ChatGPT fixtures, rewrite UX notes).
 
 3. Build Post-Analysis Chat

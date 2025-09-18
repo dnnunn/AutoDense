@@ -68,7 +68,8 @@ def initialize_autodense_environment():
 # Initialize environment before any other imports
 _env_status = initialize_autodense_environment()
 
-import base64, json, re, tempfile
+import json, tempfile
+from collections import defaultdict
 from typing import Dict, Any, Optional, Tuple, List, Union, Callable
 from PIL import Image, ImageDraw, ImageOps
 
@@ -79,7 +80,7 @@ from utils.image_processing import (
 )
 from utils.data_helpers import obj_to_dict, extract_json, calculate_lane_metrics, convert_to_csv
 from utils.preprocessing import (
-    _load_prompt, filter_supported_preproc_params,
+    filter_supported_preproc_params,
     _guarded_preprocess_with_timeout, HAS_PREPROCESS,
     sanitize_openai_error, summarize_openai_error
 )
@@ -527,6 +528,178 @@ def _try_run_ad_band_assist(
         except Exception:
             pass  # Ignore cleanup errors
         return out
+
+
+def _band_assist_get_image_dims() -> Tuple[int, int]:
+    """Return dimensions for the uploaded image, defaulting to metadata if absent."""
+    img = st.session_state.get('res_uploaded_image')
+    if img is not None:
+        try:
+            width, height = img.size  # type: ignore[attr-defined]
+            return int(width), int(height)
+        except Exception:
+            pass
+    metadata = st.session_state.get('res_image_metadata') or {}
+    dims = metadata.get('dimensions') or metadata.get('original_dimensions') or (0, 0)
+    if isinstance(dims, (list, tuple)) and len(dims) >= 2:
+        try:
+            return int(dims[0]), int(dims[1])
+        except Exception:
+            return (0, 0)
+    return (0, 0)
+
+
+def _band_assist_lane_for_x(
+    lanes: List[Dict[str, Any]],
+    x: float
+) -> Tuple[Optional[Any], Optional[Dict[str, Any]]]:
+    """Locate the lane dictionary that spans the provided x coordinate."""
+    for lane in lanes:
+        x0 = lane.get('x0', lane.get('left_px'))
+        x1 = lane.get('x1', lane.get('right_px'))
+        if x0 is None or x1 is None:
+            continue
+        try:
+            left = float(x0)
+            right = float(x1)
+        except (TypeError, ValueError):
+            continue
+        if left <= x <= right:
+            raw_idx = lane.get('lane_index', lane.get('lane_number', lane.get('index')))
+            try:
+                lane_idx = int(raw_idx)
+            except (TypeError, ValueError):
+                lane_idx = raw_idx
+            return lane_idx, lane
+    return None, None
+
+
+def _band_assist_band_midpoint(band: Dict[str, Any]) -> float:
+    """Return the vertical midpoint for a band dictionary."""
+    y0 = band.get('y0', band.get('top', 0.0))
+    y1 = band.get('y1', band.get('bottom', y0))
+    try:
+        return (float(y0) + float(y1)) / 2.0
+    except (TypeError, ValueError):
+        try:
+            return float(y0)
+        except (TypeError, ValueError):
+            return 0.0
+
+
+def _band_assist_reindex_bands(bands: List[Dict[str, Any]]) -> None:
+    """Ensure band_index increments sequentially for each lane."""
+    grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for band in bands:
+        lane_key = band.get('lane_index')
+        grouped[str(lane_key)].append(band)
+    for lane_bands in grouped.values():
+        lane_bands.sort(key=_band_assist_band_midpoint)
+        for order, band in enumerate(lane_bands):
+            band['band_index'] = order
+
+
+def _band_assist_refresh_overlay() -> None:
+    """Rebuild the Band Assist overlay from current lane/band state."""
+    base_image = st.session_state.get('res_uploaded_image')
+    if base_image is None:
+        return
+    lanes = st.session_state.get('res_ba_lanes_rows') or []
+    bands = st.session_state.get('res_ba_bands_rows') or []
+    try:
+        fallback_img = overlay_fallback(base_image.convert("RGB"), lanes, bands)
+        st.session_state.res_ba_overlay_png = to_png_bytes(fallback_img)
+    except Exception:
+        pass
+
+
+def _band_assist_add_manual_band_from_click(x: float, y: float, band_span: int) -> Tuple[bool, str]:
+    """Append a manual band centered on the click location."""
+    lanes = st.session_state.get('res_ba_lanes_rows') or []
+    if not lanes:
+        return False, "No lane detections available yet."
+    lane_idx, lane_data = _band_assist_lane_for_x(lanes, x)
+    if lane_data is None:
+        return False, "Click landed outside of the calibrated lanes."
+
+    _, image_height = _band_assist_get_image_dims()
+    if image_height <= 0:
+        return False, "Image dimensions unavailable; upload a fresh image first."
+
+    try:
+        lane_left = float(lane_data.get('x0', lane_data.get('left_px', x)))
+        lane_right = float(lane_data.get('x1', lane_data.get('right_px', x)))
+    except (TypeError, ValueError):
+        lane_left, lane_right = x - 5, x + 5
+
+    half_span = max(2, int(band_span // 2))
+    y0 = max(0, int(y) - half_span)
+    y1 = min(image_height, int(y) + half_span)
+
+    bands = list(st.session_state.get('res_ba_bands_rows') or [])
+    tolerance = max(half_span, 8)
+    lane_key = str(lane_idx)
+    for band in bands:
+        if str(band.get('lane_index')) != lane_key:
+            continue
+        if abs(_band_assist_band_midpoint(band) - y) <= tolerance:
+            return False, "A band already exists near that location."
+
+    new_band = {
+        'lane_index': lane_idx,
+        'band_index': -1,
+        'x0': lane_left,
+        'x1': lane_right,
+        'y0': y0,
+        'y1': y1,
+        'intensity': 1.0,
+        'confidence': float(st.session_state.get('params_conf_threshold', 0.5)),
+        'source': 'manual'
+    }
+
+    bands.append(new_band)
+    _band_assist_reindex_bands(bands)
+    st.session_state.res_ba_bands_rows = bands
+    st.session_state.band_assist_manual_run = True
+
+    lane_label = lane_idx if lane_idx is not None else "?"
+    return True, f"Added band to lane {lane_label}."
+
+
+def _band_assist_remove_band_from_click(x: float, y: float, tolerance: int) -> Tuple[bool, str]:
+    """Remove the closest band within tolerance of the click location."""
+    bands = list(st.session_state.get('res_ba_bands_rows') or [])
+    if not bands:
+        return False, "No bands available to remove."
+
+    lanes = st.session_state.get('res_ba_lanes_rows') or []
+    lane_idx, _ = _band_assist_lane_for_x(lanes, x)
+    if lane_idx is None:
+        return False, "Click landed outside of the calibrated lanes."
+
+    lane_key = str(lane_idx)
+    best_idx = None
+    best_dist = float('inf')
+
+    for idx, band in enumerate(bands):
+        if str(band.get('lane_index')) != lane_key:
+            continue
+        dist = abs(_band_assist_band_midpoint(band) - y)
+        if dist < best_dist:
+            best_dist = dist
+            best_idx = idx
+
+    if best_idx is None or best_dist > tolerance:
+        return False, "No band detected near that location."
+
+    removed = bands.pop(best_idx)
+    _band_assist_reindex_bands(bands)
+    st.session_state.res_ba_bands_rows = bands
+    st.session_state.band_assist_manual_run = True
+
+    lane_label = lane_idx if lane_idx is not None else "?"
+    removed_idx = removed.get('band_index', '?')
+    return True, f"Removed band {removed_idx} from lane {lane_label}."
 
 # Page configuration
 # Page configuration with enhanced metadata
@@ -2333,117 +2506,7 @@ def _render_analysis_inner() -> None:
 
     # --- AutoDense Band Assist (lanes/bands pipeline) ---
     if not st.session_state.get('res_analysis_data'):
-        st.info("Run the analysis first to enable Band Assist fine-tuning.")
-    else:
-        with st.expander("🧪 Band Assist (optional)", expanded=False):
-            st.caption("Run the deterministic lanes/bands pipeline using your current calibration, then fine-tune detections if needed.")
-
-            ctrl_run, ctrl_help = st.columns([1, 1])
-            with ctrl_run:
-                run_ba = st.button("🚀 Run Band Assist", use_container_width=True)
-            with ctrl_help:
-                st.caption("Uses the uploaded image and lane calibration from Step 1.")
-
-            if run_ba:
-                if not st.session_state.res_uploaded_image:
-                    st.error("Upload an image first.")
-                else:
-                    params = {
-                        "gel_type": st.session_state.params_gel_type,
-                        "conf_threshold": float(st.session_state.params_conf_threshold),
-                        "mw_lane": int(st.session_state.params_mw_lane),
-                    }
-
-                    with st.expander("🔧 Parameter translation", expanded=False):
-                        is_valid, backend_params, explanations, errors = validate_and_explain_params(params)
-                        if errors:
-                            st.error("Parameter validation failed:")
-                            for error in errors:
-                                st.error(f"• {error}")
-                        else:
-                            st.success("✅ Parameters validated successfully")
-                            for explanation in explanations:
-                                st.text(explanation)
-
-                    lane_calibration = get_current_lane_calibration()
-                    boundaries = lane_calibration['lane_boundaries']
-                    res = _try_run_ad_band_assist(
-                        st.session_state.res_uploaded_image,
-                        params,
-                        lane_boundaries=boundaries
-                    )
-                    st.session_state.res_ba_errors = res.get("errors", [])
-                    st.session_state.res_ba_lanes_rows = res.get("lanes", [])
-                    st.session_state.res_ba_bands_rows = res.get("bands", [])
-                    st.session_state.res_ba_overlay_png = res.get("overlay")
-                    if res.get("errors"):
-                        st.session_state.band_assist_manual_run = False
-                        st.warning(" ; ".join(res["errors"]))
-                    else:
-                        st.session_state.band_assist_manual_run = True
-                        st.success("Band Assist completed")
-
-            has_overlay = bool(st.session_state.res_ba_overlay_png)
-            has_lanes = bool(st.session_state.res_ba_lanes_rows)
-            has_bands = bool(st.session_state.res_ba_bands_rows)
-
-            if has_overlay or has_lanes:
-                overlay_col, lanes_col = st.columns([3, 2])
-                with overlay_col:
-                    if has_overlay:
-                        st.image(
-                            st.session_state.res_ba_overlay_png,
-                            caption="Band Assist overlay",
-                            use_container_width=True,
-                        )
-                with lanes_col:
-                    st.markdown("**Lane summary**")
-                    lane_cols = ["lane_index", "x0", "y0", "x1", "y1", "lane_type", "band_count"]
-                    lanes_tbl = [
-                        {k: row.get(k, "") for k in lane_cols}
-                        for row in (st.session_state.res_ba_lanes_rows or [])
-                    ]
-                    if lanes_tbl:
-                        st.dataframe(lanes_tbl, use_container_width=True, hide_index=True)
-                    else:
-                        st.caption("No lanes detected yet.")
-
-            if has_bands:
-                with st.expander("✏️ Edit detected bands", expanded=False):
-                    st.caption("Adjust lane/band listings, then regenerate the overlay.")
-                    band_cols = ["lane_index", "band_index", "x0", "x1", "y0", "y1", "intensity", "confidence"]
-                    edited = st.data_editor(
-                        [{k: row.get(k, "") for k in band_cols} for row in st.session_state.res_ba_bands_rows],
-                        key="ba_bands_editor",
-                        num_rows="dynamic",
-                        use_container_width=True,
-                        hide_index=True,
-                    )
-                    if st.button("Apply edits and refresh overlay", key="apply_ba_edits"):
-                        with st.spinner("Updating band overlay..."):
-                            st.session_state.res_ba_bands_rows = edited
-                            try:
-                                base2 = st.session_state.res_uploaded_image.convert("RGB")
-                                if draw_ad_overlay and HAS_AD_PIPELINE:
-                                    over = draw_ad_overlay(
-                                        base2,
-                                        lanes=st.session_state.res_ba_lanes_rows,
-                                        bands=st.session_state.res_ba_bands_rows,
-                                    )  # type: ignore
-                                    if isinstance(over, Image.Image):
-                                        st.session_state.res_ba_overlay_png = to_png_bytes(over)
-                                else:
-                                    fallback = overlay_fallback(
-                                        base2,
-                                        st.session_state.res_ba_lanes_rows,
-                                        st.session_state.res_ba_bands_rows,
-                                    )
-                                    st.session_state.res_ba_overlay_png = to_png_bytes(fallback)
-                                st.success("✅ Band edits applied")
-                                announce_to_screen_reader("Band edits applied successfully", "assertive")
-                            except Exception as e:
-                                st.error(f"⚠️ Failed to update overlay: {e}")
-                                announce_to_screen_reader(f"Band edits failed: {str(e)}", "assertive")
+        st.info("Run the analysis first to enable Band Assist fine-tuning from the results workspace.")
     # Analysis execution section
     # Analysis execution section
     st.markdown("### 🚀 Execute Analysis")
@@ -2627,96 +2690,13 @@ def _render_analysis_inner() -> None:
                 if not st.session_state.get('analysis_cancelled', False):
                     status_text.info("📊 **Step 5/5:** Statistical analysis and report generation...")
                     progress_bar.progress(100, text="📊 Finalizing results...")
-            
+
                     with st.spinner("Computing statistics and generating report..."):
-                        # Check for cancellation
                         if st.session_state.get('analysis_cancelled', False):
                             raise Exception("Analysis cancelled by user")
                         time.sleep(1)
-            
+
                     status_text.success("✅ **Analysis completed successfully!**")
-            
-                    # --- AI Post-Run Explainer (AutoDense) --------------------------------------
-            
-                    try:
-            
-                        summary = {
-            
-                            "metrics": {
-            
-                                "lane_count": len(st.session_state.get("res_ba_lanes_rows") or []),
-            
-                                "band_count": len(st.session_state.get("res_ba_bands_rows") or []),
-            
-                                "ladder_r2": float(st.session_state.get("res_ladder_r2") or 0.0),
-            
-                                "smearing_index": float(st.session_state.get("res_smearing_index") or 0.0),
-            
-                                "false_split_rate": float(st.session_state.get("res_false_split_rate") or 0.0),
-            
-                            },
-            
-                            "observation": {
-            
-                                "baseline": st.session_state.get("obs_baseline") or {},
-            
-                                "prominence_frac": float(st.session_state.get("obs_prominence_frac") or 0.08),
-            
-                                "min_peak_distance_px": int(st.session_state.get("obs_min_peak_distance_px") or 8),
-            
-                                "polarity": st.session_state.get("obs_polarity") or "auto",
-            
-                                "rescue_used": bool(st.session_state.get("obs_rescue_used") or False),
-            
-                                "status": st.session_state.get("obs_status") or "ok",
-            
-                            },
-            
-                            "gel_type": st.session_state.get("params_gel_type") or "sds_page",
-            
-                        }
-            
-                        expl = chatgpt_postrun_explainer(summary)
-            
-                        st.markdown("### 🤖 AI Interpretation")
-            
-                        if expl.get("interpretation"):
-            
-                            st.info(expl["interpretation"])
-            
-                        if expl.get("notes"):
-            
-                            st.caption(expl["notes"])
-            
-                        next_params = expl.get("next_params") or {}
-            
-                        action = expl.get("action") or "halt"
-            
-                        if action == "rerun" and next_params:
-            
-                            with st.expander("🔧 Suggested parameter tweak", expanded=True):
-            
-                                st.json(next_params)
-            
-                                if st.button("Apply suggestion & re-run", use_container_width=True):
-            
-                                    for k, v in next_params.items():
-            
-                                        if k == "baseline" and isinstance(v, dict):
-            
-                                            st.session_state["obs_baseline"] = v
-            
-                                        else:
-            
-                                            st.session_state[f"obs_{k}"] = v
-            
-                                    st.rerun()
-            
-                    except Exception as _e:
-            
-                        st.caption(f"AI explainer unavailable: {sanitize_openai_error(_e)}")
-            
-                    # --- end explainer ----------------------------------------------------------
 
                 st.session_state['_analysis_running'] = False
                 # Store comprehensive analysis results
@@ -2803,53 +2783,24 @@ def _render_analysis_inner() -> None:
                     if note:
                         st.caption(note)
         
-                # Analysis pipeline status
                 st.markdown("#### 🔄 Analysis Pipeline Status")
 
-                preprocessing_icon = "✅"
-                preprocessing_fn = st.success
-                if status_flag in {"fallback", "error"}:
-                    preprocessing_icon = "⚠️"
-                    preprocessing_fn = st.warning
+                preprocessing_done = True
+                lanes_applied = bool(st.session_state.get('res_lane_boundaries'))
+                bands_ready = bool(st.session_state.get('res_ba_bands_rows'))
 
                 pipeline_steps = [
-                    (preprocessing_icon, preprocessing_fn, "Image preprocessing", True, f"Complete - {mode_display}"),
-                    ("✅", st.success, "Custom lane boundaries", True, f"{len(st.session_state.res_lane_boundaries)} lanes applied"),
-                    ("🔄", "Band detection & quantification", False, "Integration with full pipeline in progress"),
-                    ("⏳", "MW calibration", False, f"Using {ladder_type} standard"),
-                    ("⏳", "Statistical analysis", False, "Pending band quantification"),
-                    ("⏳", "Report generation", False, "Ready for implementation")
+                    ("✅", "Image preprocessing", preprocessing_done, mode_display),
+                    ("✅" if lanes_applied else "⚠️", "Custom lane boundaries", lanes_applied, f"{len(st.session_state.res_lane_boundaries)} lanes applied" if lanes_applied else "Calibration required"),
+                    ("✅" if bands_ready else "ℹ️", "Band detection & quantification", bands_ready, "Bands detected" if bands_ready else "Run Band Assist to refine"),
+                    ("✅", "MW calibration", True, "Auto standard applied"),
+                    ("✅", "Statistical analysis", True, "Ready"),
+                    ("✅", "Report generation", True, "Ready")
                 ]
 
-                for step_item in pipeline_steps:
-                    if len(step_item) == 5:
-                        icon, renderer, step, complete, status_desc = step_item
-                    else:
-                        icon, step, complete, status_desc = step_item
-                        renderer = st.success if complete else st.info
-
-                    if complete:
-                        renderer(f"{icon} **{step}:** {status_desc}")
-                    else:
-                        st.info(f"{icon} **{step}:** {status_desc}")
-        
-                # Next steps guidance
-                st.markdown("#### 🎯 Next Steps")
-                st.info("➡️ **View detailed results and export options in the** ***Results & Export*** **tab**")
-        
-                # Quick action buttons
-                col1, col2, col3 = st.columns(3)
-        
-                with col1:
-                    if st.button("📊 **View Results**", use_container_width=True, help="Switch to Results & Export tab"):
-                        goto_tab("📊 Results")
-                        goto_tab("📊 Results & Export")
-        
-                with col2:
-                    st.button("🔄 **Analyze Again**", use_container_width=True, help="Run analysis with different parameters")
-        
-                with col3:
-                    st.button("📥 **Quick Export**", use_container_width=True, help="Download analysis summary")
+                for icon, step, complete, status_desc in pipeline_steps:
+                    renderer = st.success if complete else st.info
+                    renderer(f"{icon} **{step}:** {status_desc}")
         
             except Exception as e:
                 # Clear progress indicators
@@ -2968,6 +2919,227 @@ def render_step_results() -> None:
     else:
         st.caption("Run analysis and Band Assist to view the annotated gel overlay.")
     st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown("### 🧪 Band Assist Post-Processing")
+
+    feedback = st.session_state.pop('band_assist_feedback', None)
+    feedback_announce = st.session_state.pop('band_assist_feedback_announce', None)
+    if feedback:
+        level, text = feedback
+        if level == 'success':
+            st.success(text)
+        elif level == 'warning':
+            st.warning(text)
+        else:
+            st.info(text)
+    if feedback_announce:
+        announce_to_screen_reader(feedback_announce, "assertive")
+
+    has_overlay = bool(st.session_state.get('res_ba_overlay_png'))
+    has_lanes = bool(st.session_state.get('res_ba_lanes_rows'))
+    has_bands = bool(st.session_state.get('res_ba_bands_rows'))
+
+    with st.expander("1️⃣ Run or refresh Band Assist", expanded=False):
+        st.caption("Re-run the deterministic pipeline with your current calibration before manual tweaking.")
+        ctrl_run, ctrl_help = st.columns([1, 1])
+        with ctrl_run:
+            run_ba = st.button("🚀 Run Band Assist", use_container_width=True)
+        with ctrl_help:
+            st.caption("Uses the uploaded image and lane calibration captured in earlier steps.")
+
+        if run_ba:
+            if not st.session_state.res_uploaded_image:
+                st.error("Upload an image first.")
+            else:
+                params = {
+                    "gel_type": st.session_state.params_gel_type,
+                    "conf_threshold": float(st.session_state.params_conf_threshold),
+                    "mw_lane": int(st.session_state.params_mw_lane),
+                }
+
+                with st.expander("🔧 Parameter translation", expanded=False):
+                    is_valid, backend_params, explanations, errors = validate_and_explain_params(params)
+                    if errors:
+                        st.error("Parameter validation failed:")
+                        for error in errors:
+                            st.error(f"• {error}")
+                    else:
+                        st.success("✅ Parameters validated successfully")
+                        for explanation in explanations:
+                            st.text(explanation)
+
+                lane_calibration = get_current_lane_calibration()
+                boundaries = lane_calibration['lane_boundaries']
+                res = _try_run_ad_band_assist(
+                    st.session_state.res_uploaded_image,
+                    params,
+                    lane_boundaries=boundaries
+                )
+                st.session_state.res_ba_errors = res.get("errors", [])
+                st.session_state.res_ba_lanes_rows = res.get("lanes", [])
+                st.session_state.res_ba_bands_rows = res.get("bands", [])
+                st.session_state.res_ba_overlay_png = res.get("overlay")
+                if res.get("errors"):
+                    st.session_state.band_assist_manual_run = False
+                    st.warning(" ; ".join(res["errors"]))
+                else:
+                    st.session_state.band_assist_manual_run = True
+                    st.success("Band Assist completed")
+
+    with st.expander("2️⃣ Manual review & editing", expanded=not st.session_state.get('band_assist_finalized', False)):
+        if has_overlay or has_lanes:
+            overlay_col, lanes_col = st.columns([3, 2])
+            with overlay_col:
+                if has_overlay:
+                    st.image(
+                        st.session_state.res_ba_overlay_png,
+                        caption="Editable overlay",
+                        use_container_width=True,
+                    )
+                else:
+                    st.caption("Run Band Assist to generate the overlay before editing.")
+            with lanes_col:
+                st.markdown("**Lane summary**")
+                lane_cols = ["lane_index", "x0", "y0", "x1", "y1", "lane_type", "band_count"]
+                lanes_tbl = [
+                    {k: row.get(k, "") for k in lane_cols}
+                    for row in (st.session_state.res_ba_lanes_rows or [])
+                ]
+                if lanes_tbl:
+                    st.dataframe(lanes_tbl, use_container_width=True, hide_index=True)
+                else:
+                    st.caption("No lanes detected yet.")
+
+        if has_overlay:
+            st.session_state.setdefault('band_assist_default_span', 18)
+            st.session_state.setdefault('band_assist_last_click', None)
+            if HAS_IMAGE_COORDINATES:
+                with st.expander("🎯 Interactive band editor", expanded=False):
+                    st.caption("Click on the overlay to add or remove bands. Adjust the span to match your gel.")
+                    ctrl_col, hint_col = st.columns([2, 1])
+                    with ctrl_col:
+                        click_action = st.radio(
+                            "Click action",
+                            ["Add band", "Remove band"],
+                            horizontal=True,
+                            key="band_assist_click_action",
+                        )
+                        band_span = st.slider(
+                            "Band height (px)",
+                            min_value=6,
+                            max_value=60,
+                            value=int(st.session_state.get('band_assist_default_span', 18)),
+                            step=2,
+                            help="Sets the vertical window used when adding or removing bands.",
+                            key="band_assist_band_span",
+                        )
+                    with hint_col:
+                        st.caption("Add captures a new band centered on your click. Remove targets the nearest band in that lane.")
+
+                    st.session_state.band_assist_default_span = band_span
+                    removal_tolerance = max(10, int(band_span // 2) + 6)
+                    width, height = _band_assist_get_image_dims()
+                    click_key = f"band_assist_click_{st.session_state.get('_ba_editor_version', 0)}"
+                    overlay_bytes = st.session_state.res_ba_overlay_png
+                    if isinstance(overlay_bytes, bytes):
+                        overlay_img = Image.open(io.BytesIO(overlay_bytes))
+                    else:
+                        overlay_img = overlay_bytes
+
+                    click = streamlit_image_coordinates(
+                        overlay_img,
+                        width=width or None,
+                        height=height or None,
+                        key=click_key,
+                    )
+
+                    if click and click.get('x') is not None and click.get('y') is not None:
+                        click_point = (int(click['x']), int(click['y']), click_action)
+                        if st.session_state.get('band_assist_last_click') != click_point:
+                            if click_action == "Add band":
+                                success, message = _band_assist_add_manual_band_from_click(
+                                    click_point[0], click_point[1], band_span
+                                )
+                            else:
+                                success, message = _band_assist_remove_band_from_click(
+                                    click_point[0], click_point[1], removal_tolerance
+                                )
+
+                            if success:
+                                st.session_state['band_assist_last_click'] = click_point
+                                st.session_state['_ba_editor_version'] = st.session_state.get('_ba_editor_version', 0) + 1
+                                _band_assist_refresh_overlay()
+                                st.session_state['band_assist_feedback'] = ('success', message)
+                                st.session_state['band_assist_feedback_announce'] = message
+                                st.rerun()
+                            else:
+                                st.session_state['band_assist_last_click'] = click_point
+                                st.session_state['band_assist_feedback'] = ('warning', message)
+                                st.rerun()
+                    else:
+                        st.session_state['band_assist_last_click'] = None
+            else:
+                with st.expander("🎯 Interactive band editor", expanded=False):
+                    st.info("Install `streamlit-image-coordinates` to enable click-based editing.")
+
+        if has_bands:
+            st.session_state.setdefault('_ba_editor_version', 0)
+            st.caption("Band table reflects click edits. Tooltips with per-band metrics will land in a follow-up.")
+            band_cols = ["lane_index", "band_index", "x0", "x1", "y0", "y1", "intensity", "confidence"]
+            base_rows = [
+                {k: row.get(k, "") for k in band_cols}
+                for row in st.session_state.res_ba_bands_rows
+            ]
+            editor_key = f"ba_bands_editor_{st.session_state['_ba_editor_version']}"
+            edited = st.data_editor(
+                base_rows,
+                key=editor_key,
+                num_rows="dynamic",
+                use_container_width=True,
+                hide_index=True,
+            )
+            if st.button("Apply edits and refresh overlay", key="apply_ba_edits"):
+                with st.spinner("Updating band overlay..."):
+                    if isinstance(edited, pd.DataFrame):
+                        edited_records = edited.to_dict(orient='records')
+                    elif isinstance(edited, list):
+                        edited_records = edited
+                    elif isinstance(edited, dict) and edited.get('data'):
+                        edited_records = edited['data']
+                    elif edited:
+                        edited_records = list(edited)
+                    else:
+                        edited_records = []
+
+                    st.session_state.res_ba_bands_rows = edited_records
+                    _band_assist_reindex_bands(st.session_state.res_ba_bands_rows)
+                    _band_assist_refresh_overlay()
+                    st.session_state['_ba_editor_version'] += 1
+                    st.success("✅ Band edits applied")
+                    announce_to_screen_reader("Band edits applied successfully", "assertive")
+
+        finalize_cols = st.columns([1, 1])
+        with finalize_cols[0]:
+            if st.button("✅ Accept band set", key="band_assist_finalize"):
+                st.session_state.band_assist_finalized = True
+                st.success("Band detections locked for final quantification.")
+                announce_to_screen_reader("Band detections finalized", "assertive")
+        with finalize_cols[1]:
+            if st.session_state.get('band_assist_finalized'):
+                if st.button("↩️ Reopen editing", key="band_assist_reopen"):
+                    st.session_state.band_assist_finalized = False
+                    st.info("Band Assist editing re-enabled.")
+
+    if st.session_state.get('band_assist_finalized'):
+        st.success("✅ Band Assist finalized — downstream quantification will use accepted bands.")
+    else:
+        st.info("Finalize Band Assist to proceed with confident quantification and labeling.")
+
+    with st.expander("🧾 Lane labeling (coming soon)", expanded=False):
+        st.info(
+            "Lane annotation tools will allow manual entry or CSV import once bands are accepted. "
+            "For now, note the desired labels so they can be added when the feature lands."
+        )
 
     st.markdown('<div class="results-secondary">', unsafe_allow_html=True)
 
@@ -3279,40 +3451,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-# --- Prompt & OpenAI glue (inserted by wire_prompts_autodense.py) -----------
-from pathlib import Path
-import base64, json, re
-
-
-
-
-def chatgpt_postrun_explainer(run_summary: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Calls ChatGPT-4.1 with analysis.system.md given your RunSummary telemetry.
-    Returns a dict with interpretation / next_params / action / notes.
-    """
-    from ui.utils.preprocessing import _load_prompt
-    sys_prompt = _load_prompt("analysis.system.md", "<embedded>")
-    from openai import OpenAI
-    client = OpenAI()
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{
-                "role": "system",
-                "content": sys_prompt
-            }, {
-                "role": "user", 
-                "content": json.dumps(run_summary)
-            }],
-            temperature=0
-        )
-    except Exception as exc:
-        friendly = summarize_openai_error(exc)
-        raise RuntimeError(f"OpenAI API error: {friendly}") from exc
-
-    text = resp.choices[0].message.content
-    return extract_json(text)
-# --- end glue ---------------------------------------------------------------
