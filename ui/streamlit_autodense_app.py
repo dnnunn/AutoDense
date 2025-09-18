@@ -68,6 +68,7 @@ def initialize_autodense_environment():
 # Initialize environment before any other imports
 _env_status = initialize_autodense_environment()
 
+import io
 import json, tempfile
 from collections import defaultdict
 from typing import Dict, Any, Optional, Tuple, List, Union, Callable
@@ -611,6 +612,37 @@ def _band_assist_refresh_overlay() -> None:
         st.session_state.res_ba_overlay_png = to_png_bytes(fallback_img)
     except Exception:
         pass
+
+
+def _lane_boundary_to_overlay_dict(boundary: Any, image_height: int) -> Dict[str, int]:
+    """Normalize lane boundary objects to overlay-friendly dictionaries."""
+    if isinstance(boundary, dict):
+        return {
+            "x0": int(boundary.get("x0", boundary.get("left_px", 0))),
+            "x1": int(boundary.get("x1", boundary.get("right_px", 0))),
+            "y0": int(boundary.get("y0", 0)),
+            "y1": int(boundary.get("y1", image_height)),
+            "lane_index": int(boundary.get("lane_index", boundary.get("lane", 0))),
+        }
+
+    left = getattr(boundary, "left_px", None)
+    right = getattr(boundary, "right_px", None)
+    center = getattr(boundary, "center_px", None)
+    width = getattr(boundary, "width_px", None)
+    lane_index = getattr(boundary, "lane_index", getattr(boundary, "lane", 0))
+
+    if left is None and center is not None and width is not None:
+        left = center - width / 2.0
+    if right is None and center is not None and width is not None:
+        right = center + width / 2.0
+
+    return {
+        "x0": int(left or 0),
+        "x1": int(right or 0),
+        "y0": 0,
+        "y1": image_height,
+        "lane_index": int(lane_index or 0),
+    }
 
 
 def _band_assist_add_manual_band_from_click(x: float, y: float, band_span: int) -> Tuple[bool, str]:
@@ -1344,31 +1376,28 @@ def scroll_to_section(section_id: str) -> None:
     """, unsafe_allow_html=True)
 
 
-SECTION_ANCHORS = [
-    ("📸", "section-upload"),
-    ("🎯", "section-calibrate"),
-    ("🔬", "section-analyze"),
-    ("📊", "section-results"),
+WORKFLOW_TABS = [
+    "📸 Upload",
+    "🎯 Calibration",
+    "🔬 Analysis",
+    "📊 Results",
+    "💬 Companion",
 ]
 
 
 def goto_tab(label_prefix: str) -> None:
-    """Preserve legacy navigation API by scrolling to progressive workflow sections."""
-    target_id = None
+    """Update the selected workflow tab to mimic legacy navigation helpers."""
     normalized = label_prefix.strip()
-    for prefix, section_id in SECTION_ANCHORS:
-        if normalized.startswith(prefix) or prefix.startswith(normalized):
-            target_id = section_id
+    for label in WORKFLOW_TABS:
+        if label.startswith(normalized) or normalized.startswith(label.split()[0]):
+            st.session_state.ui_workflow_tab = label
             break
-    if target_id is None:
-        target_id = "section-upload"
-    scroll_to_section(target_id)
 
 def init_session_state() -> None:
     """Initialize session state following ui_* params_* res_* convention"""
     defaults: Dict[str, Any] = {
         # UI State
-        'ui_current_tab': 'calibration',
+        'ui_workflow_tab': WORKFLOW_TABS[0],
         'ui_canvas_key': 0,
         'ui_analysis_count': 0,
         'ui_error_count': 0,
@@ -1406,6 +1435,7 @@ def init_session_state() -> None:
         '_scrolled_to_analyze': False,
         '_scrolled_to_results': False,
         'band_assist_manual_run': False,
+        'lane_calibration_locked': False,
     }
     
     for key, value in defaults.items():
@@ -1413,6 +1443,35 @@ def init_session_state() -> None:
             st.session_state[key] = value
 
 init_session_state()
+
+
+def render_workflow_tracker() -> None:
+    """Display progress pills for the major workflow stages."""
+    upload_done = bool(st.session_state.get('res_uploaded_image'))
+    calibration_done = bool(st.session_state.get('res_lane_boundaries'))
+    analysis_done = bool(st.session_state.get('res_analysis_data'))
+
+    step_defs = [
+        ("1. Upload Image", upload_done, not upload_done),
+        ("2. Calibrate Lanes", calibration_done, upload_done and not calibration_done),
+        ("3. Analyze", analysis_done, calibration_done and not analysis_done),
+        (
+            "4. Results",
+            analysis_done,
+            analysis_done and not bool(st.session_state.get('res_export_data')),
+        ),
+    ]
+
+    tracker_html = ["<div class=\"step-tracker\">"]
+    for label, completed, active in step_defs:
+        cls = "step-pill"
+        if completed:
+            cls += " completed"
+        elif active:
+            cls += " active"
+        tracker_html.append(f'<div class="{cls}">{label}</div>')
+    tracker_html.append('</div>')
+    st.markdown("".join(tracker_html), unsafe_allow_html=True)
 
 # Enhanced error handler decorator
 def handle_errors(operation_name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -1475,48 +1534,63 @@ def handle_errors(operation_name: str) -> Callable[[Callable[..., Any]], Callabl
 # Accessibility: Add main content landmark
 st.markdown('<main id="main-content" role="main">', unsafe_allow_html=True)
 
-def render_step_upload_and_calibration() -> None:
-    st.markdown('<div class="workflow-section scroll-target" id="section-upload">', unsafe_allow_html=True)
-    st.markdown("### 📸 Step 1: Upload & Configure Image")
+def render_step_upload_and_calibration(section: str = "both") -> None:
+    """Render Step 1 (upload) and Step 2 (lane calibration) content."""
+    show_upload = section in ("both", "upload")
+    show_calibration = section in ("both", "calibration")
 
-    upload_done = bool(st.session_state.get('res_uploaded_image'))
-    calibration_done = bool(st.session_state.get('res_lane_boundaries'))
-    analysis_done = bool(st.session_state.get('res_analysis_data'))
+    if show_upload:
+        st.markdown("### 📸 Step 1: Upload & Configure Image")
+        render_image_upload(key_prefix="main", show_metadata=True)
 
-    step_defs = [
-        ("1. Upload Image", upload_done, not upload_done),
-        ("2. Calibrate Lanes", calibration_done, upload_done and not calibration_done),
-        ("3. Analyze", analysis_done, calibration_done and not analysis_done),
-        (
-            "4. Results",
-            analysis_done,
-            analysis_done and not bool(st.session_state.get('res_export_data')),
-        ),
-    ]
+        if not st.session_state.res_uploaded_image:
+            with st.expander("💡 Image Upload Guidelines", expanded=False):
+                col1, col2 = st.columns(2)
 
-    tracker_html = ["<div class=\"step-tracker\">"]
-    for label, completed, active in step_defs:
-        cls = "step-pill"
-        if completed:
-            cls += " completed"
-        elif active:
-            cls += " active"
-        tracker_html.append(f'<div class="{cls}">{label}</div>')
-    tracker_html.append('</div>')
-    st.markdown("".join(tracker_html), unsafe_allow_html=True)
+                with col1:
+                    st.markdown("""
+                    **Optimal image characteristics:**
+                    - **Format:** PNG or TIFF preferred, JPG acceptable
+                    - **Resolution:** 1000-4000 pixels wide
+                    - **Orientation:** Upright (ladder on left)
+                    - **Lighting:** Even illumination without glare
+                    """)
 
-    if not upload_done:
-        st.caption("🚀 Upload a gel electrophoresis image to begin the workflow.")
+                with col2:
+                    st.markdown("""
+                    **Tips:**
+                    - Crop away unused borders before uploading
+                    - Avoid compression artifacts (set scanner to high quality)
+                    - If image is dark, try manual preprocessing later
+                    - Include the molecular weight ladder in the frame
+                    """)
+        else:
+            st.success("✅ Image uploaded. Proceed to lane calibration when ready.")
+            st.caption("Switch to the Lane Calibration tab to define boundaries and verify alignment.")
 
-    # Image upload component
-    render_image_upload(key_prefix="main", show_metadata=True)
+    if not show_calibration:
+        return
 
-    if st.session_state.res_uploaded_image:
+    st.markdown("### 🎯 Step 2: Lane Calibration")
+
+    if not st.session_state.res_uploaded_image:
+        st.info("Upload a gel image in Step 1 before calibrating lanes.")
+        return
+
+    if st.session_state.get('lane_calibration_locked', False):
+        st.info("🔒 Gel configuration & calibration are hidden because an analysis has already run.")
+        if st.button("Edit gel configuration & calibration", key="unlock_gel_setup"):
+            st.session_state.lane_calibration_locked = False
+            st.rerun()
+        return
+
+
+    with st.expander("🧭 Gel configuration & lane calibration", expanded=True):
         # Gel configuration section
         st.markdown("### 🧪 Gel Configuration")
-        
+
         col1, col2 = st.columns(2)
-        
+
         with col1:
             gel_type = st.selectbox(
                 "Gel Type:",
@@ -1526,13 +1600,7 @@ def render_step_upload_and_calibration() -> None:
                 key="gel_type_select"
             )
             st.session_state.params_gel_type = gel_type
-            
-            # Visual indicator of gel type
-            if gel_type == "sds_page":
-                st.markdown("🧬 **Protein Analysis** (SDS-PAGE)")
-            else:
-                st.markdown("🧬 **DNA Analysis** (Agarose + EtBr)")
-        
+
         with col2:
             default_lanes = 12 if gel_type == "sds_page" else 20
             if st.session_state.params_n_lanes not in (12, 20):
@@ -1545,18 +1613,13 @@ def render_step_upload_and_calibration() -> None:
                 help="Total number of sample lanes including molecular weight standard"
             )
             st.session_state.params_n_lanes = n_lanes
-            
-            # Lane density indicator
-            if n_lanes <= 8:
-                st.markdown("📏 **Standard density** (good for quantification)")
-            elif n_lanes <= 16:
-                st.markdown("📏 **Medium density** (standard commercial gels)")
-            else:
-                st.markdown("📏 **High density** (may need careful calibration)")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
 
-        with st.expander("🎯 Step 2: Lane Calibration", expanded=not st.session_state.get('res_lane_boundaries')):
+        calibration_expanded = (
+            not st.session_state.get('lane_calibration_locked', False)
+            and not st.session_state.get('res_lane_boundaries')
+        )
+
+        with st.expander("🎯 Step 2: Lane Calibration", expanded=calibration_expanded):
             st.markdown('<div class="scroll-target" id="section-calibrate">', unsafe_allow_html=True)
 
             if st.session_state.get('res_lane_boundaries'):
@@ -1568,45 +1631,41 @@ def render_step_upload_and_calibration() -> None:
                     st.session_state.ui_canvas_key += 1
                     st.session_state._scrolled_to_analyze = False
                     st.session_state._scrolled_to_results = False
+                    st.session_state.lane_calibration_locked = False
                     st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
 
-            # Instructions with progressive disclosure
             render_calibration_instructions(expanded=False)
-            
-            # Calibration interface with enhanced error handling
+
             @handle_errors("Lane Calibration")
             def perform_calibration():
                 points = st.session_state.res_calibration_points
-                
+
                 if len(points) < 2:
                     return None
-                
-                # Get lane assignments
+
                 lane1 = st.session_state.get('calibration_lane1', 1)
                 lane2 = st.session_state.get('calibration_lane2', min(n_lanes, 12))
-                
+
                 if lane1 == lane2:
                     st.error("❌ Lane numbers must be different")
                     return None
-                
+
                 (x1, _), (x2, _) = points[:2]
-                
-                # Enhanced validation
+
                 if HAS_LANE_MAPPING:
                     is_valid, validation_msg = validate_calibration_points(x1, lane1, x2, lane2, n_lanes, w)
-                    
+
                     if not is_valid:
                         st.error(f"❌ {validation_msg}")
                         return None
-                    
-                    # Create calibration
+
                     calibration = TwoPointCalibration(
                         point1_x=x1, point1_lane=lane1,
                         point2_x=x2, point2_lane=lane2,
                         total_lanes=n_lanes
                     )
-                    
+
                     boundaries = calculate_lane_positions(calibration)
                     st.session_state.res_lane_boundaries = boundaries
                     st.session_state.ui_last_action = "calibration"
@@ -1614,10 +1673,9 @@ def render_step_upload_and_calibration() -> None:
                     st.session_state._scrolled_to_results = False
 
                     return calibration, boundaries
-                
+
                 return None
-            
-            # Get image data from session state for calibration
+
             if st.session_state.res_uploaded_image and st.session_state.res_uploaded_array is not None:
                 img = st.session_state.res_uploaded_image
                 img_array = st.session_state.res_uploaded_array
@@ -1625,12 +1683,10 @@ def render_step_upload_and_calibration() -> None:
             else:
                 st.error("❌ Image data not available. Please upload an image first.")
                 st.stop()
-        
-        # Interactive calibration canvas or fallback
+
         if HAS_IMAGE_COORDINATES:
             st.markdown("#### 🖱️ Interactive Calibration")
-            
-            # Canvas controls with improved UX
+
             controls_col1, controls_col2, controls_col3 = st.columns([1, 1, 1])
 
             with controls_col1:
@@ -1643,6 +1699,7 @@ def render_step_upload_and_calibration() -> None:
                     st.session_state.res_calibration_points = []
                     st.session_state.ui_canvas_key += 1
                     st.session_state.ui_last_action = "clear_calibration"
+                    st.session_state.lane_calibration_locked = False
                     st.rerun()
 
             with controls_col2:
@@ -1652,102 +1709,89 @@ def render_step_upload_and_calibration() -> None:
                     use_container_width=True,
                     disabled=len(st.session_state.res_calibration_points) == 0
                 )
-                if undo_btn:
+                if undo_btn and st.session_state.res_calibration_points:
                     st.session_state.res_calibration_points = st.session_state.res_calibration_points[:-1]
                     st.session_state.ui_canvas_key += 1
+                    st.session_state.ui_last_action = "undo_calibration"
                     st.rerun()
 
             with controls_col3:
-                help_btn = st.button(
-                    "❓ Help",
-                    help="Show detailed calibration guidance",
-                    use_container_width=True
+                st.markdown("**Calibration Mode**")
+                mode_sel = st.radio(
+                    "Calibration mode",
+                    ["Standard", "Advanced"],
+                    help="Standard: guided two-point calibration. Advanced: custom lane placement.",
+                    label_visibility="collapsed",
+                    horizontal=True,
+                    key="calibration_mode_select"
                 )
-                if help_btn:
-                    st.info("💡 Click precisely on the center of distinct, well-defined bands. Choose bands in different lanes that are far apart horizontally.")
-            
-            # Enhanced interactive coordinates with accessibility
-            st.markdown(f"""
-            <div data-testid="calibration-canvas" 
-                 role="img" 
-                 aria-label="Interactive gel image for two-point calibration"
-                 tabindex="0">
-            </div>
-            """, unsafe_allow_html=True)
+                st.session_state.calibration_mode = mode_sel
 
-            points_existing = st.session_state.res_calibration_points
-            if len(points_existing) == 0:
-                tip_text = "Step 1: Place the first calibration point in the exact center of a distinct band in the left-most lane (ideally the molecular weight ladder)."
-                tip_class = "calibration-tip step1"
-                tip_icon = "☝️"
-            elif len(points_existing) == 1:
-                tip_text = "Step 2: Place the second calibration point in the exact center of a distinct band in a right-hand lane (preferably as far right as possible)."
-                tip_class = "calibration-tip step2"
-                tip_icon = "☝️"
-            else:
-                tip_text = "Calibration points captured. Use Clear or Undo to adjust if needed."
-                tip_class = "calibration-tip step-done"
-                tip_icon = "✅"
-            st.markdown(
-                f"<div class='{tip_class}'><span class='calibration-icon'>{tip_icon}</span> {tip_text}</div>",
-                unsafe_allow_html=True
-            )
+            tips_col1, tips_col2 = st.columns(2)
+            with tips_col1:
+                st.info("👆 **Tip:** Place the first point in the MW ladder lane and the second in the far-right reference lane.")
+            with tips_col2:
+                st.info("🧪 **Need to recalibrate later?** Use the Recalibrate button after analysis to reopen this section.")
 
-            # Use streamlit-image-coordinates for better UX
-            display_width = min(w, 800)  # Max display width
+            st.markdown("##### Calibration Canvas")
+            canvas_col1, canvas_col2 = st.columns([4, 1])
+
+            draw_img = img.copy()
+            draw = ImageDraw.Draw(draw_img)
+            for idx, (px, py) in enumerate(st.session_state.res_calibration_points):
+                color = "#FF3366" if idx == 0 else "#33C1FF"
+                r = 6
+                draw.ellipse((px - r, py - r, px + r, py + r), fill=color)
+                draw.text((px + 10, py), f"P{idx+1}", fill=color)
+
+            display_width = min(w, 800)
             display_height = int(display_width * h / w)
 
-            coord_result = streamlit_image_coordinates(
-                img,
-                width=display_width,
-                height=display_height,
-                cursor="crosshair",
-                key=f"calibration_coords_{st.session_state.ui_canvas_key}"
-            )
-            
-            # Handle coordinate clicks
+            with canvas_col1:
+                coord_result = streamlit_image_coordinates(
+                    draw_img,
+                    width=display_width,
+                    height=display_height,
+                    cursor="crosshair",
+                    key=f"calibration_coords_{st.session_state.ui_canvas_key}"
+                )
+
+            with canvas_col2:
+                st.markdown("**Calibration Points**")
+                if st.session_state.res_calibration_points:
+                    for i, (px, py) in enumerate(st.session_state.res_calibration_points, 1):
+                        st.markdown(f"P{i}: ({px}, {py})")
+                else:
+                    st.caption("No points selected yet.")
+
             if coord_result is not None and coord_result.get('x') is not None:
                 with st.spinner("🎯 Processing calibration point..."):
-                    # Scale coordinates back to original image size
                     scale_x = w / display_width
                     scale_y = h / display_height
 
                     x = int(coord_result['x'] * scale_x)
                     y = int(coord_result['y'] * scale_y)
 
-                    # Get current points
                     current_points = st.session_state.res_calibration_points[:]
 
-                    # Check if this is a duplicate point (within 5 pixels)
-                    is_duplicate = False
-                    for existing_x, existing_y in current_points:
-                        if abs(x - existing_x) < 5 and abs(y - existing_y) < 5:
-                            is_duplicate = True
-                            break
+                    is_duplicate = any(abs(x - existing_x) < 5 and abs(y - existing_y) < 5 for existing_x, existing_y in current_points)
 
-                    # Add point if we have less than 2 and it's not a duplicate
                     if len(current_points) < 2 and not is_duplicate:
                         current_points.append((x, y))
                         st.session_state.res_calibration_points = current_points
                         announce_to_screen_reader(f"Calibration point {len(current_points)} added at position {x}, {y}", "assertive")
                         st.rerun()
-                    elif is_duplicate:
-                        pass  # Don't show warning, green status box below is sufficient
                     elif len(current_points) >= 2:
                         st.info("✋ Already have 2 points. Use Clear or Undo to reset.")
-            
-            # Display current points
-            points = st.session_state.res_calibration_points
-        
+
         else:
-            # Enhanced fallback manual coordinate entry
             st.warning("⚠️ Interactive canvas not available. Using manual coordinate entry mode.")
-            
+
             with st.expander("📍 Manual Coordinate Entry", expanded=True):
                 st.info("Enter pixel coordinates by examining your image. You can use image viewing software to find precise coordinates.")
-                
+
                 col1, col2 = st.columns(2)
-                
+
                 with col1:
                     st.markdown("**🎯 Point 1 - MW Standard Lane**")
                     pt1_x = st.number_input(
@@ -1762,13 +1806,12 @@ def render_step_upload_and_calibration() -> None:
                         step=1, key="manual_pt1_y",
                         help=f"Range: 0-{h} pixels"
                     )
-                    
-                    # Visual preview of point 1 location
+
                     if pt1_x and pt1_y:
                         rel_x = pt1_x / w * 100
                         rel_y = pt1_y / h * 100
                         st.caption(f"📍 Point 1: {rel_x:.1f}% from left, {rel_y:.1f}% from top")
-                
+
                 with col2:
                     st.markdown("**🎯 Point 2 - Reference Lane**")
                     pt2_x = st.number_input(
@@ -1783,1116 +1826,57 @@ def render_step_upload_and_calibration() -> None:
                         step=1, key="manual_pt2_y",
                         help=f"Range: 0-{h} pixels"
                     )
-                    
-                    # Visual preview of point 2 location
+
                     if pt2_x and pt2_y:
                         rel_x = pt2_x / w * 100
                         rel_y = pt2_y / h * 100
                         st.caption(f"📍 Point 2: {rel_x:.1f}% from left, {rel_y:.1f}% from top")
-                
-                # Distance validation
+
                 if pt1_x and pt1_y and pt2_x and pt2_y:
                     distance = ((pt2_x - pt1_x)**2 + (pt2_y - pt1_y)**2)**0.5
-                    if distance < w * 0.2:  # Less than 20% of image width
+                    if distance < w * 0.2:
                         st.warning("⚠️ Points are quite close together. Consider spacing them farther apart for better accuracy.")
                     else:
                         st.success(f"✅ Point separation: {distance:.1f} pixels (good spacing)")
-                
-                # Apply manual calibration
-                apply_manual = st.button(
-                    "✅ Apply Manual Calibration Points",
-                    use_container_width=True,
-                    type="primary",
-                    help="Use these coordinates as calibration points"
-                )
-                
-                if apply_manual:
-                    st.session_state.res_calibration_points = [(pt1_x, pt1_y), (pt2_x, pt2_y)]
-                    st.session_state.ui_last_action = "manual_calibration"
-                    st.toast("Manual calibration points applied", icon="✅")
-                    st.rerun()
-        
-        # Calibration status and lane assignment
-        points = st.session_state.res_calibration_points
-        
-        if len(points) >= 2:
 
-            if len(points) > 2:
-                st.info(f"ℹ️ Using first two points only (ignoring {len(points) - 2} extra points)")
-
-            metrics_container = st.container()
-
-            # Lane number assignment with smart defaults and validation
-            st.markdown("#### 🏷️ Lane Number Assignment")
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                lane1 = st.number_input(
-                    "MW standard lane number:",
-                    min_value=1, max_value=n_lanes, value=1,
-                    key="calibration_lane1",
-                    help="Lane number for the first calibration point (typically lane 1 for MW standard)"
-                )
-
-                # Visual feedback for lane 1
-                (x1, y1) = points[0]
-                st.caption(f"🎯 Point 1 at ({x1}, {y1}) → Lane {lane1}")
-
-            with col2:
-                # Smart default for lane 2 (avoid lane 1, prefer far lanes)
-                default_lane2 = min(n_lanes, max(8, n_lanes - 1))
-                if default_lane2 == lane1:
-                    default_lane2 = max(1, min(n_lanes, lane1 + 6))
-
-                lane2 = st.number_input(
-                    "Reference lane number:",
-                    min_value=1, max_value=n_lanes, value=default_lane2,
-                    key="calibration_lane2",
-                    help="Lane number for the second calibration point (choose a lane far from the first)"
-                )
-
-                # Visual feedback for lane 2
-                (x2, y2) = points[1]
-                st.caption(f"🎯 Point 2 at ({x2}, {y2}) → Lane {lane2}")
-
-            # Validation and calibration execution
-            if lane1 == lane2:
-                st.error("❌ **Validation Error:** Lane numbers must be different")
-                st.info("💡 Choose different lane numbers for your two calibration points")
-            else:
-                # Perform calibration with error handling
-                calibration_result = perform_calibration()
-
-                if calibration_result:
-                    calibration, boundaries = calibration_result
-
-                    with metrics_container:
-                        # Display calibration metrics directly beneath the gel image
-                        st.markdown("#### 📏 Calibration Metrics")
-
-                        col1, col2, col3, col4 = st.columns(4)
-
-                        with col1:
-                            spacing = calibration.lane_spacing_px
-                            st.metric(
-                                "Lane Spacing",
-                                f"{spacing:.1f} px",
-                                help="Distance between adjacent lane centers"
-                            )
-                            if spacing < 20:
-                                st.caption("⚠️ Very narrow lanes")
-                            elif spacing > 200:
-                                st.caption("ℹ️ Wide-spaced lanes")
-                            else:
-                                st.caption("✅ Normal spacing")
-
-                        with col2:
-                            width = calibration.lane_width_px
-                            st.metric(
-                                "Lane Width",
-                                f"{width:.1f} px",
-                                help="Calculated width of each lane (90% of spacing)"
-                            )
-
-                        with col3:
-                            total_span = abs(boundaries[-1].right_px - boundaries[0].left_px)
-                            st.metric(
-                                "Total Gel Width",
-                                f"{total_span:.0f} px",
-                                help="Span covered by all lanes"
-                            )
-
-                        with col4:
-                            gel_coverage = (total_span / w) * 100
-                            st.metric(
-                                "Image Coverage",
-                                f"{gel_coverage:.1f}%",
-                                help="Percentage of image width used by lanes"
-                            )
-
-                    # Enhanced lane preview with quality assessment
-                    st.markdown("#### 🔍 Lane Alignment Preview")
-                    
-                    # Generate enhanced overlay
-                    try:
-                        import cv2
-                        HAS_CV2 = True
-                    except ImportError:
-                        HAS_CV2 = False
-                    
-                    if HAS_CV2:
-                        overlay_img = img_array.copy()
-                        
-                        # Color coding for different lane types
-                        for i, boundary in enumerate(boundaries):
-                            center = int(boundary.center_px)
-                            left = int(boundary.left_px)
-                            right = int(boundary.right_px)
-                            
-                            # Determine color based on lane role
-                            if i == lane1 - 1:
-                                color = (255, 215, 0)  # Gold for MW standard
-                                thickness = 3
-                            elif i == lane2 - 1:
-                                color = (255, 140, 0)  # Orange for reference
-                                thickness = 3
-                            else:
-                                color = (0, 255, 255)  # Cyan for interpolated
-                                thickness = 2
-                            
-                            # Draw lane boundaries
-                            cv2.line(overlay_img, (left, 0), (left, h), color, thickness)
-                            cv2.line(overlay_img, (right, 0), (right, h), color, thickness)
-                            
-                            # Draw center lines
-                            cv2.line(overlay_img, (center, 0), (center, h), (255, 255, 255), 1, cv2.LINE_AA)
-                            
-                            # Enhanced lane numbering with background
-                            label_y = 50
-                            label_bg_size = 20
-                            
-                            # Background rectangle for visibility
-                            cv2.rectangle(overlay_img, 
-                                        (center - label_bg_size, label_y - label_bg_size), 
-                                        (center + label_bg_size, label_y + 5), 
-                                        (0, 0, 0), -1)
-                            
-                            # Lane number
-                            cv2.putText(overlay_img, str(boundary.lane_index),
-                                      (center - 10, label_y - 5),
-                                      cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
-                            
-                            # Lane type indicator
-                            if i == lane1 - 1:
-                                cv2.putText(overlay_img, "MW", (center - 12, label_y + 15),
-                                          cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 215, 0), 1, cv2.LINE_AA)
-                            elif i == lane2 - 1:
-                                cv2.putText(overlay_img, "REF", (center - 15, label_y + 15),
-                                          cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 140, 0), 1, cv2.LINE_AA)
-                        
-                        # Lane dimension adjustment slider
-                        with st.container():
-                            # Create an inset slider for lane width adjustment
-                            st.markdown("**🔧 Lane Dimension Adjustment**")
-                            
-                            # Get the current average lane width as baseline
-                            current_width = np.mean([b.width_px for b in boundaries])
-                            
-                            # Slider for adjusting lane dimensions (±50% of current width)
-                            width_multiplier = st.slider(
-                                "Lane Width Multiplier:",
-                                min_value=0.5,
-                                max_value=1.5,
-                                value=1.0,
-                                step=0.05,
-                                help=f"Adjust lane width from baseline {current_width:.1f}px",
-                                key="lane_width_adjust"
-                            )
-                            
-                            # Apply width adjustment if changed from default
-                            if width_multiplier != 1.0:
-                                # Create a fresh overlay to avoid accumulation
-                                overlay_img = img_array.copy()
-                                
-                                # Update lane boundaries with new width
-                                adjusted_boundaries = []
-                                for boundary in boundaries:
-                                    new_width = boundary.width_px * width_multiplier
-                                    half_width = new_width / 2
-                                    adjusted_boundary = SimpleLaneBoundary(
-                                        lane_index=boundary.lane_index,
-                                        center_px=boundary.center_px,
-                                        left_px=boundary.center_px - half_width,
-                                        right_px=boundary.center_px + half_width,
-                                        width_px=new_width
-                                    )
-                                    adjusted_boundaries.append(adjusted_boundary)
-                                
-                                # Draw all adjusted boundaries on fresh overlay
-                                for i, adjusted_boundary in enumerate(adjusted_boundaries):
-                                    # Determine colors based on lane type (using same logic as original)
-                                    if i == lane1 - 1:
-                                        rect_color = (255, 215, 0)  # Gold for MW lane
-                                    elif i == lane2 - 1:
-                                        rect_color = (255, 140, 0)  # Orange for REF lane
-                                    else:
-                                        rect_color = (0, 255, 255)  # Cyan for regular lanes
-                                    
-                                    # Draw lane boundary rectangles
-                                    cv2.rectangle(
-                                        overlay_img,
-                                        (int(adjusted_boundary.left_px), 50),
-                                        (int(adjusted_boundary.right_px), overlay_img.shape[0] - 50),
-                                        rect_color, 2
-                                    )
-                                    
-                                    # Add lane numbers at the top (white text)
-                                    center = int(adjusted_boundary.center_px)
-                                    cv2.putText(overlay_img, str(adjusted_boundary.lane_index), 
-                                              (center - 8, 40),
-                                              cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
-                                    
-                                    # Add center line markers
-                                    cv2.line(overlay_img, (center, 50), (center, overlay_img.shape[0] - 50), 
-                                           (255, 255, 255), 1)
-                                    
-                                    # Lane type indicator
-                                    if i == lane1 - 1:
-                                        cv2.putText(overlay_img, "MW", (center - 12, 55),
-                                                  cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 215, 0), 1, cv2.LINE_AA)
-                                    elif i == lane2 - 1:
-                                        cv2.putText(overlay_img, "REF", (center - 15, 55),
-                                                  cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 140, 0), 1, cv2.LINE_AA)
-                                
-                                # Store adjusted boundaries for later use
-                                st.session_state.adjusted_lane_boundaries = adjusted_boundaries
-                                st.info(f"🔧 Lane width adjusted by {width_multiplier:.2f}x (from {current_width:.1f}px to {current_width * width_multiplier:.1f}px)")
-                        
-                        # Display overlay with detailed caption
-                        st.image(
-                            overlay_img,
-                            caption="🎯 Lane boundary preview: Gold=MW standard, Orange=Reference lane, Cyan=Interpolated lanes, White=Centers",
-                            use_container_width=True
-                        )
-                        
-                    else:
-                        # Fallback without OpenCV
-                        st.info("🔍 Lane preview requires OpenCV. Install with: `pip install opencv-python`")
-                        
-                        # Show lane data as table instead
-                        lane_data = []
-                        for boundary in boundaries:
-                            lane_type = "MW Standard" if boundary.lane_index == lane1 else (
-                                "Reference" if boundary.lane_index == lane2 else "Sample"
-                            )
-                            lane_data.append({
-                                "Lane": boundary.lane_index,
-                                "Type": lane_type,
-                                "Center (px)": f"{boundary.center_px:.1f}",
-                                "Left (px)": f"{boundary.left_px:.1f}",
-                                "Right (px)": f"{boundary.right_px:.1f}",
-                                "Width (px)": f"{boundary.width_px:.1f}"
-                            })
-                        
-                        st.dataframe(pd.DataFrame(lane_data), use_container_width=True)
-                    
-                    # Alignment verification and confirmation
-                    st.markdown("#### ✅ Verification & Confirmation")
-                    
-                    st.markdown("""
-                    <div class="info-panel">
-                    <strong>Please verify the lane alignment:</strong><br>
-                    ✓ <strong>Boundaries:</strong> Cyan/Gold/Orange lines align with actual lane edges<br>
-                    ✓ <strong>Centers:</strong> White center lines run through the middle of each lane<br>
-                    ✓ <strong>Numbers:</strong> Lane numbers match your gel layout<br>
-                    ✓ <strong>Span:</strong> All sample lanes are covered appropriately
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # Quality check suggestions
-                    lane_spacing = abs(calibration.lane_spacing_px)
-                    if lane_spacing < 30:
-                        st.warning("⚠️ **Very narrow lanes detected.** Consider if this matches your gel specifications.")
-                    elif lane_spacing > 150:
-                        st.info("ℹ️ **Wide lanes detected.** Verify this matches your gel format.")
-                    
-                    # Final confirmation checkbox
-                    alignment_confirmed = st.checkbox(
-                        "🎯 **I confirm the lane boundaries align correctly with my gel**",
-                        value=False,
-                        help="Check this only after verifying the lane overlay matches your actual gel lanes",
-                        key="lane_alignment_confirmed"
-                    )
-                    
-                    if alignment_confirmed:
-                        st.success("✅ **Lane calibration confirmed!** 🎉")
-                        
-                        # Action buttons for next steps
-                        col1, col2, col3 = st.columns(3)
-                        
-                        with col1:
-                            st.markdown("**Next Step:**")
-                            st.info("➡️ Switch to **Analysis** tab to process your gel")
-                        
-                        with col2:
-                            # Export calibration data
-                            if HAS_LANE_MAPPING:
-                                try:
-                                    csv_data = boundaries_to_csv(boundaries)
-                                    st.download_button(
-                                        "📥 **Export Calibration**",
-                                        csv_data,
-                                        f"lane_calibration_{gel_type}_{n_lanes}lanes.csv",
-                                        "text/csv",
-                                        help="Download lane boundary data for external use",
-                                        use_container_width=True
-                                    )
-                                except Exception as e:
-                                    st.button("📥 Export", disabled=True, help=f"Export failed: {e}", use_container_width=True)
-                            else:
-                                st.button("📥 Export", disabled=True, help="Export not available", use_container_width=True)
-                        
-                        with col3:
-                            # Quick analysis shortcut
-                            if st.button("🔬 **Start Analysis**", use_container_width=True, type="primary"):
-                                with st.spinner("🚀 Navigating to analysis..."):
-                                    st.info("🔄 Switching to Analysis & Processing tab...")
-                                    announce_to_screen_reader("Navigating to analysis tab", "polite")
-                                    goto_tab("🔬 Analysis")
-                                    goto_tab("🔬 Analysis & Processing")
-                    
-                    else:
-                        st.info("💡 **Need adjustments?**")
-                        
-                        # Adjustment options
-                        adj_col1, adj_col2, adj_col3 = st.columns(3)
-                        
-                        with adj_col1:
-                            if st.button("🔄 **Recalibrate**", help="Clear points and start calibration over", use_container_width=True):
-                                with st.spinner("🔄 Resetting calibration..."):
-                                    st.info("🔄 Clearing all calibration data...")
-                                    st.session_state.res_calibration_points = []
-                                    st.session_state.res_lane_boundaries = None
-                                    st.session_state.ui_canvas_key += 1
-                                    announce_to_screen_reader("Calibration reset completed", "assertive")
-                                st.rerun()
-
-                        with adj_col2:
-                            if st.button("🎯 **Adjust Points**", help="Keep lane settings but change calibration points", use_container_width=True):
-                                with st.spinner("🎯 Adjusting calibration points..."):
-                                    st.info("🔄 Clearing points while preserving lane settings...")
-                                    st.session_state.res_calibration_points = []
-                                    st.session_state.ui_canvas_key += 1
-                                    announce_to_screen_reader("Calibration points cleared for adjustment", "assertive")
-                                st.info("👆 Place new calibration points above")
-                                st.rerun()
-                        
-                        with adj_col3:
-                            st.button("⚙️ **Change Lanes**", help="Adjust lane numbers without changing points", disabled=True, use_container_width=True)
-
-            st.markdown('</div>', unsafe_allow_html=True)
-
-    else:
-        st.markdown('</div>', unsafe_allow_html=True)
-        # No image uploaded - show upload guidance
-        with st.expander("💡 Image Upload Guidelines", expanded=False):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("""
-                **Optimal image characteristics:**
-                - **Format:** PNG or TIFF preferred, JPG acceptable
-                - **Resolution:** 1000-4000 pixels wide
-                - **Size:** Under 50MB for best performance
-                - **Quality:** High contrast, well-focused bands
-                - **Orientation:** Lanes should be vertical
-                """)
-            
-            with col2:
-                st.markdown("""
-                **Image quality tips:**
-                - Use proper lighting (avoid shadows/glare)
-                - Capture the entire gel area
-                - Minimize background noise
-                - Ensure bands are clearly visible
-                - Avoid camera shake or blur
-                """)
-
-def _render_analysis_inner() -> None:
-    st.caption("Configure preprocessing parameters and launch analysis with your calibrated lanes.")
-    
-    # Prerequisites status check using component
-    prerequisites_met = render_prerequisites_panel(goto_tab)
-
-    if not prerequisites_met:
-        return
-    
-    # Analysis configuration section
-    st.markdown("#### ⚙️ Analysis Configuration")
-    
-    # Enhanced preprocessing mode selection
-    st.markdown('<div data-testid="preprocessing-section" role="region" aria-label="Preprocessing Configuration">', unsafe_allow_html=True)
-    
-    # Determine available preprocessing modes
-    mode_options = ["Auto (heuristic)", "Manual", "Off"]
-    mode_descriptions = {
-        "Auto (heuristic)": "🧠 Automatic optimization using AutoDense's built-in image heuristics",
-        "Manual": "🛠️ Use custom preprocessing parameters with full control",
-        "Off": "📷 Analyze raw image without any preprocessing"
-    }
-
-    if st.session_state.get("preprocessing_mode_select") not in mode_options:
-        st.session_state.preprocessing_mode_select = mode_options[0]
-
-    preprocessing_mode = st.selectbox(
-        "**Preprocessing Method:**",
-        mode_options,
-        help="Choose how to optimize your gel image before analysis",
-        key="preprocessing_mode_select"
-    )
-    
-    # Display detailed description of selected mode
-    if preprocessing_mode in mode_descriptions:
-        st.markdown(f"""
-        <div class="info-panel">
-        <strong>Selected Mode:</strong> {mode_descriptions[preprocessing_mode]}
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Compact contextual guidance instead of a persistent status banner
-    with st.expander("📘 Preprocessing guidance", expanded=False):
-        st.write("Select a deterministic preprocessing strategy. You can fine-tune parameters later if needed.")
-
-    # Manual preprocessing parameters (collapsible when not selected)
-    manual_params = {}
-    if preprocessing_mode == "Manual":
-        with st.expander("🛠️ Manual Preprocessing Parameters", expanded=True):
-            st.markdown("Configure custom preprocessing steps. Advanced users can fine-tune each parameter for optimal results.")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("**🎨 Image Processing**")
-                
-                manual_params["target_channel"] = st.selectbox(
-                    "Color Channel:",
-                    ["auto", "R", "G", "B"],
-                    index=0,
-                    help="Which color channel to analyze (auto selects optimal channel)"
-                )
-                
-                manual_params["polarity"] = st.selectbox(
-                    "Band Polarity:",
-                    ["auto", "bright", "dark"],
-                    index=0,
-                    help="Whether bands appear brighter or darker than background"
-                )
-                
-                manual_params["bg_method"] = st.selectbox(
-                    "Background Correction:",
-                    ["auto", "rolling_ball", "tophat_white", "tophat_black"],
-                    index=0,
-                    help="Method for removing background intensity variations"
-                )
-                
-                manual_params["bg_radius"] = st.slider(
-                    "Background Radius (px):",
-                    min_value=5, max_value=99, value=17, step=2,
-                    help="Size parameter for background correction algorithm"
-                )
-            
-            with col2:
-                st.markdown("**🔧 Enhancement Options**")
-                
-                manual_params["denoise"] = st.selectbox(
-                    "Noise Reduction:",
-                    ["auto", "none", "median", "gaussian"],
-                    index=0,
-                    help="Algorithm for reducing image noise"
-                )
-                
-                manual_params["clahe"] = st.checkbox(
-                    "CLAHE Enhancement",
-                    value=True,
-                    help="Contrast Limited Adaptive Histogram Equalization (improves local contrast)"
-                )
-                
-                manual_params["deskew"] = st.checkbox(
-                    "Geometric Correction",
-                    value=True,
-                    help="Correct for gel skewing, rotation, and perspective distortion"
-                )
-                
-                # Advanced options
-                with st.expander("Advanced Options"):
-                    manual_params["gamma"] = st.slider(
-                        "Gamma Correction:",
-                        min_value=0.1, max_value=3.0, value=1.0, step=0.1,
-                        help="Adjust image brightness curve (1.0 = no change)"
-                    )
-                    
-                    # TEMPORARILY DISABLED: sharpen parameter not yet supported in PreprocParams backend
-                    # manual_params["sharpen"] = st.checkbox(
-                    #     "Edge Sharpening",
-                    #     value=False,
-                    #     help="Apply unsharp mask to enhance edge definition"
-                    # )
-            
-            # Parameter validation and warnings
-            if manual_params["bg_radius"] > 50:
-                st.warning("⚠️ Large background radius may over-correct and remove band signals")
-            
-            if manual_params["gamma"] < 0.5 or manual_params["gamma"] > 2.0:
-                st.info("ℹ️ Extreme gamma values may affect quantification accuracy")
-    
-    # Analysis parameters section
-    st.markdown("### 🎯 Analysis Parameters")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("**🧬 Sample Type & Standards**")
-
-        # Derive modality from gel type
-        modality = "sds" if st.session_state.params_gel_type == "sds_page" else "dna"
-        gel_type_display = "Protein (SDS-PAGE)" if modality == "sds" else "DNA (Agarose + EtBr)"
-
-        st.markdown(
-            f"""
-            <div class="compact-card">
-                <div class="card-title">Analysis Type</div>
-                <div class="card-value">{gel_type_display}</div>
-                <p class="card-subtext">Derived from gel configuration: {st.session_state.params_gel_type}</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        # Molecular weight standard selection
-        ladder_options = ["auto", "pageruler_10_180", "precision_plus"] if modality == "sds" else ["auto", "neb_1kb", "lambda_hindiii"]
-        ladder_descriptions = {
-            "auto": "🤖 Automatic detection",
-            "pageruler_10_180": "🧬 PageRuler 10-180 kDa (Thermo)",
-            "precision_plus": "🧬 Precision Plus (Bio-Rad)",
-            "neb_1kb": "🧬 NEB 1kb DNA Ladder",
-            "lambda_hindiii": "🧬 Lambda DNA/HindIII"
-        }
-
-        st.caption("Molecular Weight Standard")
-        try:
-            ladder_type = st.selectbox(
-                "Molecular Weight Standard:",
-                ladder_options,
-                index=0,
-                help=f"Choose the MW standard used in your {modality.upper()} gel",
-                label_visibility="collapsed"
-            )
-        except TypeError:
-            ladder_type = st.selectbox(
-                "Molecular Weight Standard:",
-                ladder_options,
-                index=0,
-                help=f"Choose the MW standard used in your {modality.upper()} gel"
-            )
-
-        if ladder_type in ladder_descriptions:
-            st.markdown(f"<div class='hint-text'>{ladder_descriptions[ladder_type]}</div>", unsafe_allow_html=True)
-
-        st.session_state.params_ladder_type = ladder_type
-
-    with col2:
-        st.markdown("**🔍 Detection Parameters**")
-
-        slider_col, lane_col = st.columns((3, 1))
-
-        with slider_col:
-            st.caption("Band Confidence Threshold")
-            try:
-                conf_threshold = st.slider(
-                    "Band Confidence Threshold:",
-                    min_value=0.0,
-                    max_value=1.0,
-                    value=st.session_state.params_conf_threshold,
-                    step=0.01,
-                    help="Minimum confidence required to report a band (higher = more stringent)",
-                    label_visibility="collapsed"
-                )
-            except TypeError:
-                conf_threshold = st.slider(
-                    "Band Confidence Threshold:",
-                    min_value=0.0,
-                    max_value=1.0,
-                    value=st.session_state.params_conf_threshold,
-                    step=0.01,
-                    help="Minimum confidence required to report a band (higher = more stringent)"
-                )
-            st.session_state.params_conf_threshold = conf_threshold
-
-            if conf_threshold < 0.2:
-                threshold_hint = "⚠️ Very permissive (may include noise)"
-            elif conf_threshold < 0.5:
-                threshold_hint = "✅ Standard setting (good sensitivity)"
-            elif conf_threshold < 0.8:
-                threshold_hint = "🎯 Conservative (high precision)"
-            else:
-                threshold_hint = "🔒 Very strict (minimal false positives)"
-
-            st.markdown(f"<div class='hint-text'>{threshold_hint}</div>", unsafe_allow_html=True)
-
-        with lane_col:
-            st.caption("MW Standard Lane")
-            try:
-                mw_lane = st.number_input(
-                    "MW Standard Lane:",
-                    min_value=1,
-                    max_value=st.session_state.params_n_lanes,
-                    value=st.session_state.params_mw_lane,
-                    step=1,
-                    help="Lane number containing your molecular weight standards",
-                    label_visibility="collapsed"
-                )
-            except TypeError:
-                mw_lane = st.number_input(
-                    "MW Standard Lane:",
-                    min_value=1,
-                    max_value=st.session_state.params_n_lanes,
-                    value=st.session_state.params_mw_lane,
-                    step=1,
-                    help="Lane number containing your molecular weight standards"
-                )
-            st.session_state.params_mw_lane = mw_lane
-
-            lane_hint = ""
-            if st.session_state.res_lane_boundaries:
-                total_lanes = len(st.session_state.res_lane_boundaries)
-                if 1 <= mw_lane <= total_lanes:
-                    lane_hint = f"✅ MW lane {mw_lane} of {total_lanes} configured lanes"
-                else:
-                    lane_hint = f"⚠️ MW lane {mw_lane} not in range (1-{total_lanes})"
-
-            if lane_hint:
-                st.markdown(f"<div class='hint-text'>{lane_hint}</div>", unsafe_allow_html=True)
-    
-    # Advanced analysis options
-    with st.expander("⚙️ Advanced Analysis Options", expanded=False):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**🔍 Band Detection**")
-            
-            min_band_width = st.slider(
-                "Minimum Band Width (px):",
-                min_value=1, max_value=20, value=3,
-                help="Smallest band width to consider (filters noise)"
-            )
-            
-            max_band_width = st.slider(
-                "Maximum Band Width (px):",
-                min_value=10, max_value=100, value=50,
-                help="Largest band width to consider (filters artifacts)"
-            )
-            
-            intensity_threshold = st.slider(
-                "Intensity Threshold:",
-                min_value=0.0, max_value=1.0, value=0.1, step=0.05,
-                help="Minimum relative intensity for band detection"
-            )
-        
-        with col2:
-            st.markdown("**📊 Quantification**")
-            
-            background_method = st.selectbox(
-                "Background Subtraction:",
-                ["local", "global", "none"],
-                index=0,
-                help="Method for background intensity correction"
-            )
-            
-            normalization = st.selectbox(
-                "Intensity Normalization:",
-                ["none", "total_intensity", "housekeeping", "loading_control"],
-                index=0,
-                help="Method for normalizing band intensities"
-            )
-            
-            enable_statistics = st.checkbox(
-                "Statistical Analysis",
-                value=True,
-                help="Calculate statistical significance between lanes"
-            )
-
-    # --- AutoDense Band Assist (lanes/bands pipeline) ---
-    if not st.session_state.get('res_analysis_data'):
-        st.info("Run the analysis first to enable Band Assist fine-tuning from the results workspace.")
-    # Analysis execution section
-    # Analysis execution section
-    st.markdown("### 🚀 Execute Analysis")
-
-    # Pre-analysis validation
-    analysis_warnings = []
-    analysis_errors = []
-    
-    # Check image quality indicators
-    if st.session_state.res_image_metadata:
-        # Check ORIGINAL dimensions (before standardization) for detection accuracy warning
-        dims = st.session_state.res_image_metadata.get('original_dimensions',
-               st.session_state.res_image_metadata.get('dimensions', (0, 0)))
-        if dims[0] < 1000 or dims[1] < 500:
-            analysis_warnings.append("Small image dimensions may reduce detection accuracy")
-
-        size_mb = st.session_state.res_image_metadata.get('size_bytes', 0) / (1024 * 1024)
-        if size_mb > 20:
-            analysis_warnings.append("Large image size may slow processing")
-    
-    # Check calibration quality
-    if st.session_state.res_lane_boundaries:
-        lane_spacings = []
-        for i in range(1, len(st.session_state.res_lane_boundaries)):
-            spacing = abs(st.session_state.res_lane_boundaries[i].center_px - 
-                         st.session_state.res_lane_boundaries[i-1].center_px)
-            lane_spacings.append(spacing)
-
-        if lane_spacings:
-            min_spacing = min(lane_spacings)
-            max_spacing = max(lane_spacings)
-    
-            if min_spacing < 20:
-                analysis_warnings.append("Very narrow lanes detected - consider calibration accuracy")
-    
-            if max_spacing / min_spacing > 2.0:
-                analysis_warnings.append("Irregular lane spacing detected - verify calibration")
-    
-    # Display warnings and errors
-    if analysis_errors:
-        st.error("❌ **Analysis cannot proceed due to critical errors:**")
-        for error in analysis_errors:
-            st.error(f"• {error}")
-    elif analysis_warnings:
-        st.warning("⚠️ **Analysis can proceed, but note these warnings:**")
-        for warning in analysis_warnings:
-            st.warning(f"• {warning}")
-    else:
-        st.success("✅ **Ready for analysis - no issues detected**")
-    
-    # Main analysis button
-    st.markdown('<div data-testid="analysis-execution-section" role="region" aria-label="Analysis Execution">', unsafe_allow_html=True)
-    
-    analysis_ready = len(analysis_errors) == 0
-    
-    analyze_button = st.button(
-        "🔬 **Run Comprehensive Gel Analysis**",
-        use_container_width=True,
-        disabled=not analysis_ready,
-        type="primary",
-        help="Execute complete analysis pipeline: preprocessing → lane detection → band quantification → MW calibration → statistics"
-    )
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Analysis execution with comprehensive error handling
-    if analyze_button:
-        st.session_state['_analysis_running'] = True
-        st.session_state.ui_analysis_count += 1
-        st.session_state.ui_last_action = "analysis"
-        st.session_state.analysis_cancelled = False  # Initialize cancellation flag
-
-        # Create analysis progress tracking
-        progress_container = st.container()
-
-        with progress_container:
-            progress_bar = st.progress(0, text="🚀 Initializing analysis...")
-            status_text = st.empty()
-    
-            # Add stop button in a separate column layout
-            col1, col2 = st.columns([3, 1])
-            with col2:
-                stop_button = st.button("🛑 Stop Analysis", key="stop_analysis", type="secondary", use_container_width=True)
-    
-            if stop_button:
-                st.session_state.analysis_cancelled = True
-                st.session_state['_analysis_running'] = False
-                st.warning("⚠️ Analysis cancelled by user")
+            if st.button("✅ Apply Manual Calibration Points", use_container_width=True):
+                st.session_state.res_calibration_points = [(int(pt1_x), int(pt1_y)), (int(pt2_x), int(pt2_y))]
+                st.session_state.ui_canvas_key += 1
+                st.session_state.ui_last_action = "manual_calibration"
+                st.toast("Manual calibration points applied", icon="✅")
                 st.rerun()
-    
-            try:
-                # Step 1: Image preprocessing
-                if not st.session_state.get('analysis_cancelled', False):
-                    status_text.info("🔬 **Step 1/5:** Preprocessing gel image...")
-                    progress_bar.progress(20, text="🔬 Optimizing image quality...")
 
-                    img_hash = (st.session_state.res_image_metadata or {}).get('hash', '')
-                    manual_params_str = json.dumps(manual_params) if preprocessing_mode == "Manual" else ""
+        # Update lane boundaries automatically when two points are present
+        if len(st.session_state.res_calibration_points) == 2:
+            perform_calibration()
 
-                    spinner_messages = {
-                        "auto": "Applying AutoDense heuristic preprocessing...",
-                        "manual": "Applying manual preprocessing parameters...",
-                        "off": "Skipping preprocessing — using the raw image...",
-                    }
-                    spinner_text = spinner_messages.get(preprocessing_mode.lower(), "Applying preprocessing algorithms...")
+        # Use calibrated boundaries to generate preview overlay
+        if st.session_state.res_lane_boundaries:
+            st.markdown("### ✅ Calibration Preview")
+            if HAS_LANE_MAPPING:
+                try:
+                    from autodense.preprocess.simple_lane_mapping import boundaries_to_dataframe
+                    st.dataframe(boundaries_to_dataframe(st.session_state.res_lane_boundaries), use_container_width=True)
+                except Exception as exc:
+                    st.warning(f"Could not render lane table: {exc}")
 
-                    with st.spinner(spinner_text):
-                        # Check for cancellation before expensive operation
-                        if st.session_state.get('analysis_cancelled', False):
-                            raise Exception("Analysis cancelled by user")
-                
-                        preproc_result = cached_preprocess_image(img_hash, preprocessing_mode, manual_params_str)
-                        prepped_img, preproc_metadata = preproc_result
-                        st.session_state.res_preprocessing_outcome = preproc_metadata
-        
-                    # Check for cancellation after preprocessing
-                    if st.session_state.get('analysis_cancelled', False):
-                        raise Exception("Analysis cancelled by user")
-            
-                    if preproc_metadata.get('status') == 'error':
-                        raise Exception(f"Preprocessing failed: {preproc_metadata.get('error', 'Unknown error')}")
-            
-                    st.toast("Preprocessing complete", icon="✅")
-        
-                # Step 2: Lane boundary application
-                if not st.session_state.get('analysis_cancelled', False):
-                    status_text.info("🎯 **Step 2/5:** Applying custom lane boundaries...")
-                    progress_bar.progress(40, text="🎯 Configuring lane regions...")
-            
-                    # Here we would apply the calibrated lane boundaries to the analysis
-                    # For now, we'll simulate this step
-                    import time
-                    time.sleep(1)  # Simulate processing time
-        
-                # Step 3: Band detection
-                if not st.session_state.get('analysis_cancelled', False):
-                    status_text.info("🔍 **Step 3/5:** Detecting and quantifying bands...")
-                    progress_bar.progress(60, text="🔍 Identifying band signals...")
-            
-                    with st.spinner("Analyzing band patterns..."):
-                        # Check for cancellation before expensive operation
-                        if st.session_state.get('analysis_cancelled', False):
-                            raise Exception("Analysis cancelled by user")
-                        
-                        # Connect to AutoDense lanes/bands pipeline
-                        img_for_pipeline = st.session_state.res_uploaded_image
-                        if img_for_pipeline is None:
-                            raise Exception("No image available for band detection")
-                        ba_params = {
-                            "gel_type": st.session_state.params_gel_type,  # Use internal format for translation
-                            "conf_threshold": float(st.session_state.params_conf_threshold),
-                            "mw_lane": int(st.session_state.params_mw_lane),
-                        }
-                        # Get current lane calibration data
-                        lane_calibration = get_current_lane_calibration()
-                        res_ba = _try_run_ad_band_assist(
-                            img_for_pipeline,
-                            ba_params,
-                            lane_boundaries=lane_calibration['lane_boundaries']
-                        )
-                        st.session_state.res_ba_errors = res_ba.get("errors", [])
-                        st.session_state.res_ba_lanes_rows = res_ba.get("lanes", [])
-                        st.session_state.res_ba_bands_rows = res_ba.get("bands", [])
-                        st.session_state.res_ba_overlay_png = res_ba.get("overlay")
-                        if res_ba.get("errors"):
-                            raise Exception("Band detection failed: " + "; ".join(res_ba["errors"]))
-
-                # Step 4: Molecular weight calibration
-                if not st.session_state.get('analysis_cancelled', False):
-                    status_text.info("📏 **Step 4/5:** MW calibration and size determination...")
-                    progress_bar.progress(80, text="📏 Calibrating molecular weights...")
-            
-                    with st.spinner("Calculating molecular weights..."):
-                        # Check for cancellation
-                        if st.session_state.get('analysis_cancelled', False):
-                            raise Exception("Analysis cancelled by user")
-                        # MW calibration would happen here
-                        time.sleep(1)
-        
-                # Step 5: Statistical analysis and finalization
-                if not st.session_state.get('analysis_cancelled', False):
-                    status_text.info("📊 **Step 5/5:** Statistical analysis and report generation...")
-                    progress_bar.progress(100, text="📊 Finalizing results...")
-
-                    with st.spinner("Computing statistics and generating report..."):
-                        if st.session_state.get('analysis_cancelled', False):
-                            raise Exception("Analysis cancelled by user")
-                        time.sleep(1)
-
-                    status_text.success("✅ **Analysis completed successfully!**")
-
-                st.session_state['_analysis_running'] = False
-                # Store comprehensive analysis results
-                analysis_timestamp = pd.Timestamp.now()
-
-                st.session_state.res_analysis_data = {
-                    'analysis_id': f"AD_{st.session_state.ui_analysis_count:03d}_{int(analysis_timestamp.timestamp())}",
-                    'timestamp': analysis_timestamp.isoformat(),
-                    'preprocessing': preproc_metadata,
-                    'lane_boundaries': st.session_state.res_lane_boundaries,
-                    'parameters': {
-                        'gel_type': st.session_state.params_gel_type,
-                        'n_lanes': st.session_state.params_n_lanes,
-                        'modality': modality,
-                        'ladder_type': ladder_type,
-                        'mw_lane': mw_lane,
-                        'conf_threshold': conf_threshold,
-                        'preprocessing_mode': preprocessing_mode,
-                        'manual_params': manual_params if preprocessing_mode == "Manual" else None
-                    },
-                    'analysis_count': st.session_state.ui_analysis_count,
-                    'status': 'completed',
-                    'warnings': analysis_warnings
-                }
-                st.session_state._scrolled_to_results = False
-
-                # Success celebration
-                st.success("🎉 **Analysis completed successfully!** 🎉")
-        
-                # Display analysis results summary
-                st.markdown("### 📊 Analysis Results Summary")
-        
-                col1, col2, col3, col4 = st.columns(4)
-        
-                with col1:
-                    st.metric("Analysis ID", f"AD_{st.session_state.ui_analysis_count:03d}")
-                with col2:
-                    st.metric("Processing Time", f"{int((pd.Timestamp.now() - analysis_timestamp).total_seconds())}s")
-                with col3:
-                    st.metric("Total Lanes", st.session_state.params_n_lanes)
-                with col4:
-                    st.metric("Status", "✅ Complete")
-        
-                # Preprocessing results section
-                st.markdown("#### 🔬 Preprocessing Results")
-
-                status_flag = (preproc_metadata.get('status') or 'success').lower()
-
-                mode_display = preproc_metadata.get('mode', preprocessing_mode)
-                raw_mode = preproc_metadata.get('raw_mode')
-                note = preproc_metadata.get('note')
-
-                if preprocessing_mode == "Auto (heuristic)":
-                    banner = st.success
-                    banner(f"🧠 **Preprocessing:** {mode_display}")
-                    if 'before' in preproc_metadata and 'after' in preproc_metadata:
-                        before_metrics = preproc_metadata['before']
-                        after_metrics = preproc_metadata['after']
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            snr_delta = after_metrics.get('snr', 0) - before_metrics.get('snr', 0)
-                            st.metric("SNR Improvement", f"{snr_delta:+.2f} dB")
-                        with col2:
-                            sep_delta = after_metrics.get('sep', 0) - before_metrics.get('sep', 0)
-                            st.metric("Separation Δ", f"{sep_delta:+.3f}")
-                        with col3:
-                            st.metric("Quality Score", f"{after_metrics.get('quality', 0):.2f}")
-                    if note:
-                        st.caption(note)
-
-                elif preprocessing_mode == "Manual":
-                    st.info(f"🛠️ **Preprocessing:** {mode_display}")
-                    if 'params' in preproc_metadata:
-                        with st.expander("Manual parameter snapshot", expanded=False):
-                            st.json(preproc_metadata['params'])
-                    if note:
-                        st.caption(note)
-
-                else:  # Off
-                    warning_text = "Preprocessing was skipped; results reflect the raw image."
-                    if status_flag in {"fallback", "error"} and preproc_metadata.get('error'):
-                        warning_text = preproc_metadata['error']
-                    st.warning(f"📷 **Preprocessing:** {mode_display}\n\n{warning_text}")
-                    if note:
-                        st.caption(note)
-        
-                st.markdown("#### 🔄 Analysis Pipeline Status")
-
-                preprocessing_done = True
-                lanes_applied = bool(st.session_state.get('res_lane_boundaries'))
-                bands_ready = bool(st.session_state.get('res_ba_bands_rows'))
-
-                pipeline_steps = [
-                    ("✅", "Image preprocessing", preprocessing_done, mode_display),
-                    ("✅" if lanes_applied else "⚠️", "Custom lane boundaries", lanes_applied, f"{len(st.session_state.res_lane_boundaries)} lanes applied" if lanes_applied else "Calibration required"),
-                    ("✅" if bands_ready else "ℹ️", "Band detection & quantification", bands_ready, "Bands detected" if bands_ready else "Run Band Assist to refine"),
-                    ("✅", "MW calibration", True, "Auto standard applied"),
-                    ("✅", "Statistical analysis", True, "Ready"),
-                    ("✅", "Report generation", True, "Ready")
+            if st.session_state.res_uploaded_image and HAS_AD_PIPELINE:
+                img_height = st.session_state.res_uploaded_image.height
+                lane_boxes = [
+                    _lane_boundary_to_overlay_dict(boundary, img_height)
+                    for boundary in (st.session_state.res_lane_boundaries or [])
                 ]
+                preview_img = overlay_fallback(
+                    st.session_state.res_uploaded_image,
+                    lane_boxes,
+                    []
+                )
+                st.image(preview_img, caption="Lane calibration preview", use_container_width=True)
 
-                for icon, step, complete, status_desc in pipeline_steps:
-                    renderer = st.success if complete else st.info
-                    renderer(f"{icon} **{step}:** {status_desc}")
-        
-            except Exception as e:
-                # Clear progress indicators
-                st.session_state['_analysis_running'] = False
-                progress_bar.empty()
-                status_text.empty()
-        
-                # Handle cancelled operations differently from errors
-                if "cancelled by user" in str(e).lower():
-                    st.info("⏹️ **Analysis Cancelled**")
-                    st.toast("Analysis stopped", icon="⏹️")
-            
-                    # Reset cancellation flag
-                    st.session_state.analysis_cancelled = False
-            
-                    st.markdown("""
-                    <div class="info-panel">
-                    <strong>Analysis stopped by user</strong><br>
-                    You can restart the analysis at any time by clicking the analysis button again.
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-                else:
-                    # Handle actual errors
-                    st.session_state.ui_error_count += 1
-                    st.toast("Analysis failed", icon="❌")
-            
-                    # Comprehensive error reporting
-                    with st.expander("🔍 Analysis Error Details", expanded=True):
-                        st.markdown(f"""
-                        <div class="error-details">
-                        <strong>Analysis Failed - Error #{st.session_state.ui_error_count}</strong><br>
-                        <strong>Error:</strong> {str(e)}<br>
-                        <strong>Analysis Count:</strong> {st.session_state.ui_analysis_count}<br>
-                        <strong>Preprocessing Mode:</strong> {preprocessing_mode}
-                        </div>
-                        """, unsafe_allow_html=True)
-            
-                    # Contextual troubleshooting
-                    st.markdown("""
-                    **🔧 Troubleshooting Steps:**
-            
-                    1. **Verify Prerequisites:**
-                       - Confirm image is loaded correctly
-                       - Check lane calibration is complete
-                       - Ensure all parameters are valid
-            
-                    2. **Try Different Settings:**
-                       - Switch to "Auto (heuristic)" preprocessing mode
-                       - Reduce image size if very large
-                       - Verify MW lane number is correct
-            
-                    3. **System Resources:**
-                       - Ensure sufficient memory available
-                       - Close other resource-intensive applications
-                       - Try with a smaller/simpler image first
-            
-                    4. **Get Help:**
-                       - Check the troubleshooting guide
-                       - Contact support with error details
-                       - Try the simplified analysis mode
-                    """)
-            
-                    # Debug information
-                    if st.checkbox("Show technical debug information", key=f"analysis_debug_{st.session_state.ui_error_count}"):
-                        st.subheader("Debug Information")
-                
-                        debug_info = {
-                            "session_state_keys": list(st.session_state.keys()),
-                            "image_metadata": st.session_state.res_image_metadata,
-                            "preprocessing_mode": preprocessing_mode,
-                            "manual_params": manual_params if preprocessing_mode == "Manual" else "Not applicable",
-                            "lane_boundaries_count": len(st.session_state.res_lane_boundaries) if st.session_state.res_lane_boundaries else 0,
-                            "analysis_parameters": {
-                                "gel_type": st.session_state.params_gel_type,
-                                "n_lanes": st.session_state.params_n_lanes,
-                                "mw_lane": mw_lane,
-                                "conf_threshold": conf_threshold,
-                                "ladder_type": ladder_type
-                            }
-                        }
-                
-                        st.json(debug_info)
-                
-                        # Technical exception details
-                        st.subheader("Exception Details")
-                        st.code(f"Exception Type: {type(e).__name__}")
-                        st.code(f"Exception Message: {str(e)}")
-                
-                        # Stack trace
-                        import traceback
-                        st.code(traceback.format_exc())
+        else:
+            st.warning("⚠️ Calibration not complete. Please place two calibration points.")
+
+
 def render_step_analysis() -> None:
     if not st.session_state.get('res_lane_boundaries'):
         return
@@ -3225,9 +2209,6 @@ def render_step_results() -> None:
     st.button("💾 Save analysis snapshot", disabled=True, help="Persistence workspace coming soon")
     st.caption("Use this checkpoint to persist results before deeper analysis or reporting.")
 
-    st.markdown("### 💬 Analysis Companion (coming soon)")
-    st.info("A guided chat workspace will appear here to help interpret results and design follow-up workflows.")
-
     with st.expander("📥 Export & download", expanded=False):
         lanes = st.session_state.get("res_ba_lanes_rows") or []
         bands = st.session_state.get("res_ba_bands_rows") or []
@@ -3282,6 +2263,7 @@ def render_step_results() -> None:
                     st.info("🔄 Removing all analysis data and cached results...")
                     st.session_state.res_analysis_data = None
                     st.session_state.res_export_data = None
+                    st.session_state.lane_calibration_locked = False
                     announce_to_screen_reader("Analysis results cleared successfully", "assertive")
                 st.rerun()
         
@@ -3323,6 +2305,19 @@ def render_step_results() -> None:
                 "session_error_count": st.session_state.ui_error_count
             }
             st.json(system_info)
+
+
+def render_chat_companion_tab() -> None:
+    st.markdown("### 💬 Analysis Companion")
+
+    if not st.session_state.get('res_analysis_data'):
+        st.info("Run an analysis to populate the companion workspace with quantified results.")
+        return
+
+    st.info(
+        "A guided chat workspace will arrive soon. It will let you interrogate band metrics, "
+        "launch predefined analysis playbooks, and draft reports from natural language prompts."
+    )
 
 def render_global_sticky_footer() -> None:
     """Fixed footer with Back / Next buttons anchored to workflow sections."""
@@ -3411,23 +2406,32 @@ def render_global_sticky_footer() -> None:
     </script>
     """, height=0)
 
-# Render progressive workflow sections
-render_step_upload_and_calibration()
-render_step_analysis()
-render_step_results()
+# Workflow navigation tabs
+render_workflow_tracker()
 
-# Auto-scroll progressive workflow when state advances
-if st.session_state.get('res_uploaded_image') and not st.session_state._scrolled_to_calibrate:
-    scroll_to_section('section-calibrate')
-    st.session_state._scrolled_to_calibrate = True
+current_tab = st.radio(
+    "Workflow",
+    WORKFLOW_TABS,
+    index=WORKFLOW_TABS.index(st.session_state.ui_workflow_tab)
+    if st.session_state.ui_workflow_tab in WORKFLOW_TABS else 0,
+    horizontal=True,
+    key="ui_workflow_tab"
+)
 
-if st.session_state.get('res_lane_boundaries') and not st.session_state._scrolled_to_analyze:
-    scroll_to_section('section-analyze')
-    st.session_state._scrolled_to_analyze = True
-
-if st.session_state.get('res_analysis_data') and not st.session_state._scrolled_to_results:
-    scroll_to_section('section-results')
-    st.session_state._scrolled_to_results = True
+if current_tab == "📸 Upload":
+    st.markdown('<div id="section-upload"></div>', unsafe_allow_html=True)
+    render_step_upload_and_calibration("upload")
+elif current_tab == "🎯 Calibration":
+    st.markdown('<div id="section-calibrate"></div>', unsafe_allow_html=True)
+    render_step_upload_and_calibration("calibration")
+elif current_tab == "🔬 Analysis":
+    st.markdown('<div id="section-analyze"></div>', unsafe_allow_html=True)
+    render_step_analysis()
+elif current_tab == "📊 Results":
+    st.markdown('<div id="section-results"></div>', unsafe_allow_html=True)
+    render_step_results()
+else:
+    render_chat_companion_tab()
 
 # Accessibility: Close main content landmark
 st.markdown('</main>', unsafe_allow_html=True)
