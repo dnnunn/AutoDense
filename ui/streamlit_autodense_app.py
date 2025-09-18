@@ -1384,6 +1384,13 @@ WORKFLOW_TABS = [
     "💬 Companion",
 ]
 
+TAB_ANCHORS = {
+    "📸 Upload": "section-upload",
+    "🎯 Calibration": "section-calibrate",
+    "🔬 Analysis": "section-analyze",
+    "📊 Results": "section-results",
+    "💬 Companion": "section-companion",
+}
 
 def goto_tab(label_prefix: str) -> None:
     """Queue a workflow tab change and trigger a rerun."""
@@ -1391,6 +1398,7 @@ def goto_tab(label_prefix: str) -> None:
     for label in WORKFLOW_TABS:
         if label.startswith(normalized) or normalized.startswith(label.split()[0]):
             st.session_state.ui_pending_tab = label
+            st.session_state.ui_pending_scroll = TAB_ANCHORS.get(label)
             st.rerun()
     
 def init_session_state() -> None:
@@ -1449,6 +1457,7 @@ pending_tab = st.session_state.pop('ui_pending_tab', None)
 if pending_tab and pending_tab in WORKFLOW_TABS:
     st.session_state.ui_workflow_tab = pending_tab
 
+pend_scroll = st.session_state.pop('ui_pending_scroll', None)
 
 
 
@@ -2229,8 +2238,8 @@ def render_step_upload_and_calibration(section: str = "both") -> None:
                                 with st.spinner("🚀 Navigating to analysis..."):
                                     st.info("🔄 Switching to Analysis & Processing tab...")
                                     announce_to_screen_reader("Navigating to analysis tab", "polite")
+                                    st.session_state._scrolled_to_analyze = False
                                     goto_tab("🔬 Analysis")
-                                    goto_tab("🔬 Analysis & Processing")
                     
                     else:
                         st.info("💡 **Need adjustments?**")
@@ -3706,6 +3715,12 @@ current_tab = st.radio(
     key="ui_workflow_tab"
 )
 
+if pend_scroll:
+    scroll_to_section(pend_scroll)
+    st.session_state.ui_pending_scroll = None
+    st.session_state.ui_pending_tab = None
+
+
 if current_tab == "📸 Upload":
     st.markdown('<div id="section-upload"></div>', unsafe_allow_html=True)
     render_step_upload_and_calibration("upload")
@@ -3719,6 +3734,7 @@ elif current_tab == "📊 Results":
     st.markdown('<div id="section-results"></div>', unsafe_allow_html=True)
     render_step_results()
 else:
+    st.markdown('<div id="section-companion"></div>', unsafe_allow_html=True)
     render_chat_companion_tab()
 
 # Accessibility: Close main content landmark
@@ -3726,6 +3742,22 @@ st.markdown('</main>', unsafe_allow_html=True)
 
 # Render workflow footer
 render_footer_navigation(current_tab)
+
+if pend_scroll:
+    scroll_to_section(pend_scroll)
+
+if st.session_state.get('res_uploaded_image') and not st.session_state._scrolled_to_calibrate:
+    scroll_to_section('section-calibrate')
+    st.session_state._scrolled_to_calibrate = True
+
+if st.session_state.get('res_lane_boundaries') and not st.session_state._scrolled_to_analyze:
+    scroll_to_section('section-analyze')
+    st.session_state._scrolled_to_analyze = True
+
+if st.session_state.get('res_analysis_data') and not st.session_state._scrolled_to_results:
+    scroll_to_section('section-results')
+    st.session_state._scrolled_to_results = True
+
 
 def main() -> None:
     """Entry point for the UX-optimized AutoDense interface"""
