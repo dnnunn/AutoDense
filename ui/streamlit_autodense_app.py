@@ -82,7 +82,7 @@ from utils.image_processing import (
 from utils.data_helpers import obj_to_dict, extract_json, calculate_lane_metrics, convert_to_csv
 from utils.preprocessing import (
     filter_supported_preproc_params,
-    _guarded_preprocess_with_timeout, HAS_PREPROCESS,
+    _guarded_preprocess_with_timeout, HAS_PREPROCESS, HAS_OPENAI,
     sanitize_openai_error, summarize_openai_error
 )
 from utils.parameter_management import (
@@ -1386,13 +1386,13 @@ WORKFLOW_TABS = [
 
 
 def goto_tab(label_prefix: str) -> None:
-    """Update the selected workflow tab to mimic legacy navigation helpers."""
+    """Queue a workflow tab change and trigger a rerun."""
     normalized = label_prefix.strip()
     for label in WORKFLOW_TABS:
         if label.startswith(normalized) or normalized.startswith(label.split()[0]):
-            st.session_state.ui_workflow_tab = label
-            break
-
+            st.session_state.ui_pending_tab = label
+            st.rerun()
+    
 def init_session_state() -> None:
     """Initialize session state following ui_* params_* res_* convention"""
     defaults: Dict[str, Any] = {
@@ -1445,6 +1445,13 @@ def init_session_state() -> None:
 init_session_state()
 
 
+pending_tab = st.session_state.pop('ui_pending_tab', None)
+if pending_tab and pending_tab in WORKFLOW_TABS:
+    st.session_state.ui_workflow_tab = pending_tab
+
+
+
+
 def render_workflow_tracker() -> None:
     """Display progress pills for the major workflow stages."""
     upload_done = bool(st.session_state.get('res_uploaded_image'))
@@ -1473,8 +1480,6 @@ def render_workflow_tracker() -> None:
     tracker_html.append('</div>')
     st.markdown("".join(tracker_html), unsafe_allow_html=True)
 
-    if not upload_done:
-        st.caption("🚀 Upload a gel electrophoresis image to begin the workflow.")
 
 # Enhanced error handler decorator
 def handle_errors(operation_name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -3213,7 +3218,6 @@ def _render_analysis_inner() -> None:
                         # Stack trace
                         import traceback
                         st.code(traceback.format_exc())
-    elif show_calibration:
         st.info("Upload a gel image in Step 1 before calibrating lanes.")
 
 def render_step_analysis() -> None:
@@ -3751,8 +3755,6 @@ render_workflow_tracker()
 current_tab = st.radio(
     "Workflow",
     WORKFLOW_TABS,
-    index=WORKFLOW_TABS.index(st.session_state.ui_workflow_tab)
-    if st.session_state.ui_workflow_tab in WORKFLOW_TABS else 0,
     horizontal=True,
     key="ui_workflow_tab"
 )
