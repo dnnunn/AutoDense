@@ -58,3 +58,4 @@ audits/autotune_runs/
 
 # Claude Code working directory
 .claude/
+pretab_streamlit_app_git_commits/

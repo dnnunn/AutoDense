@@ -12,6 +12,8 @@
 - Exercise the interactive editor in Streamlit to validate the add/remove heuristics; tune default span/tolerance values as needed.
 - ✅ Move Band Assist into the post-analysis workflow with finalize/reopen controls so acceptance happens before reporting (2025-09-18).
 - Hook manual band additions into downstream confidence/QC metrics so results panels reflect mixed auto/manual provenance.
+- Restore the full two-point lane calibration UI (lane selector, inset width slider, color-coded preview) from commit 52ee4055, embedding it inside the new tab driver and preserving `lane_calibration_locked` behavior.
+- Verify the restored calibration still populates `res_calibration_points`/`res_lane_boundaries` for Band Assist and analysis consumers before tackling further UX polish.
 - Implement band-level tooltips on the overlay with quick delete, and auto-propagate accepted bands across lanes when extrapolation is possible.
 - Update tests/docs to reflect the trimmed preprocessing API (remove ChatGPT fixtures, rewrite UX notes).
 
@@ -31,5 +33,6 @@
 - Expand tests to cover: deterministic preprocessing, band edits, chat integration (mocked GPT responses).
 - Preprocessing preview / manual adjustments should live before lane calibration so users can see effects once and carry them through calibration.
 - Align the UX flow with the agreed step order (upload → calibration → preprocessing → detection → optional Band Assist → final quantification → chat insights → reporting). Delay heavy export UI until after chat/queries.
+- Harden the Analysis tab for tabbed navigation: surface friendly guidance when upload/calibration prerequisites are missing, confirm calibration reruns unlock correctly, and ensure Band Assist overlays still refresh after tab switches.
 - Introduce a "Save/Resume" checkpoint between quantification and chat so results can be persisted before running conversational analyses.
 - Remove the legacy chatgpt_postrun_explainer hook from the analysis pipeline; replace with new post-analysis chat module.
